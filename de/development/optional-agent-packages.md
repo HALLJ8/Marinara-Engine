@@ -153,7 +153,10 @@ Beachte beim Schreiben eines Tools diese Regeln:
 - Nach dem Ende einer Aktivierung funktioniert deren Kontext nicht mehr. Ein gespeichertes `api`, das später aus einem Callback `registerTool` aufruft, wird abgewiesen. Eine beendete Laufzeit kann weder neue Tools registrieren noch die einer neuen Aktivierung ersetzen.
 - Deaktivieren, Aktualisieren oder Entfernen eines Pakets gibt seine Tools frei. Das Modell erhält keine Tools, deren Paket nicht mehr antworten kann. Die Tools werden vor dem Warten auf die Bereinigung entfernt; jeder Bereinigungs-Callback hat ein Zeitlimit von 8 Sekunden.
 
+Diese Zeitlimits begrenzen nur asynchrones Warten. Pakete laufen als vertrauenswürdiger Code im Serverprozess; synchrone Arbeit, die die Ereignisschleife blockiert, lässt sich nicht durch einen Timer unterbrechen. Ein erzwungener Abbruch würde einen separaten Worker oder Prozess erfordern, den diese API nicht bereitstellt.
+
 `api.registerTool` gibt es erst ab dieser Engine-Version. Ein Paket, das es benötigt, muss `capabilityApi` 1.19 deklarieren und lässt sich auf älteren Versionen nicht installieren.
+
 
 ## Erste Pakete
 

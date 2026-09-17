@@ -151,7 +151,10 @@ Antes de escribir una herramienta, ten en cuenta estas reglas:
 - El contexto de activación deja de funcionar cuando se desmonta. Si un paquete conserva `api` y llama a `registerTool` desde una devolución de llamada posterior, se rechaza: un entorno terminado no puede registrar herramientas ni reemplazar las de una nueva activación.
 - Desactivar, actualizar o eliminar un paquete libera sus herramientas. El modelo no recibe herramientas de un paquete que ya no puede responder. Se eliminan antes de esperar la limpieza; cada devolución de llamada de limpieza tiene un plazo de 8 segundos.
 
+Estos plazos solo limitan la espera asíncrona. Los paquetes se ejecutan como código de confianza en el proceso del servidor; un temporizador no puede interrumpir el trabajo síncrono que bloquea el bucle de eventos. La cancelación forzosa requeriría un worker o proceso separado, que esta API no proporciona.
+
 `api.registerTool` solo existe a partir de esta versión de Engine. Un paquete que lo necesite debe declarar `capabilityApi` 1.19 y no se instalará en versiones anteriores.
+
 
 ## Paquetes iniciales
 
