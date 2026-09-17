@@ -111,6 +111,49 @@ O contexto de abertura tem um limite de **8.000 caracteres**. Um contexto invál
 
 Os callbacks de prontidão pertencem ao chat, ao jogo e ao pacote montados. Chamadas atrasadas de outro escopo são ignoradas. Uma falha do módulo ou do ambiente de execução bloqueia a inicialização em vez de tratar a falta de contexto do mundo como sucesso. Após recarregar, o pacote deve informar a prontidão a partir do mundo salvo. O provedor de contexto do prompt no servidor continua sendo somente leitura e sujeito ao seu prazo curto; não o use para gerar o mundo nem como uma barreira prolongada de inicialização.
 
+### Capability API 1.19: ferramentas fornecidas por pacotes
+
+A Capability API 1.16 permitia que um pacote fizesse o modelo _dizer_ algo sobre o qual pudesse agir. Esta versão permite que o modelo _chame_ algo. Um pacote com a nova permissão `tools` registra uma ferramenta com nome no ponto de entrada do servidor. O Engine a oferece junto das ferramentas integradas em cada turno de cada chat, valida a chamada com o JSON Schema do pacote e entrega os argumentos ao manipulador.
+
+```ts
+export async function activate({ api }) {
+  api.registerTool({
+    name: "set_time",
+    description: "Move the world clock forward or back.",
+    parameters: {
+      type: "object",
+      properties: {
+        action: { type: "string", enum: ["advance", "rewind"] },
+        minutes: { type: "integer", minimum: 0 },
+      },
+      required: ["action", "minutes"],
+      additionalProperties: false,
+    },
+    handler: async (args, { chatId }) => {
+      const clock = await moveClock(chatId, args.action, args.minutes);
+      return { time: clock.label };
+    },
+  });
+}
+```
+
+A escolha de chamadas de ferramentas em vez de um formato de resposta é intencional. Um formato ocupa a resposta inteira: a narração teria que ser um campo de um objeto JSON e não poderia chegar por streaming. Uma chamada pode acompanhar o texto enquanto o modelo escreve o turno. O pacote recebe argumentos já restringidos pelo provedor, em vez de extraí-los da narração pronta. Um esquema impõe regras; uma convenção apenas pede que o modelo as respeite.
+
+As enumerações mostram a diferença. Um pacote que conhece doze lugares pode incluir os doze nomes no esquema. Um décimo terceiro nome é recusado antes de chegar ao manipulador. O validador de argumentos existente do Engine indica os valores aceitos para que o modelo possa corrigir a chamada. O retorno do manipulador é mostrado ao modelo como resultado da ferramenta.
+
+Antes de escrever uma ferramenta, conheça estas regras:
+
+- Os nomes usam `<packageId>_<name>`, trocando `-` por `_`: `set_time` de `world-clock` chega ao modelo como `world_clock_set_time`. Um nome já pertencente a outro pacote é recusado. Ferramentas integradas e ferramentas personalizadas ativadas mantêm os nomes em conflito; a definição do pacote é omitida. O nome completo aceita no máximo **64 caracteres**. Tanto as definições quanto a execução seguem esta ordem: integrada, personalizada, pacote.
+- As ferramentas são anexadas enquanto o pacote estiver ativo. Não há um segundo controle por chat como nas ferramentas integradas: declarar a permissão e registrar a ferramenta é a decisão. O provedor selecionado precisa aceitar chamadas nativas de ferramentas.
+- O esquema de parâmetros é copiado e compilado no registro. Se o Engine não conseguir compilá-lo, a ativação falha, tornando o problema visível durante o desenvolvimento em vez de no meio do turno.
+- Se o manipulador lançar um erro, a chamada falha e o erro é registrado; sua mensagem não é encaminhada ao modelo. Após **10 segundos** sem resultado, o turno também deixa de esperar. O manipulador continua executando, mas não pode bloquear o turno inteiro.
+- Os resultados precisam ser serializáveis em até **64 KiB**. Resultados maiores ou não serializáveis fazem a chamada falhar em vez de ocupar o espaço da conversa. Descrições e resultados são conteúdo confiável do pacote. Verifique `chatId` antes de ler ou alterar dados de um chat.
+- Cada definição é serializada na solicitação ao provedor em cada turno e conta no ajuste de contexto. Os limites são **16 ferramentas por pacote**, **64 no total**, **512 caracteres** por descrição e **8 KiB** por esquema de parâmetros. Ultrapassá-los lança um erro e impede a ativação. Registrar novamente um nome do próprio pacote substitui a ferramenta sem ocupar outra vaga.
+- O contexto de ativação para de funcionar quando ela termina. Se o pacote guardar `api` e chamar `registerTool` em um callback posterior, a chamada será recusada. Uma execução encerrada não pode registrar ferramentas nem substituir as de uma nova ativação.
+- Desativar, atualizar ou remover um pacote libera suas ferramentas. O modelo não recebe ferramentas de um pacote que não pode mais responder. As ferramentas são removidas antes de aguardar a limpeza; cada callback de limpeza tem um prazo de 8 segundos.
+
+`api.registerTool` só existe a partir desta versão do Engine. Um pacote que dependa dele precisa declarar `capabilityApi` 1.19 e não será instalado em versões anteriores.
+
 ## Pacotes iniciais
 
 - todos os agentes hoje embutidos;
