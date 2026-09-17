@@ -157,7 +157,6 @@ Diese Zeitlimits begrenzen nur asynchrones Warten. Pakete laufen als vertrauensw
 
 `api.registerTool` gibt es erst ab dieser Engine-Version. Ein Paket, das es benötigt, muss `capabilityApi` 1.19 deklarieren und lässt sich auf älteren Versionen nicht installieren.
 
-
 ## Erste Pakete
 
 - alle bisher fest eingebauten Agenten;

@@ -152,6 +152,8 @@ Antes de escrever uma ferramenta, conheça estas regras:
 - O contexto de ativação para de funcionar quando ela termina. Se o pacote guardar `api` e chamar `registerTool` em um callback posterior, a chamada será recusada. Uma execução encerrada não pode registrar ferramentas nem substituir as de uma nova ativação.
 - Desativar, atualizar ou remover um pacote libera suas ferramentas. O modelo não recebe ferramentas de um pacote que não pode mais responder. As ferramentas são removidas antes de aguardar a limpeza; cada callback de limpeza tem um prazo de 8 segundos.
 
+Esses prazos limitam apenas a espera assíncrona. Os pacotes executam código confiável no processo do servidor; um temporizador não pode interromper trabalho síncrono que bloqueia o loop de eventos. O cancelamento forçado exigiria um worker ou processo separado, que esta API não oferece.
+
 `api.registerTool` só existe a partir desta versão do Engine. Um pacote que dependa dele precisa declarar `capabilityApi` 1.19 e não será instalado em versões anteriores.
 
 ## Pacotes iniciais

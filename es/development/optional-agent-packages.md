@@ -155,7 +155,6 @@ Estos plazos solo limitan la espera asíncrona. Los paquetes se ejecutan como c�
 
 `api.registerTool` solo existe a partir de esta versión de Engine. Un paquete que lo necesite debe declarar `capabilityApi` 1.19 y no se instalará en versiones anteriores.
 
-
 ## Paquetes iniciales
 
 - todos los agentes integrados actuales;

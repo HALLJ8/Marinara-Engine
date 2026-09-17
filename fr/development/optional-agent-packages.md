@@ -152,6 +152,8 @@ Avant d'écrire un outil, retiens ces règles :
 - Le contexte d'activation cesse de fonctionner après son démontage. Un package qui conserve `api` et appelle `registerTool` depuis un callback ultérieur est refusé : une ancienne exécution ne peut ni enregistrer des outils ni remplacer ceux d'une nouvelle activation.
 - Désactiver, mettre à jour ou supprimer un package libère ses outils. Le modèle ne reçoit pas d'outil dont le package ne peut plus répondre. Les outils sont retirés avant d'attendre le nettoyage ; chaque callback de nettoyage dispose de 8 secondes.
 
+Ces délais limitent uniquement l’attente asynchrone. Les packages s’exécutent comme du code de confiance dans le processus serveur ; un minuteur ne peut pas interrompre un traitement synchrone qui bloque la boucle d’événements. Une annulation forcée nécessiterait un worker ou un processus séparé, ce que cette API ne fournit pas.
+
 `api.registerTool` n'existe qu'à partir de cette version d'Engine. Un package qui en dépend doit déclarer `capabilityApi` 1.19 et refuse de s'installer sur une version antérieure.
 
 ## Packages initiaux

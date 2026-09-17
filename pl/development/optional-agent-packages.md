@@ -152,6 +152,8 @@ Zanim napiszesz narzędzie, poznaj te zasady:
 - Kontekst aktywacji przestaje działać po jej zakończeniu. Jeśli pakiet zachowa `api` i później wywoła `registerTool` z callbacku, wywołanie zostanie odrzucone. Zakończone środowisko nie może rejestrować narzędzi ani zastępować narzędzi nowej aktywacji.
 - Dezaktywacja, aktualizacja i usunięcie pakietu zwalniają jego narzędzia. Model nie otrzyma narzędzia, którego pakiet nie może już odpowiedzieć. Narzędzia są usuwane przed oczekiwaniem na sprzątanie; każdy callback sprzątający ma limit 8 sekund.
 
+Te limity dotyczą wyłącznie oczekiwania asynchronicznego. Pakiety działają jako zaufany kod w procesie serwera; timer nie może przerwać pracy synchronicznej blokującej pętlę zdarzeń. Wymuszone anulowanie wymagałoby osobnego workera lub procesu, czego ten interfejs API nie zapewnia.
+
 `api.registerTool` istnieje dopiero od tej wersji Engine. Pakiet, który go potrzebuje, musi zadeklarować `capabilityApi` 1.19 i nie zainstaluje się w starszej wersji.
 
 ## Pakiety początkowe
