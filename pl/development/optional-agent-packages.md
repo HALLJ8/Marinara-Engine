@@ -111,6 +111,51 @@ Kontekst otwarcia ma limit **8 000 znaków**. Niepoprawny lub zbyt długi kontek
 
 Wywołania zwrotne gotowości należą do zamontowanego czatu, gry i pakietu. Spóźnione wywołania z innego zakresu są ignorowane. Błąd modułu lub środowiska uruchomieniowego blokuje start, zamiast uznawać brak kontekstu świata za sukces. Po przeładowaniu pakiet musi zgłosić gotowość na podstawie zapisanego świata. Serwerowy dostawca kontekstu promptu nadal działa tylko do odczytu i ma krótki limit czasu; nie używaj go do generowania świata ani jako długotrwałej blokady startu.
 
+### Capability API 1.19: narzędzia udostępniane przez pakiety
+
+Capability API 1.16 pozwalało pakietowi nakłonić model, by coś _powiedział_, a następnie na to zareagować. Ta wersja pozwala modelowi coś _wywołać_. Pakiet z nowym uprawnieniem `tools` rejestruje nazwane narzędzie w serwerowym punkcie wejścia. Engine udostępnia je obok wbudowanych narzędzi w każdej turze każdego czatu, sprawdza wywołanie według JSON Schema pakietu i przekazuje argumenty do jego funkcji obsługi.
+
+```ts
+export async function activate({ api }) {
+  api.registerTool({
+    name: "set_time",
+    description: "Move the world clock forward or back.",
+    parameters: {
+      type: "object",
+      properties: {
+        action: { type: "string", enum: ["advance", "rewind"] },
+        minutes: { type: "integer", minimum: 0 },
+      },
+      required: ["action", "minutes"],
+      additionalProperties: false,
+    },
+    handler: async (args, { chatId }) => {
+      const clock = await moveClock(chatId, args.action, args.minutes);
+      return { time: clock.label };
+    },
+  });
+}
+```
+
+Wywołania narzędzi zamiast formatu odpowiedzi to świadomy wybór. Format zajmuje całą odpowiedź: narracja musiałaby trafić do pola obiektu JSON i nie mogłaby być strumieniowana. Wywołanie narzędzia może towarzyszyć tekstowi, gdy model pisze swoją turę. Pakiet otrzymuje argumenty, które dostawca już ograniczył, zamiast wydobywać je z gotowej narracji. Schemat wymusza reguły; konwencja tylko prosi model o ich przestrzeganie.
+
+Widać to przy wyliczeniach. Pakiet znający dwanaście miejsc może wpisać ich nazwy do schematu. Trzynasta nazwa zostanie odrzucona, zanim dotrze do funkcji obsługi. Istniejący walidator argumentów w Engine wskazuje poprawne wartości, więc model może skorygować wywołanie. Wartość zwrócona przez funkcję obsługi trafia do modelu jako wynik narzędzia.
+
+Zanim napiszesz narzędzie, poznaj te zasady:
+
+- Nazwy mają postać `<packageId>_<name>`, a `-` jest zastępowany przez `_`: `set_time` z pakietu `world-clock` dociera do modelu jako `world_clock_set_time`. Nazwa zajęta przez inny pakiet jest odrzucana. Narzędzia wbudowane i włączone narzędzia niestandardowe zachowują kolidujące nazwy; definicja pakietu jest pomijana. Pełna nazwa może mieć najwyżej **64 znaki**. Definicje i wykonanie stosują tę samą kolejność: wbudowane, niestandardowe, pakietowe.
+- Narzędzia są dołączane przez cały czas aktywności pakietu. Nie ma dodatkowego przełącznika dla czatu, jak przy narzędziach wbudowanych: decyzją jest nadanie uprawnienia i rejestracja. Wybrany dostawca musi obsługiwać natywne wywołania narzędzi.
+- Schemat parametrów jest kopiowany i kompilowany podczas rejestracji. Jeśli Engine nie potrafi go skompilować, aktywacja kończy się błędem widocznym podczas pracy nad pakietem, zamiast przerywać turę.
+- Wyjątek w funkcji obsługi oznacza nieudane wywołanie i jest zapisywany w logach; jego treść nie trafia do modelu. Po **10 sekundach** bez wyniku tura również przestaje czekać. Funkcja nadal działa, ale nie blokuje całej tury.
+- Wyniki muszą dać się zserializować do najwyżej **64 KiB**. Większy wynik lub brak możliwości serializacji powoduje błąd wywołania, zamiast wypierać rozmowę z kontekstu. Opisy i wyniki są zaufaną treścią pakietu. Sprawdź `chatId`, zanim odczytasz lub zmienisz dane czatu.
+- Każda definicja jest serializowana w żądaniu do dostawcy przy każdej turze i uwzględniana przy dopasowaniu kontekstu. Limity wynoszą **16 narzędzi na pakiet**, **64 we wszystkich pakietach**, **512 znaków** opisu i **8 KiB** schematu parametrów. Przekroczenie limitu zgłasza wyjątek i uniemożliwia aktywację. Ponowna rejestracja własnej nazwy zastępuje narzędzie bez zajmowania kolejnego miejsca.
+- Kontekst aktywacji przestaje działać po jej zakończeniu. Jeśli pakiet zachowa `api` i później wywoła `registerTool` z callbacku, wywołanie zostanie odrzucone. Zakończone środowisko nie może rejestrować narzędzi ani zastępować narzędzi nowej aktywacji.
+- Dezaktywacja, aktualizacja i usunięcie pakietu zwalniają jego narzędzia. Model nie otrzyma narzędzia, którego pakiet nie może już odpowiedzieć. Narzędzia są usuwane przed oczekiwaniem na sprzątanie; każdy callback sprzątający ma limit 8 sekund.
+
+Te limity dotyczą wyłącznie oczekiwania asynchronicznego. Pakiety działają jako zaufany kod w procesie serwera; timer nie może przerwać pracy synchronicznej blokującej pętlę zdarzeń. Wymuszone anulowanie wymagałoby osobnego workera lub procesu, czego ten interfejs API nie zapewnia.
+
+`api.registerTool` istnieje dopiero od tej wersji Engine. Pakiet, który go potrzebuje, musi zadeklarować `capabilityApi` 1.19 i nie zainstaluje się w starszej wersji.
+
 ## Pakiety początkowe
 
 - wszyscy dotychczas wbudowani agenci;

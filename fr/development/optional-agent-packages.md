@@ -111,6 +111,51 @@ Le contexte d'ouverture est limité à **8 000 caractères**. Un contexte invali
 
 Les fonctions de rappel de disponibilité appartiennent au chat, à la partie et au package montés. Les rappels tardifs d'un autre périmètre sont ignorés. Un échec du module ou de l'environnement d'exécution bloque le démarrage au lieu de considérer l'absence de contexte du monde comme une réussite. Après un rechargement, le package doit signaler sa disponibilité à partir de son monde enregistré. Le fournisseur de contexte du prompt côté serveur reste en lecture seule et soumis à son délai court ; ne l'utilise ni pour générer le monde ni comme barrière de démarrage prolongée.
 
+### Capability API 1.19 : outils fournis par les packages
+
+Capability API 1.16 permettait à un package de faire _dire_ au modèle quelque chose sur lequel il pouvait agir. Cette version lui permet de faire _appeler_ quelque chose. Un package doté de la nouvelle permission `tools` enregistre un outil nommé depuis son point d'entrée serveur. Engine le propose avec les outils intégrés à chaque tour de chaque chat, valide l'appel avec le JSON Schema du package et transmet les arguments à son gestionnaire.
+
+```ts
+export async function activate({ api }) {
+  api.registerTool({
+    name: "set_time",
+    description: "Move the world clock forward or back.",
+    parameters: {
+      type: "object",
+      properties: {
+        action: { type: "string", enum: ["advance", "rewind"] },
+        minutes: { type: "integer", minimum: 0 },
+      },
+      required: ["action", "minutes"],
+      additionalProperties: false,
+    },
+    handler: async (args, { chatId }) => {
+      const clock = await moveClock(chatId, args.action, args.minutes);
+      return { time: clock.label };
+    },
+  });
+}
+```
+
+Le choix des appels d'outils plutôt que d'un format de réponse est volontaire. Un format occupe toute la réponse : la narration devrait devenir un champ d'un objet JSON et ne pourrait pas arriver en streaming. Un appel d'outil peut accompagner le texte pendant que le modèle écrit son tour. Le package reçoit des arguments déjà contraints par le fournisseur, au lieu de les extraire de la narration terminée. Un schéma impose des règles ; une convention demande simplement au modèle de les respecter.
+
+Les énumérations rendent la différence concrète. Un package qui connaît douze lieux peut inscrire leurs douze noms dans le schéma. Un treizième nom est refusé avant d'atteindre le gestionnaire. Le validateur d'arguments existant d'Engine indique les valeurs acceptées pour que le modèle puisse corriger l'appel. Le résultat renvoyé par le gestionnaire est montré au modèle comme résultat de l'outil.
+
+Avant d'écrire un outil, retiens ces règles :
+
+- Les noms suivent `<packageId>_<name>`, avec `-` remplacé par `_` : `set_time` du package `world-clock` devient `world_clock_set_time`. Un nom déjà pris par un autre package est refusé. Les outils intégrés et les outils personnalisés activés gardent les noms en conflit ; la définition du package est omise. Le nom complet est limité à **64 caractères**. Les définitions et l'exécution suivent le même ordre : intégré, personnalisé, package.
+- Les outils sont joints tant que le package est actif. Il n'existe pas de second interrupteur par chat comme pour les outils intégrés : déclarer la permission et enregistrer l'outil constitue la décision. Le fournisseur choisi doit prendre en charge les appels d'outils natifs.
+- Le schéma des paramètres est copié et compilé lors de l'enregistrement. Si Engine ne peut pas le compiler, l'activation échoue, ce qui rend le problème visible pendant le développement plutôt qu'au milieu d'un tour.
+- Une exception du gestionnaire fait échouer l'appel et est journalisée ; son message n'est pas transmis au modèle. Après **10 secondes** sans résultat, le tour cesse aussi d'attendre. Le gestionnaire continue de tourner, mais ne bloque plus le tour.
+- Les résultats doivent être sérialisables sur au plus **64 KiB**. Un résultat plus gros ou non sérialisable fait échouer l'appel au lieu de prendre la place de la conversation. Les descriptions et résultats sont du contenu de package considéré comme fiable. Vérifie `chatId` avant de lire ou modifier les données d'un chat.
+- Chaque définition est sérialisée dans la requête au fournisseur à chaque tour et comptée dans l'ajustement du contexte. Les limites sont **16 outils par package**, **64 pour tous les packages**, **512 caractères** par description et **8 KiB** par schéma. Les dépasser lève une erreur qui fait échouer l'activation. Réenregistrer un nom appartenant au package remplace l'outil sans prendre de place supplémentaire.
+- Le contexte d'activation cesse de fonctionner après son démontage. Un package qui conserve `api` et appelle `registerTool` depuis un callback ultérieur est refusé : une ancienne exécution ne peut ni enregistrer des outils ni remplacer ceux d'une nouvelle activation.
+- Désactiver, mettre à jour ou supprimer un package libère ses outils. Le modèle ne reçoit pas d'outil dont le package ne peut plus répondre. Les outils sont retirés avant d'attendre le nettoyage ; chaque callback de nettoyage dispose de 8 secondes.
+
+Ces délais limitent uniquement l’attente asynchrone. Les packages s’exécutent comme du code de confiance dans le processus serveur ; un minuteur ne peut pas interrompre un traitement synchrone qui bloque la boucle d’événements. Une annulation forcée nécessiterait un worker ou un processus séparé, ce que cette API ne fournit pas.
+
+`api.registerTool` n'existe qu'à partir de cette version d'Engine. Un package qui en dépend doit déclarer `capabilityApi` 1.19 et refuse de s'installer sur une version antérieure.
+
 ## Packages initiaux
 
 - tous les agents actuellement intégrés ;

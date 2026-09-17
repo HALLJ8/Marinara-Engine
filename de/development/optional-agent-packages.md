@@ -112,6 +112,51 @@ Der Eröffnungskontext ist auf **8.000 Zeichen** begrenzt. Ungültiger oder zu l
 
 Bereitschafts-Callbacks gehören zum eingebundenen Chat, Spiel und Paket. Verspätete Callbacks aus einem anderen Geltungsbereich werden ignoriert. Ein Modul- oder Laufzeitfehler blockiert den Start, statt fehlenden Weltkontext als Erfolg zu behandeln. Nach dem Neuladen muss das Paket seine Bereitschaft anhand der gespeicherten Welt melden. Der serverseitige Anbieter von Prompt-Kontext bleibt schreibgeschützt und an seine kurze Frist gebunden; verwende ihn weder zur Weltgenerierung noch als lang andauernde Startsperre.
 
+### Capability API 1.19: Tools aus Paketen
+
+Mit Capability API 1.16 konnte ein Paket das Modell etwas _sagen_ lassen, worauf es reagieren konnte. Diese Version lässt das Modell etwas _aufrufen_. Ein Paket mit der neuen Berechtigung `tools` registriert in seinem Server-Einstiegspunkt ein benanntes Tool. Die Engine bietet es neben den eingebauten Tools in jedem Zug jedes Chats an, prüft den Aufruf anhand des JSON Schema des Pakets und übergibt die Argumente an dessen Handler.
+
+```ts
+export async function activate({ api }) {
+  api.registerTool({
+    name: "set_time",
+    description: "Move the world clock forward or back.",
+    parameters: {
+      type: "object",
+      properties: {
+        action: { type: "string", enum: ["advance", "rewind"] },
+        minutes: { type: "integer", minimum: 0 },
+      },
+      required: ["action", "minutes"],
+      additionalProperties: false,
+    },
+    handler: async (args, { chatId }) => {
+      const clock = await moveClock(chatId, args.action, args.minutes);
+      return { time: clock.label };
+    },
+  });
+}
+```
+
+Tool-Aufrufe sind hier bewusst einem Antwortformat vorgezogen. Ein Antwortformat beansprucht die gesamte Antwort: Die Erzählung müsste als Feld in einem JSON-Objekt stehen und könnte nicht streamen. Ein Tool-Aufruf kann neben dem Fließtext eintreffen, während das Modell seinen Zug schreibt. Das Paket erhält Argumente, die schon der Anbieter eingeschränkt hat, statt sie aus der fertigen Erzählung herauszulesen. Ein Schema ist verbindlicher als eine Konvention, um deren Einhaltung das Modell gebeten wird.
+
+Enums machen diesen Unterschied greifbar. Kennt ein Paket zwölf Orte, kann es deren Namen im Schema aufzählen. Ein dreizehnter Name wird abgelehnt, bevor der Handler ihn erhält. Die vorhandene Argumentprüfung der Engine nennt dabei gültige Werte, damit das Modell den Aufruf korrigieren kann. Der Rückgabewert des Handlers wird dem Modell als Tool-Ergebnis gezeigt.
+
+Beachte beim Schreiben eines Tools diese Regeln:
+
+- Namen erhalten das Präfix `<packageId>_<name>`; `-` wird zu `_`. Das Tool `set_time` aus `world-clock` heißt beim Modell also `world_clock_set_time`. Ein bereits von einem anderen Paket belegter Name wird abgelehnt. Eingebaute und aktivierte eigene Tools behalten gleichnamige Aufrufe; die Paketdefinition entfällt. Der vollständige Name darf höchstens **64 Zeichen** lang sein. Sowohl bei den Definitionen als auch bei der Ausführung gilt: eingebautes Tool, eigenes Tool, Paket-Tool.
+- Die Tools eines aktiven Pakets werden immer angehängt. Anders als bei eingebauten Tools gibt es keinen weiteren Schalter pro Chat: Berechtigung und Registrierung sind die Entscheidung. Der gewählte Anbieter muss native Tool-Aufrufe unterstützen.
+- Das Parameterschema wird bei der Registrierung kopiert und kompiliert. Kann die Engine es nicht kompilieren, schlägt die Aktivierung fehl, sichtbar für die Entwicklung, statt erst während eines Zuges.
+- Wirft ein Handler einen Fehler, wird der Aufruf als fehlgeschlagen gemeldet und protokolliert; seine Fehlermeldung wird nicht weitergegeben. Nach **10 Sekunden** endet auch das Warten auf einen noch laufenden Handler. Er läuft weiter, hält den Zug aber nicht länger auf.
+- Ergebnisse müssen sich in höchstens **64 KiB** serialisieren lassen. Größere oder nicht serialisierbare Ergebnisse lassen den Aufruf scheitern, statt den Gesprächskontext zu verdrängen. Beschreibungen und Ergebnisse gelten als vertrauenswürdiger Paketinhalt. Prüfe `chatId`, bevor dein Paket chatspezifische Daten liest oder verändert.
+- Jede Definition wird bei jedem Zug an den Anbieter gesendet und bei der Kontextplanung mitgezählt. Deshalb gelten Grenzen: **16 Tools pro Paket**, **64 über alle Pakete**, **512 Zeichen** für die Beschreibung und **8 KiB** für das Parameterschema. Eine Überschreitung wirft einen Fehler und verhindert die Aktivierung. Eine erneute Registrierung eines eigenen Namens ersetzt das Tool, ohne einen weiteren Platz zu belegen.
+- Nach dem Ende einer Aktivierung funktioniert deren Kontext nicht mehr. Ein gespeichertes `api`, das später aus einem Callback `registerTool` aufruft, wird abgewiesen. Eine beendete Laufzeit kann weder neue Tools registrieren noch die einer neuen Aktivierung ersetzen.
+- Deaktivieren, Aktualisieren oder Entfernen eines Pakets gibt seine Tools frei. Das Modell erhält keine Tools, deren Paket nicht mehr antworten kann. Die Tools werden vor dem Warten auf die Bereinigung entfernt; jeder Bereinigungs-Callback hat ein Zeitlimit von 8 Sekunden.
+
+Diese Zeitlimits begrenzen nur asynchrones Warten. Pakete laufen als vertrauenswürdiger Code im Serverprozess; synchrone Arbeit, die die Ereignisschleife blockiert, lässt sich nicht durch einen Timer unterbrechen. Ein erzwungener Abbruch würde einen separaten Worker oder Prozess erfordern, den diese API nicht bereitstellt.
+
+`api.registerTool` gibt es erst ab dieser Engine-Version. Ein Paket, das es benötigt, muss `capabilityApi` 1.19 deklarieren und lässt sich auf älteren Versionen nicht installieren.
+
 ## Erste Pakete
 
 - alle bisher fest eingebauten Agenten;
