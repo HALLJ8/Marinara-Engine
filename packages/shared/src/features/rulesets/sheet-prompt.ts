@@ -21,12 +21,16 @@ const MAX_LIST_NAMES = 40;
  *  the block they land in is wrapped in a tag in the prompt. Brackets and braces could forge a
  *  command or a macro; angle brackets could close that tag and speak as the Engine. */
 function safeValue(value: string): string {
-  return value
-    .replace(/\p{Cc}+/gu, " ")
-    .replace(/[{}[\]<>]/g, "")
-    .replace(/\s{2,}/g, " ")
-    .trim()
-    .slice(0, MAX_VALUE_LENGTH);
+  return (
+    value
+      // Control characters AND the Unicode line and paragraph separators: either kind would start a
+      // new logical line inside the sheet block, and a sheet value is one line.
+      .replace(/[\p{Cc}\p{Zl}\p{Zp}]+/gu, " ")
+      .replace(/[{}[\]<>]/g, "")
+      .replace(/\s{2,}/g, " ")
+      .trim()
+      .slice(0, MAX_VALUE_LENGTH)
+  );
 }
 
 function signed(value: number): string {

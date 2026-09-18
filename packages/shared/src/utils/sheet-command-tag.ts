@@ -135,7 +135,7 @@ export function truncateSheetSummary(value: string, limit: number): string {
 function sanitizeSheetTagValue(value: string, limit = MAX_ATTRIBUTE_LENGTH): string {
   return truncateSheetSummary(
     value
-      .replace(/[\p{Cc}"[\]]/gu, " ")
+      .replace(/[\p{Cc}\p{Zl}\p{Zp}"[\]]/gu, " ")
       .replace(/\s{2,}/g, " ")
       .trim(),
     limit,
