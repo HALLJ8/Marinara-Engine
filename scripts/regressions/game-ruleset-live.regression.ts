@@ -731,6 +731,28 @@ const fighter = buildFor({ level: 1, hp_max: 12 });
   );
 }
 
+// ── The tag scan stays cheap on a hostile reply ──
+// Two shapes used to cost polynomial time: a `[sheet:` head followed by a long run of spaces and
+// no closing bracket (a `\s*` next to the body both matched the spaces), and thousands of unclosed
+// heads (each one scanned to the end of the text). The matcher is one bounded run now.
+{
+  const started = Date.now();
+  const spaces = `[sheet:${" ".repeat(400_000)}`;
+  assert.equal(stripSheetCommandTags(spaces), spaces);
+  assert.deepEqual(readResolvedSheetCommandTags(spaces), []);
+  const heads = "[sheet: ".repeat(60_000);
+  assert.equal(stripSheetCommandTags(heads), heads);
+  assert.equal(
+    applySheetCommandTags(heads, { definition: fiveE, cards: [], playerName: null, live: {} }).changed,
+    false,
+  );
+  assert.ok(Date.now() - started < 10_000, `a hostile reply must stay cheap (took ${Date.now() - started}ms)`);
+  // Spaces after the colon are still fine, and so is none at all.
+  assert.deepEqual(parseSheetCommandTagBody(`   op="rest" rest="long"`).op, { op: "rest", rest: "long" });
+  assert.equal(stripSheetCommandTags(`a [sheet:op="rest" rest="long"] b`), "a b");
+  assert.equal(stripSheetCommandTags(`a [sheet:    op="rest" rest="long"] b`), "a b");
+}
+
 // ── A long party summary is cut at an entry boundary, never through a name ──
 {
   const entries = Array.from({ length: 30 }, (_, index) => `Companion Number ${index} 12/31`);

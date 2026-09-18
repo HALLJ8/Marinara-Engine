@@ -14,15 +14,21 @@
 import { RULESET_SHEET_OP_NAMES, type RulesetSheetOp } from "../features/rulesets/live-state.js";
 import { readGmTagAttributes } from "./skill-check-tag.js";
 
-/** A fresh global, case-insensitive matcher over `[sheet: ...]` tags. A body cannot contain `]`,
- *  which keeps the scan linear over the reply. */
+/** Longest body a sheet tag can carry. The longest honest one is a note with a 500-character value;
+ *  the bound is what keeps a reply full of unclosed `[sheet:` heads from costing a scan to the end
+ *  of the text for every one of them. */
+const MAX_SHEET_TAG_BODY = 1500;
+
+/** A fresh global, case-insensitive matcher over `[sheet: ...]` tags. The body is ONE bounded run of
+ *  anything but `]`: no `\s*` in front of it, because two adjacent runs that can both take a space
+ *  are what makes a regex backtrack polynomially. The body is trimmed by whoever reads it. */
 export function createSheetCommandTagRegex(): RegExp {
-  return /\[sheet:\s*([^\]]*)\]/gi;
+  return new RegExp(`\\[sheet:([^\\]]{0,${MAX_SHEET_TAG_BODY}})\\]`, "gi");
 }
 
 /** The tag and one space on either side, so removing it does not leave a doubled space behind. */
 function createSheetCommandStripRegex(): RegExp {
-  return /([^\S\r\n]?)\[sheet:\s*[^\]]*\]([^\S\r\n]?)/gi;
+  return new RegExp(`([^\\S\\r\\n]?)\\[sheet:[^\\]]{0,${MAX_SHEET_TAG_BODY}}\\]([^\\S\\r\\n]?)`, "gi");
 }
 
 export interface ParsedSheetCommandTag {
