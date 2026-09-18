@@ -88,7 +88,7 @@
 
 デフォルトの**Base URL**が`https://fal.run`のクラウドサービスです。[fal.ai](https://fal.ai/dashboard/keys)でAPIキーを作成し、画像サービスの一覧で**fal.ai**を選んでください。初期の**Model**一覧には`fal-ai/flux/schnell`と`fal-ai/flux/dev`があります。入出力スキーマが対応する別のテキストから画像を生成するエンドポイントIDも入力できます。**Test Connection**(接続テスト)は設定だけを確認します。**Test Image**は実際に生成をリクエストし、fal.aiのクレジットを消費します。
 
-Marinaraはプロンプトと指定サイズを送り、最初に返された画像を既存の画像処理フローにダウンロードします。ネガティブプロンプトはテキストの指示として追加します。`seed`、`num_inference_steps`、`image_size`などモデル固有のオプションには**Custom Parameters**(カスタムパラメーター)を使ってください。この連携は同期式のテキストから画像への生成リクエストを使います。参照画像の送信や中断したジョブの再開には対応していません。対応する入力は、選択したモデルの[APIリファレンス](https://fal.ai/models/fal-ai/flux/schnell/api)で確認してください。
+Marinaraはプロンプトと指定サイズを送り、最初に返された画像を既存の画像処理フローにダウンロードします。ネガティブプロンプトはテキストの指示として追加します。`seed`、`num_inference_steps`、`image_size`などモデル固有のオプションには**Custom Parameters**(カスタムパラメーター)を使ってください。この連携は同期式のテキストから画像への生成リクエストを使います。参照画像の送信や中断したジョブの再開には対応していません。対応する入力は、選択したモデルや独自エンドポイントのAPIページで確認してください。例として[flux/schnellのAPIリファレンス](https://fal.ai/models/fal-ai/flux/schnell/api)を参照できます。
 
 ## NanoGPT
 

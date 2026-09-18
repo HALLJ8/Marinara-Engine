@@ -17,7 +17,7 @@ So legst du eine Bildverbindung an:
 5. Füge den **API Key** ein, falls der Dienst einen braucht. Kostenlose und lokale Dienste kommen ohne aus.
 6. Wähle ein **Model** (Modell) aus der Liste oder tippe eine Modell-ID ein. Manche Dienste bieten **Fetch Models from API** (Modelle über die API laden) an, um die aktuelle Liste zu holen.
 7. Klick auf **Save** (Speichern).
-8. Klick auf **Test Image** (Testbild), um die Verbindung zu prüfen. Marinara generiert dann ein kleines Testbild.
+8. Klick auf **Test Image** (Testbild), um die Verbindung zu prüfen. Marinara generiert dann ein kleines Testbild. Bei fal.ai verbraucht das Credits; **Test Connection** (Verbindung testen) prüft dagegen nur die Konfiguration.
 
 Liefert **Test Image** ein Bild, ist die Verbindung einsatzbereit. Schlägt der Test fehl, prüfe API-Key und Base URL.
 
@@ -86,9 +86,9 @@ Cloud-Dienst mit der Standard-Base-URL `https://api.atlascloud.ai/api/v1`. Nöti
 
 ## fal.ai
 
-Cloud-Dienst mit der standardmäßigen **Base URL** `https://fal.run`. Erstelle bei [fal.ai](https://fal.ai/dashboard/keys) einen API-Schlüssel und wähle **fal.ai** im Raster der Bilddienste. Die anfängliche **Model**-Liste bietet `fal-ai/flux/schnell` und `fal-ai/flux/dev`; du kannst eine andere Text-zu-Bild-Endpunkt-ID mit kompatiblem Ein- und Ausgabeschema eingeben. **Test Connection** (Verbindung testen) prüft nur die Konfiguration. **Test Image** sendet eine echte Generierungsanfrage und verbraucht dein fal.ai-Guthaben.
+Cloud-Dienst mit der standardmäßigen **Base URL** `https://fal.run`. Erstelle bei [fal.ai](https://fal.ai/dashboard/keys) einen API-Schlüssel und wähle **fal.ai** im Raster der Bilddienste. Die anfängliche **Model**-Liste bietet `fal-ai/flux/schnell` und `fal-ai/flux/dev`; du kannst eine andere Text-zu-Bild-Endpunkt-ID mit kompatiblem Ein- und Ausgabeschema eingeben. **Test Connection** prüft nur die Konfiguration. **Test Image** sendet eine echte Generierungsanfrage und verbraucht dein fal.ai-Guthaben.
 
-Marinara sendet den Prompt und die gewünschten Abmessungen und lädt dann das erste zurückgegebene Bild in den bestehenden Bildablauf herunter. Negative Prompts werden als Textanweisungen angehängt. Nutze **Custom Parameters** (benutzerdefinierte Parameter) für modellspezifische Optionen wie `seed`, `num_inference_steps` oder `image_size`. Die Integration nutzt synchrone Text-zu-Bild-Anfragen; sie sendet keine Referenzbilder und setzt unterbrochene Aufträge nicht fort. Die unterstützten Eingaben findest du in der [API-Referenz](https://fal.ai/models/fal-ai/flux/schnell/api) des gewählten Modells.
+Marinara sendet den Prompt und die gewünschten Abmessungen und lädt dann das erste zurückgegebene Bild in den bestehenden Bildablauf herunter. Negative Prompts werden als Textanweisungen angehängt. Nutze **Custom Parameters** (benutzerdefinierte Parameter) für modellspezifische Optionen wie `seed`, `num_inference_steps` oder `image_size`. Die Integration nutzt synchrone Text-zu-Bild-Anfragen; sie sendet keine Referenzbilder und setzt unterbrochene Aufträge nicht fort. Prüfe die unterstützten Eingaben auf der API-Seite deines gewählten Modells oder eigenen Endpunkts, etwa in der [API-Referenz für flux/schnell](https://fal.ai/models/fal-ai/flux/schnell/api).
 
 ## NanoGPT
 

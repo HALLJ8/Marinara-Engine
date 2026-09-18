@@ -88,7 +88,7 @@
 
 云端服务，默认 **Base URL** 为 `https://fal.run`。在 [fal.ai](https://fal.ai/dashboard/keys) 创建 API 密钥，然后在图像服务网格中选择 **fal.ai**。初始 **Model** 列表提供 `fal-ai/flux/schnell` 和 `fal-ai/flux/dev`；也可以输入其他文生图端点 ID，但其输入、输出结构必须兼容。**Test Connection**(测试连接) 只检查配置。**Test Image** 会发送真实的生成请求，消耗你的 fal.ai 额度。
 
-Marinara 发送提示词和所需尺寸，再将返回的第一张图像下载到现有的图像处理流程中。负面提示词会作为文字指令追加。模型专用选项（例如 `seed`、`num_inference_steps` 或 `image_size`）可通过 **Custom Parameters**(自定义参数) 设置。该集成使用同步文生图请求，不发送参考图像，也不会恢复中断的任务。所选模型支持哪些输入，见其 [API 参考](https://fal.ai/models/fal-ai/flux/schnell/api)。
+Marinara 发送提示词和所需尺寸，再将返回的第一张图像下载到现有的图像处理流程中。负面提示词会作为文字指令追加。模型专用选项（例如 `seed`、`num_inference_steps` 或 `image_size`）可通过 **Custom Parameters**(自定义参数) 设置。该集成使用同步文生图请求，不发送参考图像，也不会恢复中断的任务。请在所选模型或自定义端点的 API 页面确认支持的输入，例如 [flux/schnell API 参考](https://fal.ai/models/fal-ai/flux/schnell/api)。
 
 ## NanoGPT
 

@@ -88,7 +88,7 @@
 
 기본 **Base URL**이 `https://fal.run`인 클라우드 서비스입니다. [fal.ai](https://fal.ai/dashboard/keys)에서 API 키를 만들고 이미지 서비스 목록에서 **fal.ai**를 선택하세요. 초기 **Model** 목록에는 `fal-ai/flux/schnell`과 `fal-ai/flux/dev`가 있습니다. 입력 및 출력 스키마가 호환되는 다른 텍스트 이미지 생성 엔드포인트 ID도 입력할 수 있습니다. **Test Connection**(연결 테스트)은 설정만 확인합니다. **Test Image**는 실제 생성 요청을 보내므로 fal.ai 크레딧을 사용합니다.
 
-Marinara는 프롬프트와 요청한 크기를 전송하고, 처음 반환된 이미지를 기존 이미지 처리 흐름으로 다운로드합니다. 네거티브 프롬프트는 텍스트 지시로 덧붙입니다. `seed`, `num_inference_steps`, `image_size` 같은 모델별 옵션에는 **Custom Parameters**(사용자 지정 매개변수)를 사용하세요. 이 연동은 동기식 텍스트 이미지 생성 요청을 사용하며, 참조 이미지를 보내거나 중단된 작업을 재개하지 않습니다. 지원하는 입력은 선택한 모델의 [API 참조](https://fal.ai/models/fal-ai/flux/schnell/api)에서 확인하세요.
+Marinara는 프롬프트와 요청한 크기를 전송하고, 처음 반환된 이미지를 기존 이미지 처리 흐름으로 다운로드합니다. 네거티브 프롬프트는 텍스트 지시로 덧붙입니다. `seed`, `num_inference_steps`, `image_size` 같은 모델별 옵션에는 **Custom Parameters**(사용자 지정 매개변수)를 사용하세요. 이 연동은 동기식 텍스트 이미지 생성 요청을 사용하며, 참조 이미지를 보내거나 중단된 작업을 재개하지 않습니다. 지원하는 입력은 선택한 모델이나 사용자 지정 엔드포인트의 API 페이지에서 확인하세요. 예를 들어 [flux/schnell API 참조](https://fal.ai/models/fal-ai/flux/schnell/api)를 볼 수 있습니다.
 
 ## NanoGPT
 

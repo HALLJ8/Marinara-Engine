@@ -309,8 +309,8 @@
     },
     {
       "path": "development/game-combat-ai-design.md",
-      "sha256": "23f672598d1eaabd1696c5a8f12aafb7797f2d125ba96d12ad96112717384a03",
-      "bytes": 99192
+      "sha256": "20369e8bc6c5615ca58ae4974fed30b4c66f656b56595c20a1a94da24f18c426",
+      "bytes": 99267
     },
     {
       "path": "development/game-combat-difficulty-weather.md",
@@ -544,8 +544,8 @@
     },
     {
       "path": "media/image-providers.md",
-      "sha256": "fbfc1e7054841d44499fafa03e5dacfe054a8d72a9c3e05f543f149922c67b86",
-      "bytes": 19779
+      "sha256": "1dffe80506e9a321576476f65ad38bf4338163a5d26bdbebe10402c1f5906eed",
+      "bytes": 19872
     },
     {
       "path": "media/music.md",
