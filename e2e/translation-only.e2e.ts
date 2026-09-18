@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Route } from "@playwright/test";
 import { readFileSync } from "node:fs";
 import { seedUIState } from "./ui-state-fixture.js";
 
@@ -58,6 +58,8 @@ for (const mode of ["roleplay", "conversation", "game"] as const) {
       let translated = 'W archiwum panuje cisza.\n\n"Zacznijmy", mówi Alice.';
       let saved: { id: string } | undefined;
       let generationCount = 0;
+      let holdTranslation = false;
+      let pendingTranslation: Route | undefined;
       await page.route("**/api/generate", async (route) => {
         const regenerateId = route.request().postDataJSON().regenerateMessageId;
         const response = regenerateId
@@ -82,6 +84,10 @@ for (const mode of ["roleplay", "conversation", "game"] as const) {
       });
       await page.route("**/api/translate", async (route) => {
         expect(route.request().postDataJSON().text).toBe(source);
+        if (holdTranslation) {
+          pendingTranslation = route;
+          return;
+        }
         await route.fulfill({ json: { translatedText: translated } });
       });
       await page.route("**/api/app-settings/ui", (route) => route.fulfill({ json: { value: "" } }));
@@ -133,16 +139,28 @@ for (const mode of ["roleplay", "conversation", "game"] as const) {
       if (mode !== "game") {
         source = "The door opens for a new experiment.";
         translated = "Drzwi otwierają się na nowy eksperyment.";
+        holdTranslation = true;
         await row.click();
         await row.getByRole("button", { name: "Regenerate", exact: true }).click();
         if (isMobile) await page.getByRole("dialog").getByRole("button", { name: "Regenerate", exact: true }).click();
         await expect.poll(() => generationCount).toBe(2);
+        await expect.poll(() => Boolean(pendingTranslation)).toBe(true);
+        const pendingText = translated;
+        source = "The lantern illuminates a different path.";
+        translated = "Latarnia oświetla inną drogę.";
+        await row.click();
+        await row.getByRole("button", { name: "Regenerate", exact: true }).click();
+        if (isMobile) await page.getByRole("dialog").getByRole("button", { name: "Regenerate", exact: true }).click();
+        await expect.poll(() => generationCount).toBe(3);
+        holdTranslation = false;
+        await pendingTranslation!.fulfill({ json: { translatedText: pendingText } });
         await expect.poll(async () => (await extra()).translationSource).toBe(source);
         await expect(row).toContainText(translated);
         await expect(row).not.toContainText(source);
         await expect(row).not.toContainText(initialSource.split("\n")[0]!);
         await expect(row).not.toContainText("Let us begin");
         await expect(row).not.toContainText("Zacznijmy");
+        await expect(row).not.toContainText(pendingText);
         await page.screenshot({ path: info.outputPath("translation-only-regenerated.png") });
         await request.patch(`/api/chats/${chat.id}/metadata`, { data: { translationDisplayOnly: false } });
         await page.reload();
