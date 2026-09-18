@@ -1,6 +1,6 @@
 # Game Mode rulesets and ruleset character sheets: implementation handoff
 
-Status: in progress. Written September 18, 2026 against `staging` at `459f8b85` (v2.4.6). Slice 1 (the shared schema, the pin, the registry and Capability API 1.20) is implemented; every later slice is still a proposal. § Format decisions records where the implemented format differs from the first draft and why. It complements `game-combat-rulesets-implementation.md` (the combat handoff). Where the two differ, § Relationship to the combat handoff says so and asks for sign-off rather than quietly overriding it.
+Status: in progress. Written September 18, 2026 against `staging` at `459f8b85` (v2.4.6). Slice 1 (the shared schema, the pin, the registry and Capability API 1.20) and slice 2 (the `dice-sum` resolver, `who=`, and the Game Master reminder swap) are implemented; every later slice is still a proposal. § Format decisions records where the implemented format differs from the first draft and why. It complements `game-combat-rulesets-implementation.md` (the combat handoff). Where the two differ, § Relationship to the combat handoff says so and asks for sign-off rather than quietly overriding it.
 
 Companion file: [`ruleset-5e-2014.example.json`](ruleset-5e-2014.example.json), the first ruleset definition, the precise statement of what "the whole sheet" means, and the file the slice 1 regression validates. The authority for the format is the zod schema in `packages/shared/src/schemas/ruleset.schema.ts`.
 
@@ -72,6 +72,17 @@ The format must serve rulesets nobody has written yet, many of which will be dra
 - **Every label and guidance string follows the gm-verbs prompt hygiene**: one line, no control characters, no square brackets, no macro braces.
 - **A package declares kind `ruleset`**, needs no permission and no entrypoint, and must declare Capability API 1.20 when it lists `ruleset.json`.
 
+## What slice 2 settled
+
+- **The resolver sits behind the existing context.** `SkillCheckModifierContext` gains an optional `ruleset`. Every caller already goes through `resolveSkillCheckWithContext`, so the endpoint, generation post-processing, one-request dice and the sighted pool all reach the ruleset without new call sites.
+- **Finished-looking tags are audited against the sheet.** Under `engine-legacy` a complete tag with tidy arithmetic is accepted as it stands: no context is loaded for it, it is not audited against any sheet, and it is not rolled again. In a ruleset game the generate route passes a `rulesetPinned` hint, the context is loaded for those tags too, and a modifier, die count or natural result the ruleset would not have produced sends the tag back to be rolled. The hint exists so a legacy game still never loads the context for a finished tag.
+- **A pin the install cannot honour fails closed.** Loading the context throws, and the tag driver's existing failure path saves the checks sparse, still owing a roll.
+- **`who=` rides the result.** `SkillCheckResult.who` is set only by the ruleset resolver, and the serializer writes it, so legacy records keep their bytes.
+- **A stranger rolls unmodified dice.** A `who=` that matches no party card, or that two cards share, gets no modifier at all, because a ruleset's defaults are not neutral in every system. A party member (or the player) without a sheet rolls on the ruleset's blank default build, which is what setup copies for them. A skill name the ruleset does not know adds nothing either. Nothing falls back to a guessed ability. The player's own card keeps a name it shares with a party member.
+- **The injected d20 and a player's pre-rolled d20 are honoured only where a single d20 is what the ruleset rolls.** Other dice come from the Engine's fair die.
+- **The endpoint's difficulty cap stays at 40** (marked `ponytail:`); generation post-processing honours a wider ladder.
+- **The sheet block and the sheet command are slice 5**, with live state. Slice 2 swaps only the check lines of the reminder, and drops the line that teaches other dice notations, because a ruleset game has one rules system.
+
 ## Architecture
 
 ### The pin
@@ -135,7 +146,7 @@ The Engine validates every operation against the live sheet. A cast with no slot
 
 `[skill_check:]` gains an optional `who=`. Without it the player is checked, as today. Saves are requested as `skill="Dexterity save"`, which the existing normaliser already recognises.
 
-One-request dice placeholders gain `PROF` and the ruleset's skill ids as resolvable names, under the existing rule that an unresolvable name is refused rather than treated as zero.
+One-request dice placeholders gain `PROF` (when the ruleset has a proficiency bonus) and the ruleset's skills, saves and abilities, by id or label, as resolvable names, under the existing rule that an unresolvable name is refused rather than treated as zero.
 
 ### Setup, editor and in-game UI
 

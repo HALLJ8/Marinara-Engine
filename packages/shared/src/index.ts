@@ -180,3 +180,4 @@ export * from "./features/combat-ai.js";
 export * from "./features/combat-director.js";
 
 export * from "./features/combat-conditions.js";
+export * from "./features/rulesets/sheet-math.js";

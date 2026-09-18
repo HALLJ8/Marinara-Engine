@@ -562,6 +562,7 @@ import {
   loadSkillCheckModifierContext,
   resolveSkillCheckTagsInContent,
 } from "../services/game/skill-check-resolution.service.js";
+import { loadRulesetRegistry, resolveGameRuleset } from "../services/game/ruleset-registry.service.js";
 import { createGameChanceStreamFilter } from "../services/game/chance-stream-filter.js";
 import {
   buildGameSkillModifierView,
@@ -4087,12 +4088,23 @@ export async function generateRoutes(app: FastifyInstance) {
           // can actually resolve this turn. A name the chat cannot resolve is refused rather than
           // defaulted to zero, so the form is advertised only when there is something to resolve.
           // One read, on the switched-on path only, from the same loader the pass itself uses.
+          // The loader refuses a ruleset pin the install cannot honour. That must cost this turn
+          // only the advertised sheet names, never the turn itself.
           const gameSkillModifierContext = oneRequestDiceTurn
-            ? await loadSkillCheckModifierContext(app.db, input.chatId)
+            ? await loadSkillCheckModifierContext(app.db, input.chatId).catch((err: unknown) => {
+                logger.warn(err, "[game/one-request-dice] No sheet names to advertise for chat %s", input.chatId);
+                return null;
+              })
             : null;
           const gameSkillModifierView = gameSkillModifierContext
             ? buildGameSkillModifierView(gameSkillModifierContext)
             : undefined;
+          // A pinned ruleset replaces the built-in check lines. One the install cannot honour
+          // renders the built-in reminder, and the resolver then saves its checks sparse.
+          // `loadRulesetRegistry` never throws: a failed read is logged there and comes back as an
+          // empty registry, which resolves to "unavailable" here.
+          const pinnedGameRuleset =
+            chatMeta.gameRuleset != null ? resolveGameRuleset(chatMeta, await loadRulesetRegistry()) : null;
           // The pool block is rendered from the same session the readers spend out of, and
           // from the same modifier context the resolver uses, so the block and the engine
           // cannot disagree about a value or about a total.
@@ -4124,6 +4136,7 @@ export async function generateRoutes(app: FastifyInstance) {
               // the reminder renders the bytes it renders today.
               oneRequestDice: oneRequestDiceTurn,
               skillModifiers: gameSkillModifierView,
+              ...(pinnedGameRuleset?.status === "ok" ? { ruleset: pinnedGameRuleset.definition } : {}),
               dicePoolMode: gameDicePoolTurn,
               dicePoolBlock,
               rollDiceToolAttached,
@@ -8177,6 +8190,11 @@ export async function generateRoutes(app: FastifyInstance) {
             const rolled = await resolveSkillCheckTagsInContent(fullResponse, {
               loadContext: () => loadSkillCheckModifierContext(app.db, input.chatId),
               chatId: input.chatId,
+              // Keyed on the pin being PRESENT, not on it resolving. A pin the install cannot
+              // honour must still fail closed (the context refuses to load and the checks are
+              // saved sparse); treating it as unpinned would roll a ruleset game's checks with
+              // the Engine's own arithmetic.
+              ...(chatMeta.gameRuleset != null ? { rulesetPinned: true } : {}),
               ...(dicePoolSession ? { pool: dicePoolSession } : {}),
             });
             const generalRolls = resolveGameDiceRequests(

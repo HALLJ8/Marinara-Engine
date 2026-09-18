@@ -4915,6 +4915,8 @@ function replaceFirstUnresolvedSkillCheckTag(
     if (!isEngineRollableSkillCheckTag(tag)) return fullTag;
     if (tag.skill.trim().toLowerCase() !== request.skill.trim().toLowerCase()) return fullTag;
     if (tag.dc !== request.dc) return fullTag;
+    // Set by a ruleset game only: the tag must then be that character's own.
+    if (result.who && (tag.who ?? "").trim().toLowerCase() !== result.who.trim().toLowerCase()) return fullTag;
 
     replaced = true;
     return serializeResolvedSkillCheckTag(result);
@@ -9209,9 +9211,13 @@ export async function gameRoutes(app: FastifyInstance) {
     advantage: z.boolean().optional(),
     disadvantage: z.boolean().optional(),
     preRolledD20: z.number().int().min(1).max(20).optional(),
+    /** The party member to roll for in a game with a pinned ruleset; ignored without one. */
+    who: z.string().trim().min(1).max(100).optional(),
     messageId: z.string().min(1).optional(),
   });
 
+  // ponytail: dc stays capped at 40 here even when a ruleset's ladder reaches further. Generation
+  // post-processing already honours the ladder; widen this when a ruleset needs the fallback too.
   app.post("/skill-check", async (req) => {
     const input = skillCheckSchema.parse(req.body);
 
@@ -9223,6 +9229,7 @@ export async function gameRoutes(app: FastifyInstance) {
       advantage: input.advantage,
       disadvantage: input.disadvantage,
       preRolledD20: input.preRolledD20,
+      who: input.who,
     });
 
     let updatedContent: string | undefined;

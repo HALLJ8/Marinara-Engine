@@ -636,6 +636,32 @@ export function buildGmSystemPrompt(ctx: GmPromptContext): string {
  * Build the GM format reminder — injected as the last user message so the
  * output format and available commands sit closest to generation in context.
  */
+/** The ruleset's own check line, in place of the built-in one. Everything in it is the ruleset's
+ *  validated, prompt-safe text; the Engine adds only the tag shape and the ladder. */
+function renderRulesetSkillCheckLine(
+  ruleset: import("@marinara-engine/shared").RulesetDefinition,
+  playerDiceRollSubmitted: boolean,
+  oneRequestDice: boolean,
+): string {
+  const { dice, advantage, difficultyLadder } = ruleset.resolution;
+  const ladder = difficultyLadder.map((step) => `${step.label} ${step.dc}`).join(", ");
+  const playerDie = playerDiceRollSubmitted && dice.count === 1 && dice.sides === 20;
+  return [
+    `- [skill_check: skill="Name" dc="N"${playerDie ? ` rolls="the player's d20 result"` : ""}] - ${ruleset.gm.checkGuidance}`,
+    `Difficulty: ${ladder}.`,
+    `Add who="Character Name" to roll for a party member; without it the player is checked.`,
+    ...(advantage ? [`Add mode="advantage" or mode="disadvantage" when the rules grant one.`] : []),
+    playerDie
+      ? `Use the player's exact die. Do NOT write modifier, total or result: the engine applies the character sheet.`
+      : `Do NOT write rolls, modifier, total or result: the engine rolls ${dice.count}d${dice.sides} and applies the character sheet.`,
+    ...(oneRequestDice
+      ? [
+          `When the outcome splits two ways, add branch="label" to this tag and write the branch block described under DICE.`,
+        ]
+      : []),
+  ].join(" ");
+}
+
 export function buildGmFormatReminder(
   ctx: Pick<
     GmPromptContext,
@@ -661,6 +687,10 @@ export function buildGmFormatReminder(
     addressMode?: "party" | "gm";
     /** Whether the current player turn already includes a resolved [dice: ...] roll. */
     playerDiceRollSubmitted?: boolean;
+    /** The ruleset this game pinned, when the install can honour it. Its check guidance and
+     *  difficulty ladder replace the built-in skill-check lines. Absent is the Engine's own rules
+     *  and renders today's reminder byte for byte. */
+    ruleset?: import("@marinara-engine/shared").RulesetDefinition;
     /** Built-in systems an installed experience replaces with its own. Undeclared systems stay built-in. */
     experienceProvidedSystems?: { inventory?: boolean };
     /** Rendered COMMANDS lines for the verbs an installed experience declares (#5798). They belong
@@ -814,7 +844,9 @@ export function buildGmFormatReminder(
   );
 
   // The engine supplies numbers before the GM writes outcome narration.
-  if (ctx.playerDiceRollSubmitted) {
+  if (ctx.ruleset) {
+    lines.push(renderRulesetSkillCheckLine(ctx.ruleset, ctx.playerDiceRollSubmitted === true, oneRequestDice));
+  } else if (ctx.playerDiceRollSubmitted) {
     lines.push(
       `- [skill_check: skill="Skill Name" dc="1-20" rolls="the player's d20 result"] - use the player's exact die and choose a fair DC (5 trivial, 10 routine under pressure, 15 hard, 20 desperate). Do NOT write modifier, total or result: the engine applies their character-sheet modifiers.`,
     );
@@ -833,7 +865,12 @@ export function buildGmFormatReminder(
         ? ` When the number does not fork the prose, write a [[roll: 3d8+2]] placeholder in the sentence instead of this tag and keep writing.`
         : ""
     }`,
-    `- For other checks, declare the actual notation: [skill_check: skill="Endurance" dc="12" dice="3d6+2"]. These use the notation's modifier, not d20 character-sheet modifiers. For a pool, declare the per-die threshold and required successes: [skill_check: skill="Intimidation" dc="4" dice="6d10" resolution="successes" threshold="6"]. Each die at or above threshold counts once; dc is the number of successes needed. Exploding dice, botches, or other special pool rules are not implemented. Never invent pool results or omit its threshold.`,
+    // A ruleset game has one rules system, so the line teaching other notations is dropped.
+    ...(ctx.ruleset
+      ? []
+      : [
+          `- For other checks, declare the actual notation: [skill_check: skill="Endurance" dc="12" dice="3d6+2"]. These use the notation's modifier, not d20 character-sheet modifiers. For a pool, declare the per-die threshold and required successes: [skill_check: skill="Intimidation" dc="4" dice="6d10" resolution="successes" threshold="6"]. Each die at or above threshold counts once; dc is the number of successes needed. Exploding dice, botches, or other special pool rules are not implemented. Never invent pool results or omit its threshold.`,
+        ]),
     // The stop-at-the-attempt line is exactly the instruction the second request exists to
     // serve, so it is dropped while the turn has to finish itself.
     ...(oneRequestDice
@@ -906,7 +943,7 @@ export function buildGmFormatReminder(
       ``,
       sightedPool
         ? `- ONLY IF THE NUMBER ITSELF HAS TO DECIDE BETWEEN THREE OR MORE DIFFERENT OUTCOMES, spend a pool value instead: write the value shown below into the check's rolls= and name its slot with pool=, then narrate what it meant in this same turn.`
-        : `- ONLY IF THE NUMBER ITSELF HAS TO DECIDE BETWEEN THREE OR MORE DIFFERENT OUTCOMES, ask for the value instead: write [skill_check: skill="Skill Name" dc="1-20"] or [dice: 3d8+2] and stop at the attempt. The engine rolls it and records it. Narrate what it meant at the start of your next turn.`,
+        : `- ONLY IF THE NUMBER ITSELF HAS TO DECIDE BETWEEN THREE OR MORE DIFFERENT OUTCOMES, ask for the value instead: write [skill_check: skill="Skill Name" dc="${ctx.ruleset ? "N" : "1-20"}"] or [dice: 3d8+2] and stop at the attempt. The engine rolls it and records it. Narrate what it meant at the start of your next turn.`,
       ``,
       `- A check you write in none of these forms is rolled by the engine and recorded, and this turn ends without its outcome; narrate what the number meant at the start of your next turn.`,
       ``,
@@ -926,8 +963,14 @@ export function buildGmFormatReminder(
       `DICE:`,
       `- roll_dice is a real die you can throw. Call it the moment you need an actual number before you can keep writing - an attack, a save, damage, a random outcome the scene then reacts to - passing the notation (for example "1d20+3") and a short reason.`,
       `- Never invent a die result. Wait for the number the tool gives you, then narrate what it means, once, in this same turn.`,
-      `- If roll_dice has already returned a skill check's roll, override the sparse-check instructions above: write a complete [skill_check: skill="Skill Name" dc="chosen DC" rolls="actual tool rolls joined with |" modifier="tool modifier" total="tool total" result="critical_success|success|failure|critical_failure" resolution="sum" dice="tool notation"] record using that result. Do not request another engine roll or stop at the attempt; narrate its consequence in this same turn. Use the sparse form only when no roll result is available.`,
-      ctx.playerDiceRollSubmitted
+      // A ruleset game's checks come from the character sheet, so a tool-made modifier is never
+      // the record: the engine would roll such a tag again and contradict the narration.
+      ctx.ruleset
+        ? `- Do not use roll_dice for an ability check, skill check or saving throw. Write the [skill_check: ...] tag above without numbers and the engine rolls it from the character sheet.`
+        : `- If roll_dice has already returned a skill check's roll, override the sparse-check instructions above: write a complete [skill_check: skill="Skill Name" dc="chosen DC" rolls="actual tool rolls joined with |" modifier="tool modifier" total="tool total" result="critical_success|success|failure|critical_failure" resolution="sum" dice="tool notation"] record using that result. Do not request another engine roll or stop at the attempt; narrate its consequence in this same turn. Use the sparse form only when no roll result is available.`,
+      // A player's d20 only stands in for a check where a single d20 is what the rules roll.
+      ctx.playerDiceRollSubmitted &&
+        (!ctx.ruleset || (ctx.ruleset.resolution.dice.count === 1 && ctx.ruleset.resolution.dice.sides === 20))
         ? `- The player already threw for this turn. Use their roll rather than calling the tool again for the same action.`
         : `- A skill check is still written down with the [skill_check: ...] tag above. roll_dice is how you get a number your narration needs in hand; it does not replace that record.`,
       `- If the tool is not available to you on this connection, work from the tag alone and say nothing about tools.`,
