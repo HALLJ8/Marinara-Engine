@@ -368,4 +368,33 @@ function assertRefused(input: unknown, pattern: RegExp, message: string) {
   );
 }
 
+// ── The editors' endpoint tells "none installed" from "could not look" ──
+// Game resolution swallows a failed read (an empty registry reports the pin missing). The sheet
+// editors must not: an empty answer there would list every stored sheet as "not installed".
+{
+  const { capabilityPackageManager } =
+    await import("../../packages/server/src/services/capability-packages/package-manager.service.js");
+  const { loadRulesetRegistry } = await import("../../packages/server/src/services/game/ruleset-registry.service.js");
+  const { capabilityPackagesRoutes } = await import("../../packages/server/src/routes/capability-packages.routes.js");
+  const { default: Fastify } = await import("../../packages/server/node_modules/fastify/fastify.js");
+  const app = Fastify();
+  await app.register(capabilityPackagesRoutes, { prefix: "/api/capability-packages" });
+  const readSources = capabilityPackageManager.rulesetSources;
+  try {
+    const healthy = await app.inject({ method: "GET", url: "/api/capability-packages/rulesets" });
+    assert.equal(healthy.statusCode, 200);
+    assert.ok(Array.isArray(healthy.json()));
+
+    capabilityPackageManager.rulesetSources = async () => {
+      throw new Error("installed packages are unreadable");
+    };
+    const failed = await app.inject({ method: "GET", url: "/api/capability-packages/rulesets" });
+    assert.equal(failed.statusCode, 500, "a failed read is an error, never an empty list");
+    assert.equal((await loadRulesetRegistry()).size, 0, "game resolution still gets an empty registry");
+  } finally {
+    capabilityPackageManager.rulesetSources = readSources;
+    await app.close();
+  }
+}
+
 console.info("game ruleset registry regressions passed.");

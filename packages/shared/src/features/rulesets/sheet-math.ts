@@ -132,9 +132,12 @@ export function evaluateRulesetSheet(definition: RulesetDefinition, build: Rules
     if (ref.abilityScore !== undefined) return abilityScores[ref.abilityScore] ?? 0;
     if (ref.abilityMod !== undefined) return abilityMods[ref.abilityMod] ?? 0;
     if (ref.abilityModFromField !== undefined) {
-      // An unset choice reads as the field's declared default, like every other field.
-      const fieldId = ref.abilityModFromField;
-      const chosen = build.fields?.[fieldId] ?? sheet.fields.find((field) => field.id === fieldId)?.default;
+      // An unset choice reads as the field's declared default, like every other field. So does a
+      // stored choice the ruleset no longer offers, which is also what the sheet editor shows.
+      const field = sheet.fields.find((entry) => entry.id === ref.abilityModFromField);
+      const stored = build.fields?.[ref.abilityModFromField];
+      const offered = typeof stored === "string" && field?.type === "enum" && field.values.includes(stored);
+      const chosen = offered ? stored : field?.default;
       return typeof chosen === "string" ? (abilityMods[chosen] ?? 0) : 0;
     }
     if (ref.skillMod !== undefined) {

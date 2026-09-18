@@ -1,6 +1,6 @@
 # Game Mode rulesets and ruleset character sheets: implementation handoff
 
-Status: in progress. Written September 18, 2026 against `staging` at `459f8b85` (v2.4.6). Slice 1 (the shared schema, the pin, the registry and Capability API 1.20) and slice 2 (the `dice-sum` resolver, `who=`, and the Game Master reminder swap) are implemented; every later slice is still a proposal. § Format decisions records where the implemented format differs from the first draft and why. It complements `game-combat-rulesets-implementation.md` (the combat handoff). Where the two differ, § Relationship to the combat handoff says so and asks for sign-off rather than quietly overriding it.
+Status: in progress. Written September 18, 2026 against `staging` at `459f8b85` (v2.4.6). Slice 1 (the shared schema, the pin, the registry and Capability API 1.20) slice 2 (the `dice-sum` resolver, `who=`, and the Game Master reminder swap) and slice 3 (sheets on cards and personas) are implemented; every later slice is still a proposal. § Format decisions records where the implemented format differs from the first draft and why. It complements `game-combat-rulesets-implementation.md` (the combat handoff). Where the two differ, § Relationship to the combat handoff says so and asks for sign-off rather than quietly overriding it.
 
 Companion file: [`ruleset-5e-2014.example.json`](ruleset-5e-2014.example.json), the first ruleset definition, the precise statement of what "the whole sheet" means, and the file the slice 1 regression validates. The authority for the format is the zod schema in `packages/shared/src/schemas/ruleset.schema.ts`.
 
@@ -82,6 +82,14 @@ The format must serve rulesets nobody has written yet, many of which will be dra
 - **The injected d20 and a player's pre-rolled d20 are honoured only where a single d20 is what the ruleset rolls.** Other dice come from the Engine's fair die.
 - **The endpoint's difficulty cap stays at 40** (marked `ponytail:`); generation post-processing honours a wider ladder.
 - **The sheet block and the sheet command are slice 5**, with live state. Slice 2 swaps only the check lines of the reminder, and drops the line that teaches other dice notations, because a ruleset game has one rules system.
+
+## What slice 3 settled
+
+- **The storage boundary is bounded, never shape-checked.** `rulesetSheets` is declared on the character extensions and persona stats schemas as a record whose keys must be ruleset ids and whose values must be objects of at most 64 KB, at most 32 of them. The sheet's shape is not validated there, because the ruleset may not be installed. An update that breaks a bound is refused with a message.
+- **Importers cap, they do not refuse.** `capImportedRulesetSheets` drops only a sheet the boundary would refuse, so one bad sheet never costs an import the card. It runs in the native character importer, the SillyTavern importer, and inside `normalizePersonaStats`, which is also the persona read path.
+- **The editor is one generic component** (`RulesetSheetEditor`) rendered from the definition, mounted by `RulesetSheetsSection` in both **Stats** tabs. Installed rulesets come from `GET /api/capability-packages/rulesets`, keyed under the capability package query keys so an install or removal refreshes it.
+- **Values are clamped when edited, never when read**, and a stored proficiency tier the ruleset no longer offers still shows as what it is.
+- **Nothing is called dormant until the installed list has loaded**, so a slow request never shows a live sheet as missing.
 
 ## Architecture
 

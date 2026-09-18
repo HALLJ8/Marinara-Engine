@@ -799,6 +799,8 @@ export type RulesetField = z.infer<typeof rulesetFieldSchema>;
 export type RulesetListColumn = z.infer<typeof rulesetListColumnSchema>;
 export type RulesetDerived = z.infer<typeof rulesetDerivedSchema>;
 export type RulesetRest = RulesetDefinition["rests"][number];
+/** One installed ruleset as the API lists it: the whole definition plus the package that supplied it. */
+export type InstalledRuleset = { packageId: string | null; definition: RulesetDefinition };
 
 /** Authors may annotate any object with `$comment`, and the document root with `$schema` for
  *  editor support. Both are dropped before validation so the strict schema never sees them. */
@@ -852,3 +854,66 @@ export const rulesetSheetEnvelopeSchema = z
 
 export type RulesetSheetBuild = z.infer<typeof rulesetSheetBuildSchema>;
 export type RulesetSheetEnvelope = z.infer<typeof rulesetSheetEnvelopeSchema>;
+
+// ── Sheets as they travel on a character card or a persona ──
+
+/** How many rulesets one card or persona may hold a sheet for. */
+export const RULESET_SHEETS_MAX = 32;
+
+function storedRulesetSheetIssue(rulesetId: string, sheet: unknown): string | null {
+  if (!RULESET_REF_ID_PATTERN.test(rulesetId) || rulesetId.length > 140) return `"${rulesetId}" is not a ruleset id`;
+  if (!sheet || typeof sheet !== "object" || Array.isArray(sheet))
+    return `The sheet for "${rulesetId}" is not an object`;
+  let bytes: number;
+  try {
+    bytes = new TextEncoder().encode(JSON.stringify(sheet)).length;
+  } catch {
+    return `The sheet for "${rulesetId}" cannot be serialized`;
+  }
+  return bytes > RULESET_SHEET_MAX_BYTES
+    ? `The sheet for "${rulesetId}" is ${bytes} bytes, over the ${RULESET_SHEET_MAX_BYTES}-byte limit`
+    : null;
+}
+
+/** `rulesetSheets`: starting builds keyed by ruleset id, on `character.data.extensions` and on
+ *  `persona.personaStats`. The boundary checks only what must hold for ANY ruleset (a usable key, an
+ *  object, the size cap), never the sheet's shape: a sheet for a ruleset this install lacks is kept
+ *  dormant under its key and validated against that ruleset only once it is installed and used.
+ *  Dropping it would destroy the sheet for everyone downstream of a re-export. */
+export const storedRulesetSheetsSchema = z.record(z.unknown()).superRefine((sheets, ctx) => {
+  const ids = Object.keys(sheets);
+  if (ids.length > RULESET_SHEETS_MAX) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: `At most ${RULESET_SHEETS_MAX} ruleset sheets can be stored`,
+    });
+  }
+  for (const id of ids) {
+    const message = storedRulesetSheetIssue(id, sheets[id]);
+    if (message) ctx.addIssue({ code: z.ZodIssueCode.custom, path: [id], message });
+  }
+});
+
+export type StoredRulesetSheets = Record<string, unknown>;
+
+/** For importers: keep every sheet the boundary would accept and drop the rest, so one oversized
+ *  or malformed sheet costs the import that sheet and not the whole card. Returns what was dropped
+ *  so the caller can say so. Anything that is not a plain object reads as no sheets at all, and so
+ *  does a map with nothing left in it, so a caller never writes an empty key. */
+export function capImportedRulesetSheets(value: unknown): {
+  sheets: StoredRulesetSheets | undefined;
+  dropped: string[];
+} {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return { sheets: undefined, dropped: value === undefined || value === null ? [] : ["(not an object)"] };
+  }
+  const sheets: StoredRulesetSheets = {};
+  const dropped: string[] = [];
+  for (const [id, sheet] of Object.entries(value as Record<string, unknown>)) {
+    const message =
+      Object.keys(sheets).length >= RULESET_SHEETS_MAX ? "too many sheets" : storedRulesetSheetIssue(id, sheet);
+    if (message) dropped.push(id.slice(0, 140));
+    else sheets[id] = sheet;
+  }
+  return { sheets: Object.keys(sheets).length > 0 ? sheets : undefined, dropped };
+}
