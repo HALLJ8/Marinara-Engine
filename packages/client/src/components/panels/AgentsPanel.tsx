@@ -1209,7 +1209,8 @@ export function AgentsPanel() {
       <input
         ref={rulesetImportInputRef}
         type="file"
-        accept="application/json,.json"
+        // By extension only: the Agent import input beside this one is the panel's JSON-typed input.
+        accept=".json"
         className="hidden"
         onChange={(event) => void handleRulesetFileSelected(event)}
       />
