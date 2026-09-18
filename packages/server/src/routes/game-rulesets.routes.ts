@@ -18,6 +18,7 @@ import {
   parseRulesetDefinition,
   rulesetRefSchema,
   RULESET_LOCAL_NAMESPACE,
+  RULESET_MAX_BYTES,
 } from "@marinara-engine/shared";
 import { logger } from "../lib/logger.js";
 import { requirePrivilegedAccess } from "../middleware/privileged-gate.js";
@@ -58,8 +59,12 @@ function pinnedRulesetId(metadata: unknown): string | null {
   return typeof id === "string" ? id : null;
 }
 
+/** The file travels as one JSON string, where escaping can make a byte up to six (`\uXXXX`). Bounding
+ *  the request here refuses an oversized body before it is buffered and parsed. */
+const IMPORT_BODY_LIMIT = RULESET_MAX_BYTES * 6 + 16_384;
+
 export async function gameRulesetsRoutes(app: FastifyInstance) {
-  app.post("/import", async (req, reply) => {
+  app.post("/import", { bodyLimit: IMPORT_BODY_LIMIT }, async (req, reply) => {
     if (!requirePrivilegedAccess(req, reply, { feature: "Ruleset import" })) return;
     if (!(await getCustomAgentImportPolicy(app.db)).enabled) {
       return reply.status(403).send({
