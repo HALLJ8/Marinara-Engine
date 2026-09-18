@@ -101,7 +101,21 @@ forest.units[3]!.hp = 0;
 forest.units[0]!.x = 5;
 forest.grid.tiles[1]![2] = "forest";
 forest.grid.tiles[1]![3] = "forest";
+forest.grid.tiles[1]![4] = "forest";
 assert.deepEqual(pursueOpponent(forest, forest.units[2]!)!.to, { x: 2, y: 1 });
+forest.units[2]!.movement = 4;
+assert.deepEqual(decideTacticalAction(forest, forest.units[2]!), {
+  type: "wait",
+  unitId: "beast",
+  to: { x: 3, y: 1 },
+});
+forest.weather = { version: 1, type: "snow", wind: "calm", visibility: "clear", exposure: "exposed" };
+assert.deepEqual(decideTacticalAction(forest, forest.units[2]!), {
+  type: "wait",
+  unitId: "beast",
+  to: { x: 2, y: 1 },
+});
+assert.ok(getMovementRange(forest, "beast").some((tile) => tile.x === 2 && tile.y === 1));
 
 // Support moves into range and uses finite resources; allies share the same policy.
 const support = arena();
