@@ -4,6 +4,11 @@ This file is the release-notes source of truth for Marinara Engine. Reuse these 
 
 ## [Unreleased]
 
+- Regenerating a translated reply now translates its new content instead of retaining the previous version beside the original when Show Only Translation is enabled (#6317).
+- Launchers check the complete client build inventory and rebuild missing or empty assets before startup. Missing frontend files return 404 instead of HTML, with recovery guidance for blank pages after updates (#6320).
+- Selfie documentation lists the supported model command forms and the Conversation-mode setup requirements (#6318).
+- Reasoning-only replies without evidence of an exhausted output limit no longer suggest lowering Reasoning Effort as the cause; the error points to retrying and inspecting the response (#6321).
+
 - Image connections support fal.ai text-to-image generation, with FLUX starter models, custom model endpoints and parameters, and the existing image previews and gallery (#6312).
 - Connection tests retain fast results after automatically saving edited settings.
 
