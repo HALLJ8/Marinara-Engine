@@ -32,6 +32,7 @@ import { safeFetch } from "../../utils/security.js";
 import { createAgentsStorage } from "../storage/agents.storage.js";
 import {
   createGameRulesetsStorage,
+  RulesetRefusedError,
   RulesetVersionConflictError,
   type GameRulesetRow,
 } from "../storage/game-rulesets.storage.js";
@@ -544,14 +545,21 @@ export function createCustomAgentRepositoriesService(db: DB) {
         });
         result[stored.status] += 1;
       } catch (error) {
-        if (!(error instanceof RulesetVersionConflictError)) throw error;
+        // Either refusal is about this one file. Anything else is the store failing, which has to
+        // stop the confirm rather than be counted as a skipped ruleset.
+        if (error instanceof RulesetVersionConflictError) {
+          logger.warn(
+            "Kept installed ruleset %s version %d rather than the differing one in %s",
+            rulesetId,
+            definition.version,
+            snapshot.repository.url,
+          );
+        } else if (error instanceof RulesetRefusedError) {
+          logger.warn("Skipped ruleset %s from %s: %s", rulesetId, snapshot.repository.url, error.message);
+        } else {
+          throw error;
+        }
         result.skipped += 1;
-        logger.warn(
-          "Kept installed ruleset %s version %d rather than the differing one in %s",
-          rulesetId,
-          definition.version,
-          snapshot.repository.url,
-        );
       }
     }
     return result;
