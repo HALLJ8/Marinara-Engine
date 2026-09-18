@@ -5299,14 +5299,14 @@ for (const buildEntry of ["packages/shared/dist/constants/defaults.js", "package
     `Termux must rebuild when ${buildEntry} is missing`,
   );
 }
-const termuxClientBuildBlock = termuxLauncher.match(
-  /^if ! node scripts\/check-client-build\.mjs; then\r?\n((?:[ \t]+[^\n]*\n)*)fi$/mu,
-)?.[1];
+const termuxClientBuildBlock = termuxLauncher
+  .split("if ! node scripts/check-client-build.mjs; then\n")[1]
+  ?.split("\nfi")[0];
 assert.ok(termuxClientBuildBlock, "Termux must handle an incomplete client build");
 assert.match(termuxClientBuildBlock, /SKIP_PWA=1 run_pnpm --filter @marinara-engine\/client exec vite build/u);
 assert.match(
   termuxClientBuildBlock,
-  /    node scripts\/check-client-build\.mjs\r?\n$/u,
+  /    node scripts\/check-client-build\.mjs$/u,
   "Termux must rebuild and recheck incomplete client assets, including a missing index",
 );
 
