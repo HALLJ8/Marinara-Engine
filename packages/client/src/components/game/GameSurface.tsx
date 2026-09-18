@@ -5121,6 +5121,7 @@ function GameSurfaceComponent({
                     advantage: sc.advantage,
                     disadvantage: sc.disadvantage,
                     preRolledD20: sc.preRolledD20,
+                    who: sc.who,
                     messageId: msg.id,
                   })
                 ).result
