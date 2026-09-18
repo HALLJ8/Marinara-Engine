@@ -137,20 +137,28 @@ for (const mode of ["roleplay", "conversation", "game"] as const) {
       await expect(row).not.toContainText("Let us begin");
       await expect(row).not.toContainText(initialSource.split("\n")[0]!);
       if (mode !== "game") {
+        const regenerate = async () => {
+          const action = row.getByRole("button", { name: "Regenerate", exact: true });
+          if (isMobile) {
+            // Use touch input and keep an already revealed action bar open.
+            if (!(await action.isVisible())) await row.tap();
+            await action.tap();
+            await page.getByRole("dialog").getByRole("button", { name: "Regenerate", exact: true }).tap();
+          } else {
+            await row.hover();
+            await action.click();
+          }
+        };
         source = "The door opens for a new experiment.";
         translated = "Drzwi otwierają się na nowy eksperyment.";
         holdTranslation = true;
-        await row.click();
-        await row.getByRole("button", { name: "Regenerate", exact: true }).click();
-        if (isMobile) await page.getByRole("dialog").getByRole("button", { name: "Regenerate", exact: true }).click();
+        await regenerate();
         await expect.poll(() => generationCount).toBe(2);
         await expect.poll(() => Boolean(pendingTranslation)).toBe(true);
         const pendingText = translated;
         source = "The lantern illuminates a different path.";
         translated = "Latarnia oświetla inną drogę.";
-        await row.click();
-        await row.getByRole("button", { name: "Regenerate", exact: true }).click();
-        if (isMobile) await page.getByRole("dialog").getByRole("button", { name: "Regenerate", exact: true }).click();
+        await regenerate();
         await expect.poll(() => generationCount).toBe(3);
         holdTranslation = false;
         await pendingTranslation!.fulfill({ json: { translatedText: pendingText } });
