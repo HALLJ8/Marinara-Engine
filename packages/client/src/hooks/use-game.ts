@@ -592,6 +592,7 @@ export function useSkillCheck() {
       advantage?: boolean;
       disadvantage?: boolean;
       preRolledD20?: number;
+      who?: string;
       messageId?: string;
     }) =>
       api.post<{ result: import("@marinara-engine/shared").SkillCheckResult; updatedContent?: string }>(

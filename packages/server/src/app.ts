@@ -26,7 +26,6 @@ import { migrateTtsSettingsToAudioConnection } from "./services/connections/tts-
 import { migrateLegacyDefaultAgentPrompts } from "./services/agents/default-prompt-migration.js";
 import { APP_VERSION, resetTurnGameRegistry } from "@marinara-engine/shared";
 import { existsSync } from "fs";
-import { readFile } from "fs/promises";
 import { join, resolve, dirname } from "path";
 import { fileURLToPath } from "url";
 import { getBuildCommit, getBuildLabel } from "./config/build-info.js";
@@ -48,7 +47,7 @@ import { initializeCapabilityAgentRegistry } from "./services/capability-package
 import { capabilityPackageManager } from "./services/capability-packages/package-manager.service.js";
 import { capabilityModuleRuntime } from "./services/capability-packages/capability-module-runtime.service.js";
 import { migrateLegacyCapabilities } from "./services/capability-packages/legacy-capability-migration.js";
-import { createClientStaticOptions } from "./config/client-static-config.js";
+import { createClientNotFoundHandler, createClientStaticOptions } from "./config/client-static-config.js";
 import { hostValidationHook } from "./middleware/host-validation.js";
 import { androidLocalAuthHook, androidLocalLoginRoute } from "./middleware/android-local-auth.js";
 import { arch, platform, release } from "node:os";
@@ -294,17 +293,8 @@ export async function buildApp(https?: { cert: Buffer; key: Buffer }) {
   if (existsSync(clientIndex)) {
     await app.register(fastifyStatic, createClientStaticOptions(clientDist));
 
-    // SPA fallback — serve index.html for non-API routes
-    app.setNotFoundHandler(async (req, reply) => {
-      if (req.raw.url?.startsWith("/api/")) {
-        return reply.status(404).send({ error: "Not Found" });
-      }
-
-      reply.header("Cache-Control", "no-cache, must-revalidate");
-      reply.header("Pragma", "no-cache");
-      reply.header("Expires", "0");
-      return reply.type("text/html; charset=utf-8").send(await readFile(clientIndex));
-    });
+    // Only navigation falls back to HTML; missing modules must remain a 404.
+    app.setNotFoundHandler(createClientNotFoundHandler(clientIndex));
   } else {
     app.log.warn(
       "Client build entry not found at %s; serving API only. Run `pnpm build` to build the frontend.",

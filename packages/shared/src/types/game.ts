@@ -144,6 +144,9 @@ export interface GameCharacterCard {
     hp: { value: number; max: number };
     pools?: import("./character.js").RPGStatPool[];
   };
+  /** This game's copy of the character's sheet for the pinned ruleset (`chat.metadata.gameRuleset`).
+   *  Edited in the game, never written back to the library card or persona. */
+  rulesetSheet?: import("../schemas/ruleset.schema.js").RulesetSheetEnvelope;
 }
 
 // ── NPCs ──
@@ -411,6 +414,11 @@ export interface SkillCheckResult {
    * non-d20 systems (pool systems like V20) reach the dice card intact.
    */
   dice?: string;
+  /**
+   * The party member the check was rolled for, in a game with a pinned ruleset. Absent means the
+   * player, and always absent under the Engine's own rules, which only ever check the player.
+   */
+  who?: string;
 }
 
 // ── The sighted dice pool (opt-in, last) ──

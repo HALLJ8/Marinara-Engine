@@ -6,6 +6,12 @@ This file is the release-notes source of truth for Marinara Engine. Reuse these 
 
 - OpenAI-compatible connections to OpenCode Go/Zen automatically send a stable per-chat session header and identify Marinara Engine, including nested generation, retries and chat translations (#6325).
 
+- Mindless Tactical enemies follow the fewest legal steps instead of choosing a longer cheap detour, while still paying terrain and weather movement costs (#6324).
+- Regenerating a translated reply now translates its new content instead of retaining the previous version beside the original when Show Only Translation is enabled (#6317).
+- Launchers check the complete client build inventory and rebuild missing or empty assets before startup. Missing frontend files return 404 instead of HTML, with recovery guidance for blank pages after updates (#6320).
+- Selfie documentation lists the supported model command forms and the Conversation-mode setup requirements (#6318).
+- Reasoning-only replies without evidence of an exhausted output limit no longer suggest lowering Reasoning Effort as the cause; the error points to retrying and inspecting the response (#6321).
+
 - Image connections support fal.ai text-to-image generation, with FLUX starter models, custom model endpoints and parameters, and the existing image previews and gallery (#6312).
 - Connection tests retain fast results after automatically saving edited settings.
 
@@ -33,6 +39,7 @@ This file is the release-notes source of truth for Marinara Engine. Reuse these 
 - Classic combat consumes items only when their accepted action executes, keeping abandoned retries and skipped turns from spending inventory, and retains spent spell slots between rounds. Tactical AI uses the same skill-power floor as combat resolution when weighing area attacks.
 - Game creation describes Tactical combat without an external game comparison and no longer asks for permanent terrain guidance. Added combat AI, Summoning and versioned ruleset handoffs, with the implemented boss/reaction boundaries and remaining ruleset work.
 - Groundwork for selectable Game Mode rulesets: a capability package can now ship its rules as a validated `ruleset.json` data file (Capability API 1.20, package kind `ruleset`), and chats have a place to record which ruleset a game was created on. Nothing selects a ruleset yet, so every existing and new game plays exactly as before. See `docs/development/game-rulesets-and-sheets-implementation.md`.
+- Game Mode checks in a game that pinned a ruleset now use that ruleset: its dice, its difficulty ladder, the character's ruleset sheet, and its own rule for natural results (5e SRD 5.1 has no automatic success or failure on checks and saves). The Game Master can add `who="Name"` to check a party member, and a check that carries a modifier it invented itself is rolled again with the modifier from the sheet. Games without a ruleset are unchanged.
 - Storage flushes already waiting when shutdown starts now join the final write drain, avoiding a spurious closed-store error while preserving pending data and reporting failed admitted writes even when shutdown retries successfully (#6298).
 
 - Capability packages can now offer tools the model calls during a turn, so a package that owns live state receives structured, validated data instead of parsing it back out of the reply. Narration still streams while the call happens. See `docs/development/optional-agent-packages.md` for the package-author API.
