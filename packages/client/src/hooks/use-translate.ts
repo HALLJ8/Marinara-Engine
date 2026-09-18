@@ -12,7 +12,7 @@ import { useTranslationStore, type TranslationConfig } from "../stores/translati
 import { chatKeys, replaceCachedMessage } from "./use-chats";
 
 const translationPersistenceQueues = new Map<string, Promise<void>>();
-const pendingTranslations = new Map<string, Promise<void>>();
+const pendingTranslations = new Map<string, { text: string; request: Promise<void> }>();
 
 export function getChatTranslationConfig(chatId: string, metadata: unknown): TranslationConfig {
   const chatMeta = parseChatMetadata(metadata);
@@ -92,7 +92,14 @@ export function translateMessage(
   const requestChatId = chatId ?? config.chatId;
   const key = `${requestChatId ?? ""}:${messageId}`;
   const pending = pendingTranslations.get(key);
-  if (pending) return pending;
+  if (pending) {
+    // Finish the previous source (including persistence) before translating a regenerated reply.
+    return pending.text === text
+      ? pending.request
+      : pending.request
+          .catch(() => undefined)
+          .then(() => translateMessage(queryClient, messageId, text, config, chatId));
+  }
   const store = useTranslationStore.getState();
   const isCurrentChat = () => useTranslationStore.getState().config.chatId === requestChatId;
   if (isCurrentChat()) store.setTranslating(messageId, true);
@@ -121,10 +128,10 @@ export function translateMessage(
       }).catch(() => {});
     }
   })();
-  pendingTranslations.set(key, request);
+  pendingTranslations.set(key, { text, request });
   void request
     .finally(() => {
-      if (pendingTranslations.get(key) === request) pendingTranslations.delete(key);
+      if (pendingTranslations.get(key)?.request === request) pendingTranslations.delete(key);
     })
     .catch(() => {});
   return request;

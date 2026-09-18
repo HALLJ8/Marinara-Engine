@@ -4,7 +4,7 @@ import { aliveUnits, canTraverseTile, forecastFrom, getMovementRange, occupantAt
 import { computeHeal, manhattan, terrainInfoAt } from "./math.js";
 import type { TacticalAction, TacticalCombatState, TacticalCoord, TacticalUnit } from "./types.js";
 
-/** Shortest spatial pursuit. Terrain cost limits execution, never route preference. */
+/** Mindless pursuit ranks spatial steps; other profiles also consider movement costs. */
 export function pursueOpponent(
   state: TacticalCombatState,
   unit: TacticalUnit,
@@ -19,7 +19,7 @@ export function pursueOpponent(
   const frontier: TacticalCoord[] = [{ x: unit.x, y: unit.y }];
   let goal: { target: TacticalUnit; tile: TacticalCoord } | undefined;
   while (frontier.length) {
-    // Walking includes terrain/weather costs; flying and teleporting use spatial distance.
+    // Mindless ignores terrain/weather in route choice, but still pays for each move below.
     frontier.sort((a, b) => distances.get(key(a))! - distances.get(key(b))!);
     const tile = frontier.shift()!;
     if (!occupantAt(state, tile.x, tile.y, unit.id)) {
@@ -39,7 +39,7 @@ export function pursueOpponent(
         const next = { x: tile.x + dx, y: tile.y + dy };
         if (!canTraverseTile(state, unit, next)) continue;
         const stepCost =
-          unit.movementMode === "fly" || unit.movementMode === "teleport"
+          unit.tactics?.adjective === "mindless" || unit.movementMode === "fly" || unit.movementMode === "teleport"
             ? length
             : terrainInfoAt(state.grid, next.x, next.y).moveCost + combatWeatherEffects(state.weather).walkingCost;
         const distance = distances.get(key(tile))! + stepCost;
