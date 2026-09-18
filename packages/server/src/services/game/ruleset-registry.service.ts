@@ -112,12 +112,19 @@ export function createRulesetRef(registered: RegisteredRuleset): RulesetRef {
 }
 
 /** The live registry: every ready installed package's ruleset. Re-read per call like the GM verb
- *  table, so install, update, disable and uninstall need no invalidation. */
+ *  table, so install, update, disable and uninstall need no invalidation. Throws when the installed
+ *  packages cannot be read, for a caller that must tell "none installed" from "could not look". */
+export async function readRulesetRegistry(): Promise<RulesetRegistry> {
+  return buildRulesetRegistry(await capabilityPackageManager.rulesetSources(), (message) =>
+    logger.warn("[game/rulesets] %s", message),
+  );
+}
+
+/** The same registry for game resolution, which never throws: a failed read is an empty registry,
+ *  so a pinned game reports its ruleset missing instead of failing the turn. */
 export async function loadRulesetRegistry(): Promise<RulesetRegistry> {
   try {
-    return buildRulesetRegistry(await capabilityPackageManager.rulesetSources(), (message) =>
-      logger.warn("[game/rulesets] %s", message),
-    );
+    return await readRulesetRegistry();
   } catch (error) {
     logger.error(error, "[game/rulesets] Could not read installed rulesets; games fall back to reporting them missing");
     return new Map();

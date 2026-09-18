@@ -8,6 +8,7 @@ import {
   type CapabilityPackageVersionNote,
   type BuiltInAgentManifest,
   type InstalledCapabilityPackage,
+  type InstalledRuleset,
 } from "@marinara-engine/shared";
 import { api } from "../lib/api-client";
 import {
@@ -23,8 +24,18 @@ export const capabilityPackageKeys = {
   installed: () => [...capabilityPackageKeys.all, "installed"] as const,
   pendingUpdates: () => [...capabilityPackageKeys.all, "pending-updates"] as const,
   agents: () => [...capabilityPackageKeys.all, "agents"] as const,
+  rulesets: () => [...capabilityPackageKeys.all, "rulesets"] as const,
   releaseNotes: (id: string) => [...capabilityPackageKeys.all, "release-notes", id] as const,
 };
+
+/** Installed Game Mode rulesets. Keyed under `all`, so installing or removing a package refreshes it. */
+export function useInstalledRulesets(enabled = true) {
+  return useQuery({
+    queryKey: capabilityPackageKeys.rulesets(),
+    queryFn: () => api.get<InstalledRuleset[]>("/capability-packages/rulesets"),
+    enabled,
+  });
+}
 
 export function useCapabilityCatalog(enabled = true) {
   return useQuery({
