@@ -836,7 +836,12 @@ export type CommunityRulesetSource = { kind: "repository" | "local"; url: string
 
 /** One installed ruleset as the API lists it: the whole definition plus the package that supplied
  *  it. A community ruleset has no package and carries `source` instead, which is what lets the
- *  client tell an imported ruleset from an official one. */
+ *  client tell an imported ruleset from an official one.
+ *
+ *  `definition` is the RESOLVED definition: its `id` is the id the Engine knows the ruleset by, which
+ *  for a community ruleset is the namespaced one (`local/my-5e`). It was validated as a file, with
+ *  its bare id, before the registry re-keyed it, so it is never parsed with
+ *  `rulesetDefinitionSchema` again: that schema describes the FILE and would refuse the slash. */
 export type InstalledRuleset = {
   packageId: string | null;
   definition: RulesetDefinition;

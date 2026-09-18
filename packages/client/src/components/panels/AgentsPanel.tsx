@@ -235,7 +235,7 @@ export function AgentsPanel() {
   const { data: agentConfigs, isLoading } = useAgentConfigs();
   const { data: capabilityAgents, isLoading: capabilityAgentsLoading } = useCapabilityAgentRegistry();
   const { data: capabilityCatalog } = useCapabilityCatalog();
-  const { data: installedRulesets = [] } = useInstalledRulesets();
+  const { data: installedRulesets = [], isLoading: rulesetsLoading } = useInstalledRulesets();
   const createAgent = useCreateAgent();
   const importAgent = useImportAgent();
   const importRuleset = useImportRuleset();
@@ -1270,7 +1270,7 @@ export function AgentsPanel() {
         </div>
       )}
 
-      {!isLoading && !hasInstalledAgents && installedRulesets.length === 0 && (
+      {!isLoading && !rulesetsLoading && !hasInstalledAgents && installedRulesets.length === 0 && (
         <div className="flex flex-1 flex-col items-center justify-center gap-3 px-4 py-10 text-center">
           <span className="mari-panel-gradient-surface mari-panel-gradient--agents flex h-12 w-12 items-center justify-center rounded-2xl">
             <Sparkles size="1.25rem" />
