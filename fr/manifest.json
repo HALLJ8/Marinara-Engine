@@ -1,6 +1,6 @@
 {
   "language": "fr",
-  "sourceCommit": "a03b64ad907dfa02c3b970ed2241ff44f238c724",
+  "sourceCommit": "119de3f03e1dfb100789234f0d4d54d741da3fe8",
   "files": [
     {
       "path": "CONFIGURATION.md",
@@ -24,8 +24,8 @@
     },
     {
       "path": "TROUBLESHOOTING.md",
-      "sha256": "a64f87fdb0c3a0dbb49be69aa5f7649fbeb6f4ddea4cc07408c46d2325432510",
-      "bytes": 46502
+      "sha256": "746fe64e4bd14a263c0d305090f0493d9b683a27ef55735b5257f5aa1f69ff0f",
+      "bytes": 47845
     },
     {
       "path": "UPGRADING.md",
@@ -254,8 +254,8 @@
     },
     {
       "path": "conversation/selfies.md",
-      "sha256": "02558c06847e2c253bb3690542249b1126affef5cb5e8a4ed339f0de0ef873dc",
-      "bytes": 6938
+      "sha256": "fd2acf6db16f944ba44f5338d32d2d333688bd4ed7334ec884176f4bfdb059d6",
+      "bytes": 7787
     },
     {
       "path": "conversation/table-games.md",
@@ -308,9 +308,24 @@
       "bytes": 47118
     },
     {
+      "path": "development/game-combat-ai-design.md",
+      "sha256": "12d40381c20a98c06a5a97660cb3c75255c091682ec0051689dcbb270b91de64",
+      "bytes": 141730
+    },
+    {
+      "path": "development/game-combat-difficulty-weather.md",
+      "sha256": "18ce24919ddc8a4fd72c6ba0a6d89ad63565d9e174450af08265d693700469f0",
+      "bytes": 9963
+    },
+    {
       "path": "development/game-combat-roadmap.md",
-      "sha256": "a74af20ea93079fa0ff6015b88b0b1ac73863895b7ad0ad50fe97d60ae074807",
-      "bytes": 9303
+      "sha256": "7941f4b095563896dbe3595d072877c69e80e34e6cfb909581aee0a964f64b36",
+      "bytes": 9424
+    },
+    {
+      "path": "development/game-combat-rulesets-implementation.md",
+      "sha256": "a7bb097a117af33dcad4d32e976f66c9ba4ac673ca1b9cabc274fe1a4987d6a2",
+      "bytes": 23784
     },
     {
       "path": "development/hierarchical-locations-prd-v3.md",
@@ -529,8 +544,8 @@
     },
     {
       "path": "media/image-providers.md",
-      "sha256": "3b057b335f36698cbe0040ff1603c90c71b780e4a60e88eff024b7175d47bf51",
-      "bytes": 16441
+      "sha256": "3002817ad4c16b57b843c701ac9fa0bb07b09375a49f705258668cb725fb93ca",
+      "bytes": 17705
     },
     {
       "path": "media/music.md",

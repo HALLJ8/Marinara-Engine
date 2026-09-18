@@ -375,3 +375,28 @@ In `media/illustrator-agent.md`, translate a native NovelAI character caption as
 not a subtitle or text drawn on the image. Keep this sense distinct from captions
 on comic pages. The accompanying `media/image-providers.md` wording uses the same
 native character-prompt meaning.
+
+## Combat handoffs and provider follow-ups (2026-09-18)
+
+Cycle precedent for the new `development/game-combat-ai-design.md`,
+`development/game-combat-rulesets-implementation.md`, and
+`development/game-combat-difficulty-weather.md` translations:
+
+- Temperament uses **temperamento**; a ruleset uses **conjunto de reglas**. Keep capability,
+  combat role, temperament and controller distinct (AI design, section 3).
+- Legendary actions use **acciones legendarias**; triggered reactions use **reacciones**
+  (AI design, section 16). Neither means a free ordinary turn or an ordinary
+  exchange counterattack.
+- Keep policy/class identifiers such as Mindless, Protective, Bruiser, Classic,
+  Tactical, Traditional and Counterspell recognizable in Latin script. They name
+  specific policies or mechanics; translate the explanations, not code values.
+- The source intentionally retains historical audits and proposed future work
+  alongside implemented boundaries. Preserve those distinctions and the original
+  validation limitations; a translated test report is not a new test run.
+- In `media/image-providers.md`, keep fal.ai and endpoint/model IDs unchanged.
+  **Test Connection** checks configuration; **Test Image** can incur generation
+  charges. In `conversation/selfies.md`, preserve the exact case-insensitive
+  marker examples and their Conversation-only scope.
+
+These are documented translation choices from this cycle, not a claim of a new
+independent native-reader panel review. Existing pack-wide rules still apply.

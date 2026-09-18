@@ -1,6 +1,6 @@
 # Provedores de geração de imagens e configuração
 
-Neste guia você aprende a conectar um serviço de geração de imagens ao Marinara Engine. Ele também mostra o que cada um dos 17 serviços exige. A geração de imagens alimenta as ilustrações de cena, as selfies, os planos de fundo de cena e os avatares, retratos e sprites gerados.
+Neste guia você aprende a conectar um serviço de geração de imagens ao Marinara Engine. Ele também mostra o que cada um dos serviços exige. A geração de imagens alimenta as ilustrações de cena, as selfies, os planos de fundo de cena e os avatares, retratos e sprites gerados.
 
 A geração de imagens é configurada como um tipo especial de conexão. Depois que uma conexão de imagem funciona, todos os recursos de imagem do aplicativo podem usá-la.
 
@@ -23,7 +23,7 @@ Se o botão **Test Image** devolver uma figura, a conexão está pronta. Se falh
 
 ## Como escolher um serviço
 
-Os 17 serviços se dividem em três grupos. Os serviços de nuvem exigem uma chave de API e uma conta. Os serviços gratuitos não exigem chave. Os serviços locais rodam um programa de imagens no seu próprio computador.
+Os serviços se dividem em três grupos. Os serviços de nuvem exigem uma chave de API e uma conta. Os serviços gratuitos não exigem chave. Os serviços locais rodam um programa de imagens no seu próprio computador.
 
 A tabela abaixo mostra cada serviço de relance. Os detalhes e as particularidades vêm nas seções de cada serviço.
 
@@ -38,6 +38,7 @@ A tabela abaixo mostra cada serviço de relance. Os detalhes e as particularidad
 | Venice.ai | Sim | Nuvem |
 | Z.AI | Sim | Nuvem |
 | Atlas Cloud | Sim | Nuvem |
+| fal.ai | Sim | Nuvem |
 | NanoGPT | Sim | Nuvem |
 | Block Entropy | Sim | Nuvem |
 | RunPod Serverless (ComfyUI) | Sim | Nuvem |
@@ -82,6 +83,12 @@ Serviço de nuvem com a Base URL padrão `https://api.z.ai/api/paas/v4`. Exige u
 ## Atlas Cloud
 
 Serviço de nuvem com a Base URL padrão `https://api.atlascloud.ai/api/v1`. Exige uma chave de API da Atlas Cloud. Marinara traz um pequeno catálogo inicial com Nano Banana, Gemini Flash Image e FLUX 1.1 Pro, e você pode digitar o ID exato de outro modelo de imagem da Atlas Cloud. Os trabalhos rodam de forma assíncrona: Marinara inicia a geração e consulta a Atlas Cloud repetidamente até a imagem ficar pronta. Os controles comuns de texto para imagem são convertidos automaticamente; as imagens de referência são enviadas para os IDs de modelo que anunciam comportamento de imagem para imagem, de edição ou Kontext. Como os esquemas dos modelos da Atlas variam, consulte a documentação da Atlas Cloud sobre o modelo escolhido ao usar outro ID de modelo.
+
+## fal.ai
+
+Serviço em nuvem com **Base URL** padrão `https://fal.run`. Crie uma chave de API em [fal.ai](https://fal.ai/dashboard/keys) e selecione **fal.ai** na grade de serviços de imagem. A lista inicial **Model** oferece `fal-ai/flux/schnell` e `fal-ai/flux/dev`; você pode digitar outro ID de endpoint texto para imagem com esquema compatível de entrada e saída. **Test Connection** (testar conexão) verifica apenas a configuração. **Test Image** envia uma solicitação real de geração e consome seus créditos do fal.ai.
+
+Marinara envia o prompt e as dimensões solicitadas, depois baixa a primeira imagem retornada para seu fluxo existente de imagens. Prompts negativos são acrescentados como instruções de texto. Use **Custom Parameters** (parâmetros personalizados) para opções específicas do modelo, como `seed`, `num_inference_steps` ou `image_size`. A integração usa solicitações síncronas de texto para imagem; não envia imagens de referência nem retoma tarefas interrompidas. Consulte as entradas com suporte na [referência da API](https://fal.ai/models/fal-ai/flux/schnell/api) do modelo selecionado.
 
 ## NanoGPT
 

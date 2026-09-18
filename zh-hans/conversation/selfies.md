@@ -74,6 +74,15 @@
 
 自拍配置好以后，角色会在聊天中自行决定什么时候发一张，不需要输入任何命令。时机由角色把握，Marinara 负责生成图片并发进聊天。
 
+模型回复使用 `[selfie]`，也可以附上上下文：
+
+```text
+Here is a picture from my walk!
+[selfie: context="standing beside the river at sunset"]
+```
+
+`[selfie: "standing beside the river"]` 和 `[selfie: standing beside the river]` 也能使用。命令不区分大小写，所以 `[SELFIE:xxxxx.]` 是有效语法。这是 Conversation 命令，不是 Roleplay 或 Game Mode 的图像触发命令。如果标记原样留在消息中，可能是聊天处于其他模式，或 **Commands** 已关闭。请确认已安装 Illustrator，开启 **Generated Selfies**，并选好 **Selfie Connection**。如果生成开始后失败，请检查报告的连接或图像服务商错误；改变标记的大小写无法解决问题。
+
 ## 手动要一张自拍
 
 也可以自己主动要一张，不用干等角色。

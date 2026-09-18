@@ -13,6 +13,14 @@ Wenn du das Team um Hilfe bittest, schalte vorher den **Debug mode** (Debug-Modu
 
 ## Probleme bei Installation und Start
 
+### Leere Seite oder JavaScript als HTML nach einem Update
+
+Ein Fehler wie "Failed to load module script" mit dem MIME-Typ `text/html` kann bedeuten, dass der Browser eine JavaScript-Datei angefordert hat, die im installierten Build fehlt. Die Warnung zum Ende der vorherigen Sitzung weist nicht auf dieses Problem hin. Eine Schreibsperre (Writer Lease) oder deine Daten zu löschen, repariert die Dateien nicht.
+
+Beende den laufenden Server und starte `start.bat`, `start.sh` oder `start-termux.sh` erneut. Der Launcher prüft das Build-Verzeichnis anhand des Vite-Inventars, einschließlich nachgeladener JavaScript-Chunks, und baut unvollständige Client-Dateien vor dem Start neu. Ein Build aus der Zeit vor dieser Prüfung wird einmal neu gebaut, um sein Inventar anzulegen. Scheitert der Build, bewahre den Terminal-Fehler für den Support auf. Bei einer manuellen Installation führe vor dem Neustart `pnpm build` im Stammverzeichnis des Repositorys aus.
+
+Besteht der Build die Prüfung und die Seite bleibt leer, lade sie ohne Cache neu oder probiere ein privates Browserfenster. Melde die vollständige URL der fehlerhaften Datei, HTTP-Status, Content-Type und die erste Antwortzeile zusammen mit der Launcher-Ausgabe. Fehlende Dateien liefern jetzt HTTP 404 statt der HTML-Seite der App.
+
 ### Windows: EPERM- oder Corepack-Signaturfehler beim Installieren von pnpm
 
 pnpm ist der Paketmanager, mit dem Marinara seinen Code installiert. Erscheint `EPERM: operation not permitted` oder ein Fehler bei der Corepack-Signaturprüfung, konnte Corepack nicht in den Node-Installationsordner schreiben.

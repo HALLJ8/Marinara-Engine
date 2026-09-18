@@ -1,6 +1,6 @@
 # 图像生成服务商与设置
 
-本指南介绍如何把图像生成服务接入 Marinara Engine，也逐一说明这 17 个服务各自需要什么。图像生成支撑着场景插图、自拍、场景背景，以及生成出来的头像、肖像和立绘。
+本指南介绍如何把图像生成服务接入 Marinara Engine，也逐一说明各个服务需要什么。图像生成支撑着场景插图、自拍、场景背景，以及生成出来的头像、肖像和立绘。
 
 图像生成是作为一种特殊的连接来设置的。只要有一个图像连接可用，应用里所有图像功能都能用上它。
 
@@ -23,7 +23,7 @@
 
 ## 选择服务
 
-17 个服务分成三类。云端服务需要账号和 API 密钥。免费服务不需要密钥。本地服务在自己的电脑上运行图像软件。
+这些服务分成三类。云端服务需要账号和 API 密钥。免费服务不需要密钥。本地服务在自己的电脑上运行图像软件。
 
 下面这张表可以快速对照各个服务。细节和注意事项见后面的分服务小节。
 
@@ -38,6 +38,7 @@
 | Venice.ai | 需要 | 云端 |
 | Z.AI | 需要 | 云端 |
 | Atlas Cloud | 需要 | 云端 |
+| fal.ai | 需要 | 云端 |
 | NanoGPT | 需要 | 云端 |
 | Block Entropy | 需要 | 云端 |
 | RunPod Serverless (ComfyUI) | 需要 | 云端 |
@@ -82,6 +83,12 @@
 ## Atlas Cloud
 
 云端服务，默认 Base URL 是 `https://api.atlascloud.ai/api/v1`。需要 Atlas Cloud 的 API 密钥。Marinara 内置了一份小型起步目录，包含 Nano Banana、Gemini Flash Image 和 FLUX 1.1 Pro，也可以直接输入其他准确的 Atlas Cloud 图像模型 ID。任务是异步执行的，Marinara 会先发起生成，然后轮询 Atlas Cloud 直到图像就绪。常见的文生图参数会自动映射；对于声明支持图生图、编辑或 Kontext 行为的模型 ID，参考图会一并发送。由于 Atlas 各模型的接口结构可能不同，使用其他模型 ID 时请查阅该模型在 Atlas Cloud 的文档。
+
+## fal.ai
+
+云端服务，默认 **Base URL** 为 `https://fal.run`。在 [fal.ai](https://fal.ai/dashboard/keys) 创建 API 密钥，然后在图像服务网格中选择 **fal.ai**。初始 **Model** 列表提供 `fal-ai/flux/schnell` 和 `fal-ai/flux/dev`；也可以输入其他文生图端点 ID，但其输入、输出结构必须兼容。**Test Connection**(测试连接) 只检查配置。**Test Image** 会发送真实的生成请求，消耗你的 fal.ai 额度。
+
+Marinara 发送提示词和所需尺寸，再将返回的第一张图像下载到现有的图像处理流程中。负面提示词会作为文字指令追加。模型专用选项（例如 `seed`、`num_inference_steps` 或 `image_size`）可通过 **Custom Parameters**(自定义参数) 设置。该集成使用同步文生图请求，不发送参考图像，也不会恢复中断的任务。所选模型支持哪些输入，见其 [API 参考](https://fal.ai/models/fal-ai/flux/schnell/api)。
 
 ## NanoGPT
 

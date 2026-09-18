@@ -74,6 +74,15 @@ Voici les tailles proposées :
 
 Une fois les selfies réglés, un personnage peut décider d'en envoyer un de lui-même pendant le chat. Tu n'as aucune commande à taper. Le personnage choisit le moment, Marinara génère l'image et la publie dans le chat.
 
+La réponse du modèle utilise `[selfie]`, avec un contexte facultatif :
+
+```text
+Here is a picture from my walk!
+[selfie: context="standing beside the river at sunset"]
+```
+
+Les formes `[selfie: "standing beside the river"]` et `[selfie: standing beside the river]` fonctionnent aussi. La casse n'a pas d'importance : `[SELFIE:xxxxx.]` est donc une syntaxe valide. C'est une commande Conversation, pas un déclencheur d'image pour Roleplay ou Game Mode. Un marqueur resté tel quel dans le message peut indiquer un autre mode de chat ou la désactivation de **Commands**. Vérifie qu'Illustrator est installé, que **Generated Selfies** est activé et que **Selfie Connection** est choisie. Si la génération démarre puis échoue, examine l'erreur de connexion ou du fournisseur d'images. Changer les majuscules du marqueur ne la corrigera pas.
+
 ## Demander un selfie soi-même
 
 Autre option : demander toi-même un selfie plutôt que d'attendre le personnage.

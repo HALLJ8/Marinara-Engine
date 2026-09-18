@@ -19,7 +19,7 @@ Nie udostępniaj niedokończonych kombinacji. Towarzysze fabularni i jednostki b
 
 GM dostarcza niewielki opis strukturalny wynikający ze sceny. Silnik ustala dokładny teren i pozycje początkowe z użyciem ziarna, sprawdza planszę i zapisuje wynik. Następnie GM opisuje zaakceptowane pole bitwy. Zwykły ruch i ataki nie wymagają wywołań modelu.
 
-Rozszerz istniejący przepływ środowiska i formacji o opcjonalny rozmiar mapy, charakterystyczne miejsca, wskazówki gracza i ziarno do ponownego użycia. Zachowaj zgodność starszych konfiguracji. Zapisuj zaakceptowaną siatkę i informacje o generatorze, aby jego przyszła zmiana nie przerysowała istniejącej bitwy. Zapisane ziarno odtwarza generowanie dla tego samego opisu i uczestników; nie czyni dowolnej odpowiedzi modelu deterministyczną.
+Przepływ środowiska i formacji obsługuje opcjonalny rozmiar mapy i charakterystyczne miejsca sceny. Wskazówki dotyczące terenu należą do poszczególnych starć; ziarna map są wewnętrzne dla każdego starcia, bez ustawienia ziarna w konfiguracji kampanii. Zachowaj zgodność starszych konfiguracji. Zapisuj zaakceptowaną siatkę i informacje o generatorze, aby jego przyszła zmiana nie przerysowała istniejącej bitwy. Zapisane ziarno odtwarza generowanie dla tego samego opisu i uczestników; nie czyni dowolnej odpowiedzi modelu deterministyczną.
 
 Wygenerowany teren można naprawiać, by zapewnić połączenia, lecz ograniczenia autora nie mogą znikać bez ostrzeżenia. Ogranicz rozmiar odpowiedzi modelu, liczbę pól i jednostek oraz wymiary elementów. Odrzucaj niewykonalny układ z wyjaśnieniem pozwalającym zareagować i proponuj jawny wariant z wygenerowanym terenem. Pełny edytor malowania i rozmieszczania oraz dowolne autorskie mapy to późniejsze prace, podlegające tym samym zasadom walidacji.
 

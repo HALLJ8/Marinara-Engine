@@ -21,7 +21,7 @@ Aby włączyć selfie:
 3. Znajdź sekcję **Agents**.
 4. Włącz w niej główny przełącznik **Commands**. Przy wyłączonym przełączniku postacie nie mogą wykonać żadnego ukrytego działania.
 5. Znajdź sekcję **Illustrator Settings**.
-6. Włącz przełącznik **Generated Selfies**.
+6. Włącz przełącznik **Generated Selfies** (generowane selfie).
 
 Po włączeniu przełącznika **Generated Selfies** pod nim pojawiają się ustawienia selfie. Zobaczysz pola połączenia, modelu opisu, stylu i referencji. Przyciski **Resolution** pokazują się dopiero po wybraniu połączenia w polu **Selfie Connection**.
 
@@ -73,6 +73,14 @@ Dostępne rozmiary:
 ## Jak postać wysyła selfie
 
 Po skonfigurowaniu selfie postać sama decyduje, kiedy je wysłać w trakcie czatu. Nie trzeba wpisywać żadnej komendy. Postać wybiera moment, a Marinara generuje zdjęcie i publikuje je na czacie.
+
+Odpowiedź modelu zawiera `[selfie]`, opcjonalnie z kontekstem:
+
+```text
+Here is a picture from my walk!
+[selfie: context="standing beside the river at sunset"]
+```
+Działają także `[selfie: "standing beside the river"]` i `[selfie: standing beside the river]`. Wielkość liter nie ma znaczenia, więc `[SELFIE:xxxxx.]` to poprawna składnia. Jest to komenda trybu Conversation, a nie wyzwalacz obrazu w Roleplay lub Game Mode. Dosłowny znacznik pozostawiony w wiadomości może oznaczać inny tryb czatu albo wyłączoną opcję **Commands**. Sprawdź, czy Illustrator jest zainstalowany, **Generated Selfies** jest włączone i wybrano **Selfie Connection** (połączenie do selfie). Jeśli generowanie rusza, ale kończy się błędem, sprawdź zgłoszony błąd połączenia lub dostawcy obrazów; zmiana wielkości liter w znaczniku go nie naprawi.
 
 ## Ręczna prośba o selfie
 

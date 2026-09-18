@@ -74,6 +74,15 @@ Zur Auswahl stehen:
 
 Sind Selfies eingerichtet, entscheidet der Charakter im Chat selbst, wann er eines schickt. Du tippst dafür keinen Befehl. Der Charakter wählt den Moment, Marinara generiert das Bild und stellt es in den Chat.
 
+Die Modellantwort nutzt `[selfie]`, optional mit Kontext:
+
+```text
+Here is a picture from my walk!
+[selfie: context="standing beside the river at sunset"]
+```
+
+Auch `[selfie: "standing beside the river"]` und `[selfie: standing beside the river]` funktionieren. Groß- und Kleinschreibung spielen keine Rolle; `[SELFIE:xxxxx.]` ist also gültige Syntax. Es ist ein Conversation-Befehl, kein Bildauslöser für Roleplay oder Game Mode. Bleibt der Marker wörtlich in der Nachricht stehen, läuft der Chat möglicherweise in einem anderen Modus oder **Commands** ist deaktiviert. Prüfe, ob Illustrator installiert, **Generated Selfies** aktiviert und eine **Selfie Connection** ausgewählt ist. Startet die Generierung und schlägt dann fehl, prüfe den gemeldeten Verbindungs- oder Bildanbieterfehler. Eine andere Großschreibung des Markers behebt ihn nicht.
+
 ## Ein Selfie von Hand anfordern
 
 Alternativ forderst du ein Selfie selbst an, statt auf den Charakter zu warten.
