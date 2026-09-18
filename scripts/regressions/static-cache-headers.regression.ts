@@ -80,7 +80,24 @@ try {
       assert.doesNotMatch(response.headers["content-type"], /html/);
     }
   }
-  for (const headers of [{ accept: "text/html;q=0.9" }, { "sec-fetch-dest": "document" }]) {
+  for (const destination of ["empty", "script", "style", "image", "worker"]) {
+    const response = await app.inject({
+      method: "GET",
+      url: "/unknown",
+      headers: { accept: "text/html", "sec-fetch-dest": destination },
+    });
+    assert.equal(response.statusCode, 404, destination);
+    assert.equal(response.headers["cache-control"], "no-store");
+    assert.doesNotMatch(response.headers["content-type"], /html/);
+  }
+  for (const headers of [
+    { accept: "text/html;q=0.9" },
+    { "sec-fetch-dest": "document" },
+    ...["document", "iframe", "frame"].map((destination) => ({
+      accept: "text/html",
+      "sec-fetch-dest": destination,
+    })),
+  ]) {
     const navigation = await app.inject({
       method: "GET",
       url: "/some/navigation?query=example.js",

@@ -14,9 +14,11 @@ export function createClientNotFoundHandler(clientIndex: string) {
       const quality = parameters.find((parameter) => parameter.startsWith("q="))?.slice(2) ?? "1";
       return type === "text/html" && /^(?:0(?:\.\d{0,3})?|1(?:\.0{0,3})?)$/.test(quality) && Number(quality) > 0;
     });
+    const destination = req.headers["sec-fetch-dest"];
     const isNavigation =
       (req.method === "GET" || req.method === "HEAD") &&
-      (acceptsHtml || (req.headers.accept === undefined && req.headers["sec-fetch-dest"] === "document"));
+      (destination === undefined || ["document", "iframe", "frame"].includes(String(destination))) &&
+      (acceptsHtml || (req.headers.accept === undefined && destination === "document"));
     reply.header("Cache-Control", "no-store");
     if (pathname === "/api" || pathname.startsWith("/api/") || pathname.startsWith("/assets/") || !isNavigation) {
       return reply.status(404).send({ error: "Not Found" });
