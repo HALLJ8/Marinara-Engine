@@ -20,6 +20,7 @@ import {
   ArrowUpDown,
   ShieldCheck,
   TriangleAlert,
+  Dices,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useUIStore, type ResourcePanelSort } from "../../stores/ui.store";
@@ -35,6 +36,7 @@ import {
 import {
   useCapabilityAgentRegistry,
   useCapabilityCatalog,
+  useInstalledRulesets,
   useUninstallCapabilityPackage,
 } from "../../hooks/use-capability-packages";
 import {
@@ -220,6 +222,7 @@ export function AgentsPanel() {
   const { data: agentConfigs, isLoading } = useAgentConfigs();
   const { data: capabilityAgents, isLoading: capabilityAgentsLoading } = useCapabilityAgentRegistry();
   const { data: capabilityCatalog } = useCapabilityCatalog();
+  const { data: installedRulesets = [] } = useInstalledRulesets();
   const createAgent = useCreateAgent();
   const importAgent = useImportAgent();
   const { data: agentImportPolicy, isLoading: agentImportPolicyLoading } = useAgentImportPolicy();
@@ -464,6 +467,34 @@ export function AgentsPanel() {
     () => selectableAgents.filter((agent) => selectedAgentIds.has(agent.id)),
     [selectableAgents, selectedAgentIds],
   );
+
+  // A rules package adds no agent, so it is listed in its own section or it would be installed and
+  // invisible here. Rulesets are Game Mode only, which is what the mode filter tests.
+  const visibleRulesets = installedRulesets.filter(
+    ({ definition }) =>
+      (agentModeFilter === "all" || agentModeFilter === "game") &&
+      (!agentSearchQuery ||
+        definition.name.toLowerCase().includes(agentSearchQuery) ||
+        definition.coverage.summary.toLowerCase().includes(agentSearchQuery)),
+  );
+
+  const confirmAndUninstallRuleset = async (packageId: string, name: string) => {
+    const confirmed = await showConfirmDialog({
+      title: localizeUi("ui.agents.agentcatalogview.uninstallValue1", { value1: name }),
+      message: localizeUi("ui.panels.agentspanel.uninstallRulesetMessage"),
+      confirmLabel: localizeUi("ui.agents.agentcatalogview.uninstall"),
+      tone: "destructive",
+    });
+    if (!confirmed) return;
+    try {
+      await uninstallCapabilityPackage.mutateAsync(packageId);
+      toast.success(localizeUi("ui.agents.agentcatalogview.value1Uninstalled", { value1: name }));
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : localizeUi("ui.agents.agentcatalogview.agentUninstallFailed"),
+      );
+    }
+  };
 
   const removeAgentResource = useCallback(
     (agent: AgentConfigRow) => {
@@ -1090,7 +1121,7 @@ export function AgentsPanel() {
         </div>
       )}
 
-      {!isLoading && !hasInstalledAgents && (
+      {!isLoading && !hasInstalledAgents && installedRulesets.length === 0 && (
         <div className="flex flex-1 flex-col items-center justify-center gap-3 px-4 py-10 text-center">
           <span className="mari-panel-gradient-surface mari-panel-gradient--agents flex h-12 w-12 items-center justify-center rounded-2xl">
             <Sparkles size="1.25rem" />
@@ -1488,6 +1519,40 @@ export function AgentsPanel() {
               }),
             )
           )}
+        </PanelSection>
+      )}
+
+      {visibleRulesets.length > 0 && (
+        <PanelSection title={localizeUi("ui.panels.agentspanel.rules")} icon={<Dices size="0.8125rem" />}>
+          {visibleRulesets.map(({ definition, packageId }) => (
+            <div
+              key={definition.id}
+              className="group relative flex items-center gap-2.5 rounded-xl p-2 transition-all hover:bg-[var(--sidebar-accent)]"
+            >
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[var(--secondary)] text-[var(--muted-foreground)]">
+                <Dices size="1rem" />
+              </span>
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-sm font-medium">{definition.name}</div>
+                <div className="mt-0.5 text-[0.625rem] text-[var(--muted-foreground)] line-clamp-2">
+                  {definition.coverage.summary}
+                </div>
+                <div className="mt-1 text-[0.5625rem] uppercase text-[var(--muted-foreground)]/80">
+                  {localizeUi("ui.panels.agentspanel.rulesetVersion", { version: definition.version })}
+                </div>
+              </div>
+              {packageId && (
+                <button
+                  className="mari-chrome-control mari-chrome-control--small shrink-0 p-1.5"
+                  title={localizeUi("ui.agents.agentcatalogview.uninstall")}
+                  aria-label={localizeUi("ui.panels.agentspanel.uninstallRuleset", { name: definition.name })}
+                  onClick={() => void confirmAndUninstallRuleset(packageId, definition.name)}
+                >
+                  <Trash2 size="0.75rem" />
+                </button>
+              )}
+            </div>
+          ))}
         </PanelSection>
       )}
 

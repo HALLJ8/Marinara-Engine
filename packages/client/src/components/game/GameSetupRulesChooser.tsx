@@ -8,6 +8,7 @@ import { useTranslation as useUiTranslation } from "react-i18next";
 import {
   normalizeCharacterLookupName,
   rulesetSheetEnvelopeSchema,
+  type GameCombatStyle,
   type InstalledRuleset,
 } from "@marinara-engine/shared";
 import { useCharacters, usePersonas } from "../../hooks/use-characters";
@@ -97,10 +98,13 @@ export function GameSetupRulesetSheetStatus({
 export function GameSetupRulesChooser({
   rulesets,
   activeId,
+  combatStyle,
   onSelect,
 }: {
   rulesets: InstalledRuleset[];
   activeId: string | null;
+  /** The Combat Preference picked above, named in the note so "Marinara's combat" is never read as Classic. */
+  combatStyle: GameCombatStyle;
   onSelect: (rulesetId: string | null) => void;
 }) {
   const { t } = useUiTranslation();
@@ -146,7 +150,13 @@ export function GameSetupRulesChooser({
         <div className="mt-2 space-y-2 rounded-lg border border-[var(--border)] bg-[var(--card)] p-3 text-xs">
           <p className="text-[var(--muted-foreground)]">{t("game.ruleset.setup.pinned")}</p>
           {!active.definition.coverage.combat && (
-            <p className="text-[var(--muted-foreground)]">{t("game.ruleset.setup.defaultCombat")}</p>
+            <p className="text-[var(--muted-foreground)]">
+              {t("game.ruleset.setup.combatFromPreference", {
+                style: t(
+                  combatStyle === "tactical" ? "ui.game.gamesetupwizard.tactical" : "ui.game.gamesetupwizard.classic",
+                ),
+              })}
+            </p>
           )}
         </div>
       )}

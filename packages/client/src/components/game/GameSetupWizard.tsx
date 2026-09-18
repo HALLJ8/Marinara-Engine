@@ -2011,6 +2011,7 @@ export function GameSetupWizard({
                       <GameSetupRulesChooser
                         rulesets={rulesets}
                         activeId={activeRuleset?.definition.id ?? null}
+                        combatStyle={combatStyle}
                         onSelect={(id) => {
                           setRulesetId(id);
                           setRulesetImportNotice(null);
