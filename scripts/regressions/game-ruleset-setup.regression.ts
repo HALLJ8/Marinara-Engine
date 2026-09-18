@@ -163,7 +163,8 @@ writeFileSync(
 
 const { default: Fastify } = await import("../../packages/server/node_modules/fastify/fastify.js");
 const { getDB, closeDB } = await import("../../packages/server/src/db/connection.js");
-const { gameRoutes } = await import("../../packages/server/src/routes/game.routes.js");
+const { applyGeneratedGameCharacterCards, gameRoutes } =
+  await import("../../packages/server/src/routes/game.routes.js");
 const db = await getDB();
 const app = Fastify();
 app.decorate("db", db);
@@ -264,6 +265,42 @@ try {
   const library = await characters.getById(withSheet.id);
   const libraryData = typeof library!.data === "string" ? JSON.parse(library!.data) : library!.data;
   assert.deepEqual(libraryData.extensions.rulesetSheets["5e-2014"], starting);
+
+  // ── After setup, nothing that rewrites a card may cost it the game's sheet ──
+  // A session conclusion rebuilds the cards it names from an allow-list.
+  {
+    const concluded = applyGeneratedGameCharacterCards(cards as unknown as Array<Record<string, unknown>>, [
+      { name: "MIRA", shortDescription: "Older and wiser.", class: "Rogue" },
+    ]);
+    assert.equal(concluded.updatedCount, 1);
+    assert.equal(concluded.cards[0]!.shortDescription, "Older and wiser.");
+    assert.deepEqual(concluded.cards[0]!.rulesetSheet, cards[0]!.rulesetSheet, "a concluded card keeps its sheet");
+    assert.deepEqual(concluded.cards[1], cards[1], "a card the conclusion does not name is untouched");
+  }
+
+  // A recruit joins the way the party did: a copy of the library build, or a blank sheet. No model
+  // connection exists here, so the route takes its fallback card, which is the path under test.
+  {
+    const recruitBuild = createRulesetSheetEnvelope(fiveE);
+    recruitBuild.build.abilities.str = 17;
+    const recruitCard = await characters.create({
+      ...blankCard,
+      name: "Bram Ironhand",
+      extensions: { rulesetSheets: { "5e-2014": recruitBuild } },
+    } as never);
+    assert.ok(recruitCard?.id);
+    const recruited = await app.inject({
+      method: "POST",
+      url: "/api/game/party/recruit",
+      payload: { chatId: partyChatId, characterName: "Bram Ironhand" },
+    });
+    assert.equal(recruited.statusCode, 200, recruited.body);
+    const afterRecruit = JSON.parse((await createChatsStorage(db).getById(partyChatId))!.metadata as string);
+    const recruitedCards = afterRecruit.gameCharacterCards as typeof cards;
+    const bram = recruitedCards.find((card) => card.name === "Bram Ironhand");
+    assert.equal(bram?.rulesetSheet?.build.abilities.str, 17, "a recruit gets a copy of the library build");
+    assert.equal(recruitedCards[0]!.rulesetSheet?.build.abilities.dex, 16, "recruiting leaves the others alone");
+  }
 
   // A game with no ruleset gets no sheets.
   const plainGame = await create({ ...baseConfig, partyCharacterIds: [withSheet.id] } as unknown as Record<

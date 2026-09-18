@@ -2502,7 +2502,7 @@ function hasGeneratedGameCharacterCardContent(card: ReturnType<typeof normalizeG
   );
 }
 
-function applyGeneratedGameCharacterCards(
+export function applyGeneratedGameCharacterCards(
   currentCards: Array<Record<string, unknown>>,
   rawCards: unknown,
 ): { cards: Array<Record<string, unknown>>; updatedCount: number } {
@@ -2532,12 +2532,13 @@ function applyGeneratedGameCharacterCards(
 
     updatedCount += 1;
     const normalizedCard = normalizeGeneratedGameCharacterCard(generatedCard, existingName);
-    return existingCard.rpgStats
-      ? {
-          ...normalizedCard,
-          rpgStats: existingCard.rpgStats,
-        }
-      : normalizedCard;
+    // The generated card is rebuilt from an allow-list. What the model never writes and the game
+    // owns rides along: the RPG stats and this game's copy of the ruleset sheet.
+    return {
+      ...normalizedCard,
+      ...(existingCard.rpgStats ? { rpgStats: existingCard.rpgStats } : {}),
+      ...(existingCard.rulesetSheet ? { rulesetSheet: existingCard.rulesetSheet } : {}),
+    };
   });
 
   return { cards, updatedCount };
@@ -9014,12 +9015,23 @@ export async function gameRoutes(app: FastifyInstance) {
       ? buildFallbackGameCharacterCard(recruit.data, recruit.name)
       : buildNpcPartyCard(npcRecruit!);
     const recruitRpgStats = recruit ? extractRecruitCharacterRpgStats(recruit.data) : undefined;
+    // In a game on a ruleset a recruit joins the way the party did at setup: with a copy of the
+    // library card's starting build, or a blank sheet (an NPC has no library card to copy from).
+    const pinnedRuleset = meta.gameRuleset != null ? resolveGameRuleset(meta, await loadRulesetRegistry()) : null;
+    const recruitRulesetSheet =
+      pinnedRuleset?.status === "ok"
+        ? copyRulesetSheetForGame(
+            pinnedRuleset.definition,
+            recruit?.data.extensions?.rulesetSheets?.[pinnedRuleset.definition.id],
+          )
+        : undefined;
     const recruitSourceCard = recruit
       ? buildRecruitCharacterSourceCard(recruit.data)
       : buildNpcRecruitCharacterSourceCard(npcRecruit!);
     let nextCard: Record<string, unknown> = {
       ...fallbackCard,
       ...(recruitRpgStats ? { rpgStats: recruitRpgStats } : {}),
+      ...(recruitRulesetSheet ? { rulesetSheet: recruitRulesetSheet } : {}),
     };
 
     if (existingCardIndex >= 0) {
@@ -9132,6 +9144,7 @@ export async function gameRoutes(app: FastifyInstance) {
           nextCard = {
             ...normalizeGeneratedGameCharacterCard(rawCard, recruitName),
             ...(recruitRpgStats ? { rpgStats: recruitRpgStats } : {}),
+            ...(recruitRulesetSheet ? { rulesetSheet: recruitRulesetSheet } : {}),
           };
         }
       } catch (error) {
