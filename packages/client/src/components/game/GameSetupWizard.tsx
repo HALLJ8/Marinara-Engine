@@ -510,13 +510,14 @@ export function GameSetupWizard({
   const [experienceSeed, setExperienceSeed] = useState(() => String(crypto.getRandomValues(new Uint32Array(1))[0]));
   // Rules are chosen once, for a new game only, and stay independent of combat presentation.
   const { data: installedRulesets, isLoading: rulesetsLoading } = useInstalledRulesets(isNewGame);
-  const { data: agentImportPolicy } = useAgentImportPolicy();
+  const { data: agentImportPolicy, isLoading: agentImportPolicyLoading } = useAgentImportPolicy();
   // With custom imports off the server refuses a new game on an imported ruleset, so it is not
-  // offered here either. Games that already pinned one keep playing: nothing else consults this.
+  // offered here either, and it is only offered once the policy is KNOWN to be on. Games that
+  // already pinned one keep playing: nothing else consults this.
   const rulesets = useMemo(() => {
     if (!isNewGame) return [];
     const installed = installedRulesets ?? [];
-    return agentImportPolicy?.enabled === false ? installed.filter((entry) => !entry.source) : installed;
+    return agentImportPolicy?.enabled === true ? installed : installed.filter((entry) => !entry.source);
   }, [agentImportPolicy, installedRulesets, isNewGame]);
   const [rulesetId, setRulesetId] = useState<string | null>(null);
   const activeRuleset = rulesets.find((entry) => entry.definition.id === rulesetId) ?? null;
@@ -817,7 +818,9 @@ export function GameSetupWizard({
     !personasLoading &&
     !lorebooksLoading &&
     !experiencesLoading &&
-    !rulesetsLoading;
+    !rulesetsLoading &&
+    // The policy decides whether an imported ruleset is on the list the import resolves against.
+    !agentImportPolicyLoading;
 
   const availableLorebooks = useMemo(
     () =>

@@ -130,8 +130,8 @@ export async function gameRulesetsRoutes(app: FastifyInstance) {
     if (games > 0 && force !== "true") {
       return reply.status(409).send({
         error:
-          `${games} game${games === 1 ? "" : "s"} play on this ruleset. Removing it leaves ` +
-          `${games === 1 ? "that game" : "those games"} without their rules until you import it again.`,
+          `${games === 1 ? "1 game plays" : `${games} games play`} on this ruleset. Removing it leaves ` +
+          `${games === 1 ? "that game without its rules" : "those games without their rules"} until you import it again.`,
         code: "ruleset_in_use",
         games,
       });

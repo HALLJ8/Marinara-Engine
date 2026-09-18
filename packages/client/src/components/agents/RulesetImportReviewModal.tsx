@@ -2,7 +2,7 @@
 // no permissions, so there is nothing to tick here: the review exists because the file DOES decide
 // how every check in the game is rolled, what a sheet holds, and what text reaches the Game Master
 // model. Those are shown in full, the GM text verbatim, before anything is written.
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { useTranslation as useUiTranslation } from "react-i18next";
 import { FileText } from "lucide-react";
 import type { RulesetDefinition } from "@marinara-engine/shared";
@@ -47,11 +47,17 @@ export function RulesetImportReviewModal({
   onConfirm: () => void;
 }) {
   const { t } = useUiTranslation();
-  // Stays mounted while the dialog closes, like the Agent import review beside it, so the exit
-  // animation plays instead of the panel vanishing mid-frame.
+  // The dialog closes by `definition` going null, and the exit animation still has to show
+  // something: the body keeps rendering the last file that was under review.
+  const [shown, setShown] = useState({ definition, rulesetId });
+  if (definition && (shown.definition !== definition || shown.rulesetId !== rulesetId)) {
+    setShown({ definition, rulesetId });
+  }
+  const open = definition !== null;
+  const review = shown.definition;
   return (
     <Modal
-      open={definition !== null}
+      open={open}
       onClose={() => {
         if (!importing) onCancel();
       }}
@@ -60,35 +66,33 @@ export function RulesetImportReviewModal({
       mobileFullscreen
       closeDisabled={importing}
     >
-      {definition && (
+      {review && (
         <div className="space-y-4">
           <div className="flex gap-3 rounded-xl border border-[var(--border)] bg-[var(--secondary)]/45 p-3 text-sm leading-6">
             <FileText className="mt-0.5 shrink-0 text-[var(--muted-foreground)]" size="1rem" />
             <p className="text-[var(--muted-foreground)]">{t("game.ruleset.import.intro")}</p>
           </div>
 
-          {installedVersions.includes(definition.version) && (
+          {installedVersions.includes(review.version) && (
             <div role="status" className="rounded-lg bg-[var(--primary)]/10 px-3 py-2 text-xs text-[var(--primary)]">
-              {t("game.ruleset.import.alreadyInstalled", { version: definition.version })}
+              {t("game.ruleset.import.alreadyInstalled", { version: review.version })}
             </div>
           )}
 
           <div className="max-h-[55dvh] space-y-3 overflow-y-auto pr-1">
             <section className="space-y-2 rounded-xl border border-[var(--border)] bg-[var(--background)]/45 p-3">
-              <h3 className="text-sm font-semibold">{definition.name}</h3>
+              <h3 className="text-sm font-semibold">{review.name}</h3>
               <ReviewRow label={t("game.ruleset.import.idLabel")}>
-                <code className="break-all">{rulesetId}</code>
+                <code className="break-all">{shown.rulesetId}</code>
                 <span className="mt-0.5 block">{t("game.ruleset.import.idHint")}</span>
               </ReviewRow>
-              <ReviewRow label={t("game.ruleset.import.versionLabel")}>{definition.version}</ReviewRow>
-              {definition.edition && (
-                <ReviewRow label={t("game.ruleset.import.editionLabel")}>{definition.edition}</ReviewRow>
-              )}
+              <ReviewRow label={t("game.ruleset.import.versionLabel")}>{review.version}</ReviewRow>
+              {review.edition && <ReviewRow label={t("game.ruleset.import.editionLabel")}>{review.edition}</ReviewRow>}
               <ReviewRow label={t("game.ruleset.import.licenseLabel")}>
-                {definition.license?.spdx || definition.license?.attribution ? (
+                {review.license?.spdx || review.license?.attribution ? (
                   <>
-                    {definition.license.spdx && <span className="block">{definition.license.spdx}</span>}
-                    {definition.license.attribution && <ReviewText>{definition.license.attribution}</ReviewText>}
+                    {review.license.spdx && <span className="block">{review.license.spdx}</span>}
+                    {review.license.attribution && <ReviewText>{review.license.attribution}</ReviewText>}
                   </>
                 ) : (
                   t("game.ruleset.import.licenseNone")
@@ -97,16 +101,16 @@ export function RulesetImportReviewModal({
             </section>
 
             <section className="space-y-2 rounded-xl border border-[var(--border)] bg-[var(--background)]/45 p-3">
-              <ReviewRow label={t("game.ruleset.import.coverageLabel")}>{definition.coverage.summary}</ReviewRow>
+              <ReviewRow label={t("game.ruleset.import.coverageLabel")}>{review.coverage.summary}</ReviewRow>
               <ReviewRow label={t("game.ruleset.import.resolutionLabel")}>
-                {definition.resolution.kind === "dice-sum"
+                {review.resolution.kind === "dice-sum"
                   ? t("game.ruleset.import.resolutionDiceSum", {
-                      dice: `${definition.resolution.dice.count}d${definition.resolution.dice.sides}`,
+                      dice: `${review.resolution.dice.count}d${review.resolution.dice.sides}`,
                     })
-                  : definition.resolution.kind}
+                  : review.resolution.kind}
               </ReviewRow>
               <ReviewRow label={t("game.ruleset.import.combatLabel")}>
-                {definition.coverage.combat
+                {review.coverage.combat
                   ? t("game.ruleset.import.combatCovered")
                   : t("game.ruleset.import.combatNotCovered")}
               </ReviewRow>
@@ -117,8 +121,8 @@ export function RulesetImportReviewModal({
               <p className="text-[0.625rem] leading-relaxed text-[var(--muted-foreground)]">
                 {t("game.ruleset.import.gmTextHint")}
               </p>
-              <ReviewText>{definition.gm.checkGuidance}</ReviewText>
-              {definition.gm.sheetGuidance && <ReviewText>{definition.gm.sheetGuidance}</ReviewText>}
+              <ReviewText>{review.gm.checkGuidance}</ReviewText>
+              {review.gm.sheetGuidance && <ReviewText>{review.gm.sheetGuidance}</ReviewText>}
             </section>
           </div>
 

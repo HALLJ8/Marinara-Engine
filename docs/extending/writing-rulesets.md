@@ -14,7 +14,7 @@ Combat is separate too. Battles run on Marinara's own combat, in whichever Comba
 
 ## Quickstart
 
-1. Copy the example file [`ember-roads.json`](../examples/rulesets/ember-roads.json). It is a small 2d6 system with three stats, written to show that nothing in the format assumes a d20 or six abilities. For a full-size example, see the 5e (SRD 5.1) file in [`docs/development/ruleset-5e-2014.example.json`](../development/ruleset-5e-2014.example.json).
+1. Copy the example file [`ember-roads.json`](https://github.com/Pasta-Devs/Marinara-Engine/blob/staging/docs/examples/rulesets/ember-roads.json). It is a small 2d6 system with three stats, written to show that nothing in the format assumes a d20 or six abilities. For a full-size example, see the 5e (SRD 5.1) file in [`ruleset-5e-2014.example.json`](https://github.com/Pasta-Devs/Marinara-Engine/blob/staging/docs/development/ruleset-5e-2014.example.json).
 2. Change `id` to your own. An id is lowercase letters, digits, and single hyphens, such as `ember-roads`.
 3. Edit the sheet, the rests, and the Game Master text.
 4. Import it (see [Trying your ruleset](#trying-your-ruleset)). The import checks the whole file and tells you what is wrong, line by line, before anything is saved.
@@ -23,7 +23,7 @@ Combat is separate too. Battles run on Marinara's own combat, in whichever Comba
 For help while you type, point your editor at the JSON Schema by adding this as the first line inside the file's outer braces:
 
 ```json
-"$schema": "https://raw.githubusercontent.com/Pasta-Devs/Marinara-Engine/main/docs/extending/ruleset.schema.json",
+"$schema": "https://raw.githubusercontent.com/Pasta-Devs/Marinara-Engine/staging/docs/extending/ruleset.schema.json",
 ```
 
 The schema catches misspelled keys and wrong types as you type. It cannot check that the names in your file point at things that exist, such as a skill naming an ability. The import does that.

@@ -488,13 +488,16 @@ export function AgentsPanel() {
   );
 
   // A rules package adds no agent, so it is listed in its own section or it would be installed and
-  // invisible here. Rulesets are Game Mode only, which is what the mode filter tests.
+  // invisible here. Rulesets are Game Mode only, which is what the mode filter tests. The search and
+  // mode controls only render while agents are installed, so without agents nothing is filtered:
+  // a filter the user can no longer see or clear must not hide the rulesets.
   const visibleRulesets = installedRulesets.filter(
     ({ definition }) =>
-      (agentModeFilter === "all" || agentModeFilter === "game") &&
-      (!agentSearchQuery ||
-        definition.name.toLowerCase().includes(agentSearchQuery) ||
-        definition.coverage.summary.toLowerCase().includes(agentSearchQuery)),
+      !hasInstalledAgents ||
+      ((agentModeFilter === "all" || agentModeFilter === "game") &&
+        (!agentSearchQuery ||
+          definition.name.toLowerCase().includes(agentSearchQuery) ||
+          definition.coverage.summary.toLowerCase().includes(agentSearchQuery))),
   );
 
   const confirmAndUninstallRuleset = async (packageId: string, name: string) => {
@@ -1691,7 +1694,7 @@ export function AgentsPanel() {
                   <button
                     className="mari-chrome-control mari-chrome-control--small shrink-0 p-1.5"
                     title={localizeUi("game.ruleset.remove.confirm")}
-                    aria-label={localizeUi("game.ruleset.remove.title", { name: definition.name })}
+                    aria-label={localizeUi("game.ruleset.remove.label", { name: definition.name })}
                     onClick={() => void confirmAndRemoveRuleset(definition.id, definition.name)}
                   >
                     <Trash2 size="0.75rem" />

@@ -857,6 +857,7 @@
   "game.ruleset.remove.failed": "The ruleset could not be removed.",
   "game.ruleset.remove.inUseMessage_one": "{{count}} game plays on this ruleset. Removing it leaves that game without its rules until you import the ruleset again. Remove it anyway?",
   "game.ruleset.remove.inUseMessage_other": "{{count}} games play on this ruleset. Removing it leaves those games without their rules until you import the ruleset again. Remove it anyway?",
+  "game.ruleset.remove.label": "Remove {{name}}",
   "game.ruleset.remove.message": "Every stored version of this ruleset is removed. Sheets saved on characters and personas stay, and you can import the file again at any time.",
   "game.ruleset.remove.title": "Remove {{name}}?",
   "game.ruleset.setup.blankSheet": "Starts on a blank sheet",
