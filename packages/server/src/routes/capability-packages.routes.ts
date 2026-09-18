@@ -80,10 +80,16 @@ export async function capabilityPackagesRoutes(app: FastifyInstance) {
   // Every installed ruleset, whole, because the sheet editors are rendered from the definition.
   // A failed read is an error here, never an empty list: the editors call a stored sheet "not
   // installed" when its ruleset is absent, and must not say that because the lookup failed.
+  // Imported rulesets are listed whatever the import policy says, for the same reason: an existing
+  // sheet has to stay readable after the switch goes off. `source` is what tells the two apart.
   app.get(
     "/rulesets",
     async (): Promise<InstalledRuleset[]> =>
-      [...(await readRulesetRegistry()).values()].map(({ definition, packageId }) => ({ packageId, definition })),
+      [...(await readRulesetRegistry(app.db)).values()].map(({ definition, packageId, source }) => ({
+        packageId,
+        definition,
+        ...(source ? { source } : {}),
+      })),
   );
   app.get<{ Params: { id: string } }>("/:id/release-notes", async (request) => {
     const { id } = packageParams.parse(request.params);

@@ -30,6 +30,38 @@ const RULESET_ID_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 /** A pinned id is a bare official id, or a community id namespaced by its source
  *  (`<owner>/<id>` for a repository, `local/<id>` for a file) so nothing can shadow an official one. */
 const RULESET_REF_ID_PATTERN = /^(?:[A-Za-z0-9][A-Za-z0-9._-]{0,63}\/)?[a-z0-9]+(?:-[a-z0-9]+)*$/;
+const RULESET_NAMESPACE_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
+
+/** The namespace of a community ruleset imported from a file rather than from a repository. */
+export const RULESET_LOCAL_NAMESPACE = "local";
+
+/** The id the Engine knows a community ruleset by. The `ruleset.json` itself always carries the
+ *  BARE id; the namespace is where the file came from (a repository owner, or `local`). Community
+ *  ids therefore always contain a slash and bare ids never do, so nothing a user imports can take
+ *  an official ruleset's id, and two authors' `v20` are two different rulesets. Throws rather than
+ *  returning null: every caller here has already validated its parts, so a bad one is a bug. */
+export function communityRulesetId(namespace: string, bareId: string): string {
+  if (!RULESET_NAMESPACE_PATTERN.test(namespace)) {
+    throw new Error(`"${namespace}" is not a usable ruleset namespace`);
+  }
+  if (bareId.length > 64 || !RULESET_ID_PATTERN.test(bareId)) {
+    throw new Error(`"${bareId}" is not a ruleset id`);
+  }
+  // Reserved ids are the Engine's own behaviours, not data, inside a namespace exactly as outside.
+  if ((RESERVED_RULESET_IDS as readonly string[]).includes(bareId)) {
+    throw new Error(`"${bareId}" is an Engine-owned ruleset id`);
+  }
+  return `${namespace}/${bareId}`;
+}
+
+/** Whether an id names a community ruleset (imported) rather than an official packaged one. */
+export function isCommunityRulesetId(id: string): boolean {
+  return id.includes("/");
+}
+
+/** Where a community ruleset came from, as a pin may record it. Exported so the import path can
+ *  refuse a url the pin could not carry: a pin that fails to parse takes the game's rules with it. */
+export const rulesetSourceUrlSchema = z.string().url().max(300);
 
 /** The pin written once by game creation (`chat.metadata.gameRuleset`). Read tolerantly: this is
  *  persisted data, so a field a newer Engine added must not make the pin unreadable here. */
@@ -40,7 +72,7 @@ export const rulesetRefSchema = z
     /** The capability package that supplied the definition, or null for a community file/repository. */
     packageId: z.string().max(128).nullable().default(null),
     /** Where a community ruleset came from, so a recipient without it can be told where to get it. */
-    source: z.string().url().max(300).optional(),
+    source: rulesetSourceUrlSchema.optional(),
     options: z.record(z.union([z.boolean(), z.number().finite(), z.string().max(200)])).default({}),
   })
   .passthrough();
@@ -799,8 +831,17 @@ export type RulesetField = z.infer<typeof rulesetFieldSchema>;
 export type RulesetListColumn = z.infer<typeof rulesetListColumnSchema>;
 export type RulesetDerived = z.infer<typeof rulesetDerivedSchema>;
 export type RulesetRest = RulesetDefinition["rests"][number];
-/** One installed ruleset as the API lists it: the whole definition plus the package that supplied it. */
-export type InstalledRuleset = { packageId: string | null; definition: RulesetDefinition };
+/** Where a community ruleset was imported from. `url` is null for a file the user picked. */
+export type CommunityRulesetSource = { kind: "repository" | "local"; url: string | null };
+
+/** One installed ruleset as the API lists it: the whole definition plus the package that supplied
+ *  it. A community ruleset has no package and carries `source` instead, which is what lets the
+ *  client tell an imported ruleset from an official one. */
+export type InstalledRuleset = {
+  packageId: string | null;
+  definition: RulesetDefinition;
+  source?: CommunityRulesetSource;
+};
 
 /** Authors may annotate any object with `$comment`, and the document root with `$schema` for
  *  editor support. Both are dropped before validation so the strict schema never sees them. */

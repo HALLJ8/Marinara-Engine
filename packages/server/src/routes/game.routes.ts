@@ -129,6 +129,7 @@ import {
   loadRulesetRegistry,
   resolveGameRuleset,
 } from "../services/game/ruleset-registry.service.js";
+import { getCustomAgentImportPolicy } from "../services/agents/custom-agent-import-policy.service.js";
 import { resolveChatSkillCheck } from "../services/game/skill-check-resolution.service.js";
 import { applyAllSegmentEdits, stripGmCommandTags } from "../services/game/segment-edits.js";
 import { processLorebooks, type LorebookScanResult } from "../services/lorebook/index.js";
@@ -182,6 +183,7 @@ import {
   parseTrackerHiddenFields,
   normalizeRpgStatPools,
   copyRulesetSheetForGame,
+  isCommunityRulesetId,
   rulesetRefSchema,
   type RulesetDefinition,
   type RulesetRef,
@@ -6482,10 +6484,20 @@ export async function gameRoutes(app: FastifyInstance) {
     // rules is the one outcome the player did not choose.
     let gameRuleset: RulesetRef | null = null;
     if (parsedCreateGameInput.setupConfig.ruleset) {
-      const registered = (await loadRulesetRegistry()).get(parsedCreateGameInput.setupConfig.ruleset.id);
+      const requestedRulesetId = parsedCreateGameInput.setupConfig.ruleset.id;
+      // Imported rulesets follow the custom Agent import policy: with imports off they are hidden
+      // from NEW games. Resolution never consults the policy, so a game that already pinned one
+      // keeps running — turning the switch off must not break somebody's campaign.
+      if (isCommunityRulesetId(requestedRulesetId) && !(await getCustomAgentImportPolicy(app.db)).enabled) {
+        return reply.status(400).send({
+          error: "Imported rulesets are turned off in Settings, so a new game cannot start on one.",
+          code: "ruleset_imports_disabled",
+        });
+      }
+      const registered = (await loadRulesetRegistry(app.db)).get(requestedRulesetId);
       if (!registered) {
         return reply.status(400).send({
-          error: `The ruleset "${parsedCreateGameInput.setupConfig.ruleset.id}" is not installed.`,
+          error: `The ruleset "${requestedRulesetId}" is not installed.`,
           code: "ruleset_not_installed",
         });
       }
