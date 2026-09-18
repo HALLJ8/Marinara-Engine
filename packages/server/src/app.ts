@@ -57,6 +57,7 @@ import { getRuntimeMemorySnapshot } from "./utils/runtime-memory.js";
 import { getLastFreeze } from "./lib/freeze-detector.js";
 import { getPreviousSessionStatus, getUncleanExitHistory } from "./lib/session-postmortem.js";
 import { protectTerminalLogger } from "./lib/logger.js";
+import { openCodeSessionHook } from "./utils/opencode-session.js";
 
 const isLite = process.env.MARINARA_LITE === "true" || process.env.MARINARA_LITE === "1";
 const MAX_UPLOAD_BYTES = 256 * 1024 * 1024;
@@ -204,6 +205,9 @@ export async function buildApp(https?: { cert: Buffer; key: Buffer }) {
       personalExtensionTrust.changedRecordsDisabled,
     );
   }
+
+  // Share the originating chat session with nested provider calls and retries.
+  app.addHook("preHandler", openCodeSessionHook);
 
   // Keep fallback reporting attached to the originating request even when
   // generation passes through nested services. Streamed routes emit an SSE

@@ -4,6 +4,8 @@ This file is the release-notes source of truth for Marinara Engine. Reuse these 
 
 ## [Unreleased]
 
+- OpenAI-compatible connections to OpenCode Go/Zen automatically send a stable per-chat session header and identify Marinara Engine, including nested generation, retries and chat translations (#6325).
+
 - Image connections support fal.ai text-to-image generation, with FLUX starter models, custom model endpoints and parameters, and the existing image previews and gallery (#6312).
 - Connection tests retain fast results after automatically saving edited settings.
 
