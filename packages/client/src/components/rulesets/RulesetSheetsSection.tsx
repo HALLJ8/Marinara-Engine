@@ -1,6 +1,7 @@
 // The "Ruleset sheets" block of the character and persona Stats tabs: one collapsible sheet per
 // installed Game Mode ruleset, plus a removable line for every stored sheet whose ruleset is not
 // installed. Such a sheet is kept dormant under its key, never dropped and never shown to a prompt.
+import { useState } from "react";
 import { Trash2 } from "lucide-react";
 import { useTranslation as useUiTranslation } from "react-i18next";
 import {
@@ -32,6 +33,8 @@ export function RulesetSheetsSection({
 }) {
   const { t } = useUiTranslation();
   const installed = useInstalledRulesets();
+  // The ruleset whose last edit was refused for size, so its entry can say so.
+  const [refusedId, setRefusedId] = useState<string | null>(null);
   const stored = sheets && typeof sheets === "object" && !Array.isArray(sheets) ? sheets : {};
   const rulesets = installed.data ?? [];
   const installedIds = new Set(rulesets.map((entry) => entry.definition.id));
@@ -57,6 +60,18 @@ export function RulesetSheetsSection({
   const atSheetLimit = Object.keys(stored).length >= RULESET_SHEETS_MAX;
 
   const setSheet = (id: string, sheet: RulesetSheetEnvelope | undefined) => {
+    // The save boundary refuses an oversized sheet, and that refusal fails the whole character or
+    // persona save. So an edit that would leave the sheet over the limit is not applied, unless it
+    // makes an already oversized sheet smaller, which is how such a sheet gets repaired.
+    if (sheet) {
+      const nextBytes = sheetBytes(sheet);
+      const previousBytes = Object.hasOwn(stored, id) ? sheetBytes(stored[id]) : 0;
+      if (nextBytes > RULESET_SHEET_MAX_BYTES && nextBytes >= previousBytes) {
+        setRefusedId(id);
+        return;
+      }
+    }
+    setRefusedId(null);
     const { [id]: _previous, ...rest } = stored;
     const next = sheet ? { ...rest, [id]: sheet } : rest;
     onChange(Object.keys(next).length > 0 ? next : undefined);
@@ -94,6 +109,11 @@ export function RulesetSheetsSection({
                   {tooLarge && (
                     <p role="alert" className="text-xs text-[var(--destructive)]">
                       {t("ui.rulesets.sheets.tooLarge", { limit: Math.floor(RULESET_SHEET_MAX_BYTES / 1024) })}
+                    </p>
+                  )}
+                  {refusedId === definition.id && (
+                    <p role="alert" className="text-xs text-[var(--destructive)]">
+                      {t("ui.rulesets.sheets.changeRefused", { limit: Math.floor(RULESET_SHEET_MAX_BYTES / 1024) })}
                     </p>
                   )}
                   <RulesetSheetEditor
