@@ -80,6 +80,7 @@ const OFFICIAL_PACKAGE_MODES: Readonly<Record<string, readonly CatalogMode[]>> =
   spotify: ["conversation", "roleplay", "game"],
   poker: ["conversation"],
   "rock-paper-scissors": ["conversation"],
+  "ruleset-5e-2014": ["game"],
   "tic-tac-toe": ["conversation"],
   uno: ["conversation"],
 });
