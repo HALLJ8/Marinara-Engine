@@ -9,9 +9,14 @@ const NO_STORE_FILES = new Set(["manifest.json", "sw.js", "registerSW.js"]);
 export function createClientNotFoundHandler(clientIndex: string) {
   return async (req: FastifyRequest, reply: FastifyReply) => {
     const pathname = new URL(req.url, "http://localhost").pathname;
+    const acceptsHtml = req.headers.accept?.split(",").some((range) => {
+      const [type, ...parameters] = range.split(";").map((part) => part.trim().toLowerCase());
+      const quality = parameters.find((parameter) => parameter.startsWith("q="))?.slice(2) ?? "1";
+      return type === "text/html" && /^(?:0(?:\.\d{0,3})?|1(?:\.0{0,3})?)$/.test(quality) && Number(quality) > 0;
+    });
     const isNavigation =
       (req.method === "GET" || req.method === "HEAD") &&
-      (req.headers["sec-fetch-dest"] === "document" || req.headers.accept?.includes("text/html"));
+      (acceptsHtml || (req.headers.accept === undefined && req.headers["sec-fetch-dest"] === "document"));
     reply.header("Cache-Control", "no-store");
     if (pathname === "/api" || pathname.startsWith("/api/") || pathname.startsWith("/assets/") || !isNavigation) {
       return reply.status(404).send({ error: "Not Found" });

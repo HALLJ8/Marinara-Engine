@@ -62,17 +62,34 @@ try {
     assert.doesNotMatch(response.headers["content-type"], /html/);
   }
   for (const method of ["GET", "POST"] as const) {
-    const response = await app.inject({ method, url: "/unknown", headers: { accept: "application/json" } });
-    assert.equal(response.statusCode, 404);
+    for (const accept of [
+      "",
+      "application/json",
+      "application/json, text/html;q=0",
+      "text/html;q=0.000",
+      "text/html;q=.5",
+      "text/html;q=+0.5",
+      "text/html;q=0.0001",
+    ]) {
+      const response = await app.inject({
+        method,
+        url: "/unknown",
+        headers: { accept, "sec-fetch-dest": "document" },
+      });
+      assert.equal(response.statusCode, 404);
+      assert.doesNotMatch(response.headers["content-type"], /html/);
+    }
   }
-  const navigation = await app.inject({
-    method: "GET",
-    url: "/some/navigation?query=example.js",
-    headers: { accept: "text/html" },
-  });
-  assert.equal(navigation.statusCode, 200);
-  assert.match(navigation.headers["content-type"], /html/);
-  assert.equal(navigation.headers["cache-control"], "no-cache, must-revalidate");
+  for (const headers of [{ accept: "text/html;q=0.9" }, { "sec-fetch-dest": "document" }]) {
+    const navigation = await app.inject({
+      method: "GET",
+      url: "/some/navigation?query=example.js",
+      headers,
+    });
+    assert.equal(navigation.statusCode, 200);
+    assert.match(navigation.headers["content-type"], /html/);
+    assert.equal(navigation.headers["cache-control"], "no-cache, must-revalidate");
+  }
 
   console.info("Static client cache-header regression passed.");
 } finally {

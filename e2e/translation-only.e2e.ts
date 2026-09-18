@@ -53,7 +53,8 @@ for (const mode of ["roleplay", "conversation", "game"] as const) {
             : {}),
         },
       });
-      let source = 'The archive is quiet.\n\n"Let us begin," Alice says.';
+      const initialSource = 'The archive is quiet.\n\n"Let us begin," Alice says.';
+      let source = initialSource;
       let translated = 'W archiwum panuje cisza.\n\n"Zacznijmy", mówi Alice.';
       let saved: { id: string } | undefined;
       let generationCount = 0;
@@ -128,6 +129,7 @@ for (const mode of ["roleplay", "conversation", "game"] as const) {
       await page.reload();
       await expect(row).toContainText(mode === "game" ? "W archiwum panuje cisza" : "Zacznijmy");
       await expect(row).not.toContainText("Let us begin");
+      await expect(row).not.toContainText(initialSource.split("\n")[0]!);
       if (mode !== "game") {
         source = "The door opens for a new experiment.";
         translated = "Drzwi otwierają się na nowy eksperyment.";
@@ -138,6 +140,8 @@ for (const mode of ["roleplay", "conversation", "game"] as const) {
         await expect.poll(async () => (await extra()).translationSource).toBe(source);
         await expect(row).toContainText(translated);
         await expect(row).not.toContainText(source);
+        await expect(row).not.toContainText(initialSource.split("\n")[0]!);
+        await expect(row).not.toContainText("Let us begin");
         await expect(row).not.toContainText("Zacznijmy");
         await page.screenshot({ path: info.outputPath("translation-only-regenerated.png") });
         await request.patch(`/api/chats/${chat.id}/metadata`, { data: { translationDisplayOnly: false } });
