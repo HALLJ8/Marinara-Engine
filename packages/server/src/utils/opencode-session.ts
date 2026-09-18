@@ -27,17 +27,21 @@ export function getOpenCodeSessionId(): string {
   return sessionContext.getStore() ?? `marinara-request-${randomUUID()}`;
 }
 
+export function isOpenCodeApiUrl(url: URL): boolean {
+  return (
+    url.protocol === "https:" &&
+    (url.hostname === "opencode.ai" || url.hostname === "api.opencode.ai") &&
+    /^\/zen\/(?:go\/)?v1(?:\/|$)/u.test(url.pathname)
+  );
+}
+
 /** Apply at each outbound hop so automatically added headers never follow an external redirect. */
 export function requestHeadersWithOpenCodeSession(
   url: URL,
   headersInit: RequestInit["headers"] | undefined,
   sessionId: string,
 ): Headers | undefined {
-  const isOpenCodeApi =
-    url.protocol === "https:" &&
-    (url.hostname === "opencode.ai" || url.hostname === "api.opencode.ai") &&
-    /^\/zen\/(?:go\/)?v1(?:\/|$)/u.test(url.pathname);
-  if (!isOpenCodeApi) return headersInit ? new Headers(headersInit) : undefined;
+  if (!isOpenCodeApiUrl(url)) return headersInit ? new Headers(headersInit) : undefined;
 
   const headers = new Headers(headersInit);
   headers.set("x-opencode-session", sessionId);

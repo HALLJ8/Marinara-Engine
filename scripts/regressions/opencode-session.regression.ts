@@ -60,6 +60,9 @@ try {
     if (url.endsWith("/redirect-same")) {
       return new Response(null, { status: 307, headers: { location: "/zen/go/v1/final" } });
     }
+    if (url.endsWith("/redirect-docs")) {
+      return new Response(null, { status: 307, headers: { location: "/docs/go" } });
+    }
     await new Promise<void>((resolve) => setImmediate(resolve));
     return body.stream
       ? new Response('data: {"choices":[{"delta":{"content":"Ready."},"finish_reason":null}]}\n\ndata: [DONE]\n\n', {
@@ -110,6 +113,19 @@ try {
   assert.equal(captured[1]!.headers.get("x-opencode-session"), null);
   assert.equal(captured[1]!.headers.get("authorization"), null);
   assert.equal(captured[1]!.headers.get("user-agent"), null);
+  captured.length = 0;
+  await safeFetch("https://opencode.ai/zen/go/v1/redirect-docs", {
+    headers: { "x-opencode-session": "old-static-value" },
+  });
+  assert.ok(captured[0]!.headers.get("x-opencode-session"));
+  assert.equal(
+    captured[1]!.headers.get("x-opencode-session"),
+    null,
+    "API session headers do not follow a redirect to docs",
+  );
+  captured.length = 0;
+  await safeFetch("https://proxy.example/v1", { headers: { "x-opencode-session": "configured-proxy-session" } });
+  assert.equal(captured[0]!.headers.get("x-opencode-session"), "configured-proxy-session");
   for (const url of ["https://opencode.ai/zen/v1/responses", "https://api.opencode.ai/zen/go/v1/models"]) {
     captured.length = 0;
     await safeFetch(url);

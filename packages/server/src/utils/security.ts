@@ -7,7 +7,7 @@ import { isLoopbackIp, isPrivateNetworkIp } from "../middleware/ip-allowlist.js"
 import { logger } from "../lib/logger.js";
 import { CSRF_HEADER, CSRF_HEADER_VALUE } from "@marinara-engine/shared";
 import { requestHeadersWithOpenRouterAttribution } from "./openrouter-attribution.js";
-import { getOpenCodeSessionId, requestHeadersWithOpenCodeSession } from "./opencode-session.js";
+import { getOpenCodeSessionId, isOpenCodeApiUrl, requestHeadersWithOpenCodeSession } from "./opencode-session.js";
 
 export { CSRF_HEADER, CSRF_HEADER_VALUE };
 
@@ -679,6 +679,9 @@ export async function safeFetch(url: string | URL, options: SafeFetchOptions = {
         currentHeaders = stripCrossOriginRedirectHeaders(currentHeaders);
         currentInit = { ...currentInit };
         delete (currentInit as { body?: unknown }).body;
+      } else if (isOpenCodeApiUrl(previousUrl) && !isOpenCodeApiUrl(nextUrl)) {
+        currentHeaders = new Headers(currentHeaders);
+        currentHeaders.delete("x-opencode-session");
       }
       current = await validateOutboundUrlForFetch(nextUrl, policy, agentOptions, keepAliveInitialDelayMs);
       continue;
