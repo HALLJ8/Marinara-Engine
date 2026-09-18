@@ -89,6 +89,7 @@ import {
   useInstalledRulesets,
   useCapabilityAgentRegistry,
 } from "../../hooks/use-capability-packages";
+import { useAgentImportPolicy } from "../../hooks/use-agents";
 import { useGameAssetStore } from "../../stores/game-asset.store";
 import { useUIStore } from "../../stores/ui.store";
 import {
@@ -509,7 +510,14 @@ export function GameSetupWizard({
   const [experienceSeed, setExperienceSeed] = useState(() => String(crypto.getRandomValues(new Uint32Array(1))[0]));
   // Rules are chosen once, for a new game only, and stay independent of combat presentation.
   const { data: installedRulesets, isLoading: rulesetsLoading } = useInstalledRulesets(isNewGame);
-  const rulesets = useMemo(() => (isNewGame ? (installedRulesets ?? []) : []), [installedRulesets, isNewGame]);
+  const { data: agentImportPolicy } = useAgentImportPolicy();
+  // With custom imports off the server refuses a new game on an imported ruleset, so it is not
+  // offered here either. Games that already pinned one keep playing: nothing else consults this.
+  const rulesets = useMemo(() => {
+    if (!isNewGame) return [];
+    const installed = installedRulesets ?? [];
+    return agentImportPolicy?.enabled === false ? installed.filter((entry) => !entry.source) : installed;
+  }, [agentImportPolicy, installedRulesets, isNewGame]);
   const [rulesetId, setRulesetId] = useState<string | null>(null);
   const activeRuleset = rulesets.find((entry) => entry.definition.id === rulesetId) ?? null;
   const [rulesetImportNotice, setRulesetImportNotice] = useState<string | null>(null);

@@ -85,10 +85,11 @@ export async function capabilityPackagesRoutes(app: FastifyInstance) {
   app.get(
     "/rulesets",
     async (): Promise<InstalledRuleset[]> =>
-      [...(await readRulesetRegistry(app.db)).values()].map(({ definition, packageId, source }) => ({
+      [...(await readRulesetRegistry(app.db)).values()].map(({ definition, packageId, source, versions }) => ({
         packageId,
         definition,
         ...(source ? { source } : {}),
+        ...(versions ? { versions: [...versions.keys()].sort((left, right) => left - right) } : {}),
       })),
   );
   app.get<{ Params: { id: string } }>("/:id/release-notes", async (request) => {

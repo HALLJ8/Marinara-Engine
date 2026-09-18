@@ -12,6 +12,7 @@ import {
   type InstalledRuleset,
 } from "@marinara-engine/shared";
 import { useCharacters, usePersonas } from "../../hooks/use-characters";
+import { rulesetRepositoryLabel } from "../../lib/ruleset-source";
 import { cn } from "../../lib/utils";
 
 function readRecord(value: unknown): Record<string, unknown> | null {
@@ -129,8 +130,11 @@ export function GameSetupRulesChooser({
             {t("game.ruleset.setup.ownRulesDescription")}
           </span>
         </button>
-        {rulesets.map(({ definition }) => {
+        {rulesets.map(({ definition, source }) => {
           const selected = active?.definition.id === definition.id;
+          // An imported ruleset says so on its own card: it was not reviewed by anyone, and where
+          // it came from is part of deciding whether to build a whole campaign on it.
+          const repository = source ? rulesetRepositoryLabel(source) : null;
           return (
             <button
               key={definition.id}
@@ -140,6 +144,13 @@ export function GameSetupRulesChooser({
               className={cardClass(selected)}
             >
               <span className="block font-medium text-[var(--foreground)]">{definition.name}</span>
+              {source && (
+                <span className="mt-0.5 block text-[0.625rem] uppercase text-[var(--muted-foreground)]/80">
+                  {repository
+                    ? t("game.ruleset.setup.importedFrom", { source: repository })
+                    : t("game.ruleset.setup.imported")}
+                </span>
+              )}
               <span className="mt-1 block text-[var(--muted-foreground)]">{definition.coverage.summary}</span>
             </button>
           );

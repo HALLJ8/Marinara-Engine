@@ -841,6 +841,9 @@ export type InstalledRuleset = {
   packageId: string | null;
   definition: RulesetDefinition;
   source?: CommunityRulesetSource;
+  /** Community only, ascending: every stored version, so the UI can say what removing one costs.
+   *  `definition` is the highest of them. */
+  versions?: number[];
 };
 
 /** Authors may annotate any object with `$comment`, and the document root with `$schema` for

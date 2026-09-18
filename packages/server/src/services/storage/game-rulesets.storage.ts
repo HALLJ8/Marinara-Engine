@@ -60,10 +60,19 @@ export class RulesetVersionConflictError extends Error {
   ) {
     super(
       `Version ${version} of "${rulesetId}" is already installed with different contents. ` +
-        `Raise the ruleset's version number and import it again — a version games may already be ` +
+        `Raise the ruleset's version number and import it again. A version games may already be ` +
         `pinned to is never rewritten.`,
     );
     this.name = "RulesetVersionConflictError";
+  }
+}
+
+/** The file itself cannot be stored, and the message says why in words an author can act on. Its
+ *  own class so a route answers 400 for these and lets a real storage failure stay a 500. */
+export class RulesetRefusedError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "RulesetRefusedError";
   }
 }
 
@@ -72,40 +81,59 @@ export function gameRulesetRowId(rulesetId: string, version: number): string {
   return `${rulesetId}@${version}`;
 }
 
+/** The size sentence, or null when the file fits. Exported so the import route can refuse an
+ *  oversized file before it parses it, and still say exactly what this write path would say. */
+export function rulesetSizeIssue(definition: string): string | null {
+  const bytes = Buffer.byteLength(definition, "utf8");
+  return bytes > RULESET_MAX_BYTES
+    ? `The ruleset file is ${bytes} bytes, over the ${RULESET_MAX_BYTES}-byte limit`
+    : null;
+}
+
 /** Validate the bytes against everything the registry will later assume. Returns nothing: it either
  *  passes or throws a sentence the importer can show the user. */
 function assertStorableRuleset(input: PutGameRulesetInput): void {
   if (!isCommunityRulesetId(input.rulesetId)) {
-    throw new Error(`"${input.rulesetId}" is not a community ruleset id; this table never holds official rulesets`);
+    throw new RulesetRefusedError(
+      `"${input.rulesetId}" is not a community ruleset id; this table never holds official rulesets`,
+    );
   }
   // A game's pin records this url, and the pin is re-read through `rulesetRefSchema` on every turn.
   // A url that schema would refuse must never be stored: it would make the whole pin unreadable and
   // take the game's rules with it. This single write path is where that stays true.
   if (input.sourceUrl != null && !rulesetSourceUrlSchema.safeParse(input.sourceUrl).success) {
-    throw new Error(`"${input.sourceUrl}" is not a usable ruleset source address`);
+    throw new RulesetRefusedError(`"${input.sourceUrl}" is not a usable ruleset source address`);
   }
-  const bytes = Buffer.byteLength(input.definition, "utf8");
-  if (bytes > RULESET_MAX_BYTES) {
-    throw new Error(`The ruleset file is ${bytes} bytes, over the ${RULESET_MAX_BYTES}-byte limit`);
-  }
+  const sizeIssue = rulesetSizeIssue(input.definition);
+  if (sizeIssue) throw new RulesetRefusedError(sizeIssue);
   let json: unknown;
   try {
     json = JSON.parse(input.definition);
   } catch {
-    throw new Error("The ruleset file is not valid JSON");
+    throw new RulesetRefusedError("The ruleset file is not valid JSON");
   }
   const parsed = parseRulesetDefinition(json);
   if (!parsed.ok) {
-    throw new Error(`The ruleset file is not usable: ${parsed.issues.slice(0, 5).join("; ")}`);
+    throw new RulesetRefusedError(`The ruleset file is not usable: ${parsed.issues.slice(0, 5).join("; ")}`);
   }
   // The document carries the BARE id; the namespace says where the file came from. Combining them
   // has to reproduce the id the caller is filing it under, or the registry would key it elsewhere.
   const namespace = input.rulesetId.slice(0, input.rulesetId.indexOf("/"));
-  if (communityRulesetId(namespace, parsed.definition.id) !== input.rulesetId) {
-    throw new Error(`The ruleset file declares the id "${parsed.definition.id}", not "${input.rulesetId}"`);
+  let declaredId: string;
+  try {
+    declaredId = communityRulesetId(namespace, parsed.definition.id);
+  } catch (error) {
+    throw new RulesetRefusedError(error instanceof Error ? error.message : "The ruleset id cannot be used");
+  }
+  if (declaredId !== input.rulesetId) {
+    throw new RulesetRefusedError(
+      `The ruleset file declares the id "${parsed.definition.id}", not "${input.rulesetId}"`,
+    );
   }
   if (parsed.definition.version !== input.version) {
-    throw new Error(`The ruleset file declares version ${parsed.definition.version}, not ${input.version}`);
+    throw new RulesetRefusedError(
+      `The ruleset file declares version ${parsed.definition.version}, not ${input.version}`,
+    );
   }
 }
 
@@ -165,6 +193,14 @@ export function createGameRulesetsStorage(db: DB) {
       await db
         .delete(gameRulesets)
         .where(and(eq(gameRulesets.rulesetId, rulesetId), eq(gameRulesets.version, version)));
+    },
+
+    /** Forget every stored version of one ruleset, and say how many went. Whether a game still
+     *  plays on it is the caller's question: this path only writes. */
+    async removeAll(rulesetId: string): Promise<number> {
+      const removed = db.count(gameRulesets, eq(gameRulesets.rulesetId, rulesetId));
+      await db.delete(gameRulesets).where(eq(gameRulesets.rulesetId, rulesetId));
+      return removed;
     },
   };
 }
