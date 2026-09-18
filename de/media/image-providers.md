@@ -1,6 +1,6 @@
 # Anbieter für Bildgenerierung und Einrichtung
 
-In dieser Anleitung erfährst du, wie du einen Dienst für Bildgenerierung mit Marinara Engine verbindest. Außerdem steht hier, was die 17 Dienste jeweils brauchen. Die Bildgenerierung liefert Szenenillustrationen, Selfies, Szenenhintergründe sowie generierte Avatare, Porträts und Sprites.
+In dieser Anleitung erfährst du, wie du einen Dienst für Bildgenerierung mit Marinara Engine verbindest. Außerdem steht hier, was die Dienste jeweils brauchen. Die Bildgenerierung liefert Szenenillustrationen, Selfies, Szenenhintergründe sowie generierte Avatare, Porträts und Sprites.
 
 Die Bildgenerierung richtest du als besondere Art von Verbindung ein. Sobald eine Bildverbindung läuft, greift jede Bildfunktion der App darauf zu.
 
@@ -17,13 +17,13 @@ So legst du eine Bildverbindung an:
 5. Füge den **API Key** ein, falls der Dienst einen braucht. Kostenlose und lokale Dienste kommen ohne aus.
 6. Wähle ein **Model** (Modell) aus der Liste oder tippe eine Modell-ID ein. Manche Dienste bieten **Fetch Models from API** (Modelle über die API laden) an, um die aktuelle Liste zu holen.
 7. Klick auf **Save** (Speichern).
-8. Klick auf **Test Image** (Testbild), um die Verbindung zu prüfen. Marinara generiert dann ein kleines Testbild.
+8. Klick auf **Test Image** (Testbild), um die Verbindung zu prüfen. Marinara generiert dann ein kleines Testbild. Bei fal.ai verbraucht das Credits; **Test Connection** (Verbindung testen) prüft dagegen nur die Konfiguration.
 
 Liefert **Test Image** ein Bild, ist die Verbindung einsatzbereit. Schlägt der Test fehl, prüfe API-Key und Base URL.
 
 ## Den passenden Dienst auswählen
 
-Die 17 Dienste teilen sich in drei Gruppen. Cloud-Dienste brauchen einen API-Key und ein Konto. Kostenlose Dienste brauchen keinen Key. Lokale Dienste lassen die Bildsoftware auf dem eigenen Rechner laufen.
+Die Dienste teilen sich in drei Gruppen. Cloud-Dienste brauchen einen API-Key und ein Konto. Kostenlose Dienste brauchen keinen Key. Lokale Dienste lassen die Bildsoftware auf dem eigenen Rechner laufen.
 
 Die Tabelle zeigt alle Dienste auf einen Blick. Details und Eigenheiten folgen weiter unten im Abschnitt zum jeweiligen Dienst.
 
@@ -38,6 +38,7 @@ Die Tabelle zeigt alle Dienste auf einen Blick. Details und Eigenheiten folgen w
 | Venice.ai | Ja | Cloud |
 | Z.AI | Ja | Cloud |
 | Atlas Cloud | Ja | Cloud |
+| fal.ai | Ja | Cloud |
 | NanoGPT | Ja | Cloud |
 | Block Entropy | Ja | Cloud |
 | RunPod Serverless (ComfyUI) | Ja | Cloud |
@@ -82,6 +83,12 @@ Cloud-Dienst mit der Standard-Base-URL `https://api.z.ai/api/paas/v4`. Nötig is
 ## Atlas Cloud
 
 Cloud-Dienst mit der Standard-Base-URL `https://api.atlascloud.ai/api/v1`. Nötig ist ein API-Key von Atlas Cloud. Marinara bringt einen kleinen Startkatalog für Nano Banana, Gemini Flash Image und FLUX 1.1 Pro mit; alternativ tippst du die exakte ID eines anderen Atlas-Cloud-Bildmodells ein. Die Aufträge laufen asynchron: Marinara startet die Generierung und fragt bei Atlas Cloud so lange nach, bis das Bild fertig ist. Gängige Text-to-Image-Regler ordnet Marinara automatisch zu; Referenzbilder gehen an Modell-IDs, die Image-to-Image, Edit oder Kontext unterstützen. Da sich die Schemata der Atlas-Modelle unterscheiden, lohnt bei einer anderen Modell-ID ein Blick in die Atlas-Cloud-Dokumentation zum gewählten Modell.
+
+## fal.ai
+
+Cloud-Dienst mit der standardmäßigen **Base URL** `https://fal.run`. Erstelle bei [fal.ai](https://fal.ai/dashboard/keys) einen API-Schlüssel und wähle **fal.ai** im Raster der Bilddienste. Die anfängliche **Model**-Liste bietet `fal-ai/flux/schnell` und `fal-ai/flux/dev`; du kannst eine andere Text-zu-Bild-Endpunkt-ID mit kompatiblem Ein- und Ausgabeschema eingeben. **Test Connection** prüft nur die Konfiguration. **Test Image** sendet eine echte Generierungsanfrage und verbraucht dein fal.ai-Guthaben.
+
+Marinara sendet den Prompt und die gewünschten Abmessungen und lädt dann das erste zurückgegebene Bild in den bestehenden Bildablauf herunter. Negative Prompts werden als Textanweisungen angehängt. Nutze **Custom Parameters** (benutzerdefinierte Parameter) für modellspezifische Optionen wie `seed`, `num_inference_steps` oder `image_size`. Die Integration nutzt synchrone Text-zu-Bild-Anfragen; sie sendet keine Referenzbilder und setzt unterbrochene Aufträge nicht fort. Prüfe die unterstützten Eingaben auf der API-Seite deines gewählten Modells oder eigenen Endpunkts, etwa in der [API-Referenz für flux/schnell](https://fal.ai/models/fal-ai/flux/schnell/api).
 
 ## NanoGPT
 

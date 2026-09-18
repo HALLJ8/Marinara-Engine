@@ -74,6 +74,15 @@
 
 설정을 마치면 캐릭터가 채팅 도중 스스로 셀카를 보낼지 판단합니다. 따로 명령을 입력할 필요는 없습니다. 캐릭터가 순간을 고르면 Marinara가 이미지를 만들어 채팅에 올립니다.
 
+모델의 응답은 `[selfie]`를 사용하며, 필요한 경우 맥락을 덧붙입니다:
+
+```text
+Here is a picture from my walk!
+[selfie: context="standing beside the river at sunset"]
+```
+
+`[selfie: "standing beside the river"]`와 `[selfie: standing beside the river]`도 사용할 수 있습니다. 대소문자를 구분하지 않으므로 `[SELFIE:xxxxx.]`도 올바른 구문입니다. 이 명령어는 Conversation용이며 Roleplay나 Game Mode의 이미지 생성 트리거가 아닙니다. 메시지에 마커가 그대로 남아 있다면 다른 모드의 채팅이거나 **Commands**가 꺼져 있을 수 있습니다. Illustrator가 설치되어 있고 **Generated Selfies**가 켜져 있으며 **Selfie Connection**이 선택되어 있는지 확인하세요. 생성이 시작된 뒤 실패한다면 표시된 연결 또는 이미지 제공자 오류를 확인하세요. 마커의 대소문자를 바꿔도 해결되지 않습니다.
+
 ## 직접 셀카 요청하기
 
 캐릭터가 보낼 때까지 기다리지 않고 직접 셀카를 요청할 수도 있습니다.

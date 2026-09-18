@@ -74,6 +74,15 @@ Las opciones de tamaño son:
 
 Una vez configurados los selfies, un personaje puede decidir enviar uno durante el chat por su cuenta. Tú no escribes ningún comando. El personaje elige el momento, y Marinara genera la imagen y la publica en el chat.
 
+La respuesta del modelo usa `[selfie]`, opcionalmente con contexto:
+
+```text
+Here is a picture from my walk!
+[selfie: context="standing beside the river at sunset"]
+```
+
+También funcionan `[selfie: "standing beside the river"]` y `[selfie: standing beside the river]`. El comando no distingue mayúsculas de minúsculas, así que `[SELFIE:xxxxx.]` es una sintaxis válida. Es un comando de Conversation, no un activador de imágenes de Roleplay o Game Mode. Si el marcador queda visible en el mensaje, puede que el chat esté en otro modo o que **Commands** esté desactivado. Confirma que Illustrator esté instalado, **Generated Selfies** esté activado y **Selfie Connection** esté seleccionada. Si la generación empieza pero falla, revisa el error de conexión o del proveedor de imágenes; cambiar las mayúsculas del marcador no lo solucionará.
+
 ## Pedir un selfie tú mismo
 
 También puedes solicitar un selfie tú mismo en lugar de esperar al personaje.

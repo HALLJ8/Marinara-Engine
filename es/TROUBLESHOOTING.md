@@ -13,6 +13,14 @@ Si le vas a pedir ayuda al equipo, activa primero **Debug mode** (Modo de depura
 
 ## Problemas de instalación y arranque
 
+### Página en blanco o JavaScript servido como HTML después de actualizar
+
+Un error como "Failed to load module script" con el tipo MIME `text/html` puede indicar que el navegador solicitó un archivo JavaScript que falta en la compilación instalada. El aviso sobre el cierre de la sesión anterior no identifica este problema, y borrar un bloqueo de escritura (writer lease) o tus datos no reparará los archivos.
+
+Detén el servidor y vuelve a ejecutar `start.bat`, `start.sh` o `start-termux.sh`. El lanzador comprueba el inventario de compilación de Vite, incluidos los fragmentos JavaScript de carga diferida, y recompila los archivos incompletos del cliente antes de arrancar. Una compilación anterior a esta comprobación se recompila una vez para crear su inventario. Si falla, conserva el error del terminal para pedir ayuda. En una instalación manual, ejecuta `pnpm build` desde la raíz del repositorio antes de volver a arrancar.
+
+Si la comprobación pasa pero la página sigue en blanco, haz una recarga forzada o prueba una ventana privada. Informa la URL completa del archivo que falla, el estado HTTP, Content-Type y la primera línea de la respuesta, junto con la salida del lanzador. Los archivos ausentes ahora devuelven HTTP 404 en lugar de la página HTML de la aplicación.
+
 ### Windows: error EPERM o de firma de corepack al instalar pnpm
 
 pnpm es el gestor de paquetes que Marinara usa para instalar su código. Si ves `EPERM: operation not permitted` o un fallo de verificación de firma de corepack, corepack no pudo escribir en la carpeta de instalación de Node.

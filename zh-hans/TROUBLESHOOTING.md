@@ -13,6 +13,14 @@
 
 ## 安装和启动问题
 
+### 更新后页面空白，或 JavaScript 被当作 HTML 返回
+
+带有 `text/html` MIME 类型的“Failed to load module script”等错误，可能表示浏览器请求了已安装构建中缺失的 JavaScript 文件。上次会话的退出警告并不能定位这个问题，删除写入租约（writer lease）或用户数据也无法修复这些文件。
+
+停止正在运行的服务器，再运行 `start.bat`、`start.sh` 或 `start-termux.sh`。启动脚本会检查 Vite 构建清单，包括按需加载的 JavaScript 分块，并在启动前重新构建不完整的客户端文件。在加入这项检查之前生成的构建会重建一次，以生成清单。如果重建失败，请保留终端错误供求助时使用。手动安装时，在再次启动前先从仓库根目录运行 `pnpm build`。
+
+如果检查通过但页面仍然空白，请强制刷新或尝试无痕窗口。报告出错文件的完整 URL、HTTP 状态、Content-Type 和响应第一行，并附上启动脚本的输出。缺失的文件现在会返回 HTTP 404，而不是应用的 HTML 页面。
+
 ### Windows：安装 pnpm 时出现 EPERM 或 corepack 签名错误
 
 pnpm 是 Marinara 用来安装自身代码的包管理器。如果看到 `EPERM: operation not permitted` 或者 corepack 签名校验失败，说明 corepack 写不进 Node 的安装文件夹。

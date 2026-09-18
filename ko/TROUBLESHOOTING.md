@@ -13,6 +13,14 @@
 
 ## 설치와 실행 문제
 
+### 업데이트 후 빈 페이지가 나타나거나 JavaScript가 HTML로 반환됨
+
+MIME 유형 `text/html`과 함께 "Failed to load module script" 같은 오류가 나타나면, 브라우저가 설치된 빌드에 없는 JavaScript 파일을 요청했을 수 있습니다. 이전 세션 종료 경고로는 이 문제를 특정할 수 없으며, 쓰기 임대(writer lease)나 사용자 데이터를 삭제해도 파일이 복구되지 않습니다.
+
+실행 중인 서버를 멈추고 `start.bat`, `start.sh` 또는 `start-termux.sh`를 다시 실행하세요. 런처는 지연 로드되는 JavaScript 청크를 포함한 Vite 빌드 목록을 확인하고, 불완전한 클라이언트 파일을 시작 전에 다시 빌드합니다. 이 검사 기능이 추가되기 전의 빌드는 목록을 만들기 위해 한 번 다시 빌드됩니다. 빌드가 실패하면 지원 요청에 쓸 터미널 오류를 보관하세요. 수동 설치에서는 다시 시작하기 전에 저장소 루트에서 `pnpm build`를 실행하세요.
+
+검사를 통과해도 페이지가 비어 있다면 강제 새로고침하거나 시크릿 창을 사용해 보세요. 실패한 파일의 전체 URL, HTTP 상태, Content-Type과 응답 첫 줄을 런처 출력과 함께 알려 주세요. 없는 파일은 이제 앱의 HTML 페이지 대신 HTTP 404를 반환합니다.
+
 ### Windows: pnpm 설치 중 EPERM 또는 corepack 서명 오류
 
 pnpm은 Marinara가 코드를 설치할 때 쓰는 패키지 관리자입니다. `EPERM: operation not permitted`나 corepack 서명 검증 실패가 나타나면 corepack이 Node 설치 폴더에 파일을 쓰지 못한 것입니다.

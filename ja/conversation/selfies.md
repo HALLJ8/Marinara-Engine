@@ -74,6 +74,15 @@
 
 設定が終わると、キャラクターはチャットの流れの中で自分の判断で自撮り写真を送れます。コマンドを打つ必要はありません。キャラクターがタイミングを選び、Marinaraが画像を生成してチャットに投稿します。
 
+モデルの応答では`[selfie]`を使い、必要に応じてコンテキストを指定します:
+
+```text
+Here is a picture from my walk!
+[selfie: context="standing beside the river at sunset"]
+```
+
+`[selfie: "standing beside the river"]`と`[selfie: standing beside the river]`も使えます。大文字と小文字は区別しないため、`[SELFIE:xxxxx.]`も有効な構文です。これはConversationのコマンドであり、RoleplayやGame Modeの画像生成トリガーではありません。マーカーがそのままメッセージに残る場合は、別のモードであるか、**Commands**が無効になっている可能性があります。Illustratorがインストール済みで、**Generated Selfies**が有効になり、**Selfie Connection**が選ばれているか確認してください。生成が始まってから失敗する場合は、報告された接続や画像プロバイダーのエラーを確認します。マーカーの大文字・小文字を変えても解決しません。
+
 ## 手動で自撮り写真をリクエストする
 
 キャラクターが送ってくるのを待たずに、自分からリクエストすることもできます。
