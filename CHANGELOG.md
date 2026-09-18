@@ -9,6 +9,7 @@ This file is the release-notes source of truth for Marinara Engine. Reuse these 
 - Visual Novel portraits open the existing full-size image viewer with mouse, keyboard or touch (#6332).
 - The Conversation sidebar's Character Schedule Manager icon keeps its intended size instead of shrinking inside button padding (#6333).
 - Professor Mari's fenced code blocks have copy buttons that preserve code whitespace and report clipboard failures, sharing the Docs viewer's controls (#6334).
+- OpenAI-compatible connections to OpenCode Go/Zen automatically send a stable per-chat session header and identify Marinara Engine, including nested generation, retries and chat translations (#6325).
 
 - Mindless Tactical enemies follow the fewest legal steps instead of choosing a longer cheap detour, while still paying terrain and weather movement costs (#6324).
 - Regenerating a translated reply now translates its new content instead of retaining the previous version beside the original when Show Only Translation is enabled (#6317).

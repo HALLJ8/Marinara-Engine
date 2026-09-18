@@ -107,6 +107,7 @@ export function translateMessage(
     let translatedText: string;
     try {
       const result = await api.post<{ translatedText: string }>("/translate", {
+        chatId: requestChatId,
         text,
         provider: config.provider,
         targetLanguage: config.outputTargetLanguage,

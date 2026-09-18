@@ -694,6 +694,7 @@ test("Game translation follows changed narration and remains manually accessible
     await page.route("**/api/translate", async (route) => {
       const body = route.request().postDataJSON();
       expect(body.targetLanguage).toBe("pl");
+      expect(body.chatId).toBe(chat.id);
       requested.push(body.text);
       await route.fulfill({
         json: {
@@ -1063,6 +1064,7 @@ for (const mode of ["conversation", "roleplay", "game"] as const) {
         await page.evaluate(() => (window as any).translationFixture.settled());
         await expect.poll(() => translations.length).toBe(scenarios.indexOf(scenario) + 1);
         expect(translations.at(-1)).toMatchObject({
+          chatId: chat.id,
           text: source,
           provider: "ai",
           targetLanguage: scenario === "malformed-legacy" ? "en" : "pl",
