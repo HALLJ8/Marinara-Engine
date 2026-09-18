@@ -4,6 +4,7 @@ import { createServer } from "node:http";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type { CapabilityPromptContextRequest } from "../../packages/server/src/services/capability-packages/capability-prompt-context.service.js";
 
 const dir = mkdtempSync(join(tmpdir(), "marinara-capability-preview-"));
 process.env.DATA_DIR = dir;
@@ -145,7 +146,7 @@ try {
           updatedAt: timestamp,
         });
       }
-      const calls: unknown[] = [];
+      const calls: CapabilityPromptContextRequest[] = [];
       release = registerCapabilityPromptContext("preview-package", (request) => {
         calls.push({ ...request });
         return `PACKAGE_CONTEXT:${request.chatId}:${request.mode}:${request.chatMeta.packageFixture}`;
@@ -165,6 +166,7 @@ try {
       const marker = `PACKAGE_CONTEXT:${chat.id}:${mode}:stored-context`;
       assert.equal(previewText.split(marker).length - 1, 1, `${mode} preview includes package context exactly once`);
       assert.equal(calls.length, 1, "Preview collects only once");
+      assert.equal(calls[0]?.wrapFormat, "xml", "The preset wrap format reaches the contributor");
       const generation = await app.inject({ method: "POST", url: "/api/generate/", payload: { chatId: chat.id } });
       assert.equal(generation.statusCode, 200, generation.body);
       assert.ok(!generation.body.includes('"type":"error"'), generation.body);
