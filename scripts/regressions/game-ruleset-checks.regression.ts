@@ -109,6 +109,9 @@ try {
     const cleric = levelBuild(1, { abilities: { wis: 16 } });
     delete (cleric.fields as Record<string, unknown>).spellcasting_ability;
     assert.equal(evaluateRulesetSheet(defaulted, cleric).derived.spell_attack, 2 + 3);
+    // A stored choice the ruleset no longer offers reads as the default too, never as a bare +0.
+    const staleChoice = levelBuild(1, { abilities: { wis: 16 }, fields: { spellcasting_ability: "luck" } });
+    assert.equal(evaluateRulesetSheet(defaulted, staleChoice).derived.spell_attack, 2 + 3);
 
     // Tolerant reading: junk reads as the default, unknown keys are ignored, nothing throws.
     const junk = evaluateRulesetSheet(fiveE, {

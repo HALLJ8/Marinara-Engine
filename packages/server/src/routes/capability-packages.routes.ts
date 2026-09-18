@@ -1,7 +1,8 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { BUILT_IN_AGENT_MANIFESTS } from "@marinara-engine/shared";
+import { BUILT_IN_AGENT_MANIFESTS, type InstalledRuleset } from "@marinara-engine/shared";
 import { requirePrivilegedAccess } from "../middleware/privileged-gate.js";
+import { loadRulesetRegistry } from "../services/game/ruleset-registry.service.js";
 import {
   capabilityPackageManager,
   CapabilityPackageVersionMismatchError,
@@ -76,6 +77,12 @@ export async function capabilityPackagesRoutes(app: FastifyInstance) {
   app.get("/installed", async () => capabilityPackageManager.installed());
   app.get("/updates/pending", async () => capabilityPackageManager.pendingUpdates());
   app.get("/agents", async () => BUILT_IN_AGENT_MANIFESTS);
+  // Every installed ruleset, whole, because the sheet editors are rendered from the definition.
+  app.get(
+    "/rulesets",
+    async (): Promise<InstalledRuleset[]> =>
+      [...(await loadRulesetRegistry()).values()].map(({ definition, packageId }) => ({ packageId, definition })),
+  );
   app.get<{ Params: { id: string } }>("/:id/release-notes", async (request) => {
     const { id } = packageParams.parse(request.params);
     return capabilityPackageManager.releaseNotes(id);
