@@ -86,7 +86,10 @@ export interface SkillCheckRulesetContext {
   playerKey: string | null;
   /** Evaluated sheet per normalized card name. */
   sheets: Map<string, EvaluatedRulesetSheet>;
-  /** A blank default build, for a name with no sheet: unmodified dice, never a guessed ability. */
+  /** The ruleset's blank default build, for a party member (or a player) who has no sheet yet.
+   *  It is what setup would have copied for them. A `who=` that names NOBODY in the party does
+   *  not get this: it rolls with no modifier at all, because a ruleset's defaults are not neutral
+   *  in every system and the Engine knows nothing about a stranger. */
   blank: EvaluatedRulesetSheet;
 }
 
@@ -245,19 +248,32 @@ export function buildSkillCheckRulesetContext(
 ): SkillCheckRulesetContext {
   const blankBuild = defaultRulesetSheetBuild(definition);
   const sheets = new Map<string, EvaluatedRulesetSheet>();
+  const playerKeyForCards = playerCard ? normalizeCharacterLookupName(readTrimmedString(playerCard.name)) : "";
+  // Two cards that normalize to one name: `who=` cannot say which, so neither sheet answers it and
+  // the check rolls unmodified. The player's own card is the exception; a name they share stays theirs.
+  const ambiguous = new Set<string>();
   for (const card of cards) {
     const key = normalizeCharacterLookupName(readTrimmedString(card.name));
-    if (!key || sheets.has(key)) continue;
+    if (!key || ambiguous.has(key)) continue;
+    if (sheets.has(key)) {
+      if (key === playerKeyForCards) {
+        if (card !== playerCard) continue;
+      } else {
+        sheets.delete(key);
+        ambiguous.add(key);
+        logger.warn("[game/skill-check] Two party cards are named %s; checks for that name roll unmodified", key);
+        continue;
+      }
+    }
     const envelope = rulesetSheetEnvelopeSchema.safeParse(card.rulesetSheet);
     if (card.rulesetSheet != null && !envelope.success) {
       logger.warn("[game/skill-check] The ruleset sheet for %s is unreadable; rolling on a blank sheet", key);
     }
     sheets.set(key, evaluateRulesetSheet(definition, envelope.success ? envelope.data.build : blankBuild));
   }
-  const playerKey = playerCard ? normalizeCharacterLookupName(readTrimmedString(playerCard.name)) : "";
   return {
     definition,
-    playerKey: playerKey || null,
+    playerKey: playerKeyForCards || null,
     sheets,
     blank: evaluateRulesetSheet(definition, blankBuild),
   };
@@ -265,9 +281,14 @@ export function buildSkillCheckRulesetContext(
 
 /** The sheet modifier a ruleset game applies for `who` (or the player) on the named check. */
 export function rulesetCheckModifierFor(ruleset: SkillCheckRulesetContext, skill: string, who?: string): number {
-  const key = who ? normalizeCharacterLookupName(who) : ruleset.playerKey;
-  const sheet = (key ? ruleset.sheets.get(key) : undefined) ?? ruleset.blank;
-  return rulesetCheckModifier(sheet, matchRulesetCheckTarget(ruleset.definition, skill));
+  const target = matchRulesetCheckTarget(ruleset.definition, skill);
+  if (who) {
+    // A name that matches nobody (or two cards at once) is a stranger: no modifier at all.
+    const named = ruleset.sheets.get(normalizeCharacterLookupName(who));
+    return named ? rulesetCheckModifier(named, target) : 0;
+  }
+  const player = ruleset.playerKey ? ruleset.sheets.get(ruleset.playerKey) : undefined;
+  return rulesetCheckModifier(player ?? ruleset.blank, target);
 }
 
 function resolveRulesetSkillCheck(
@@ -305,6 +326,8 @@ function resolveRulesetSkillCheck(
 /** Whether a ruleset game rolls this tag: a `sum` check whose dice label, when the GM wrote one,
  *  is exactly what the ruleset throws for that mode. Anything else names another system. */
 function isRulesetRollableSkillCheckTag(tag: SkillCheckTag, definition: RulesetDefinition): boolean {
+  // Refused on purpose, exactly as `isEngineRollableSkillCheckTag` refuses it: a tag that declares
+  // both modes names no roll, and the guide promises a check is never rolled with both at once.
   if (tag.advantage && tag.disadvantage) return false;
   if (tag.declaredResolution != null && tag.declaredResolution !== "sum") return false;
   if (tag.declaredDice == null) return true;
@@ -505,7 +528,9 @@ export async function resolveSkillCheckTagsInContent(
   /** Ruleset games only: tags whose fate depends on the ruleset, decided once it is loaded. */
   const deferred: Array<{ start: number; end: number; tag: SkillCheckTag }> = [];
   /** Set once a ruleset context is in hand, so every rewrite keeps the `who=` it rolled for. */
-  let keepWho = false;
+  // Starts from the hint, so a context that fails to load on ANY path (the pool's included) still
+  // saves the sparse ask with the name it was for, instead of handing the check to the player.
+  let keepWho = options.rulesetPinned === true;
   const whoExtras = (tag: SkillCheckTag) => (keepWho && tag.who ? { who: tag.who } : undefined);
   const toRequest = (tag: SkillCheckTag): SkillCheckRequest => ({
     skill: tag.skill,

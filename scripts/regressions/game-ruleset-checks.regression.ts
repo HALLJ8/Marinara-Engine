@@ -249,6 +249,43 @@ try {
     const stranger = await resolve(`[skill_check: skill="Stealth" dc="10" who="A Guard"]`, [10]);
     assert.match(stranger.content, /modifier="0" total="10"/);
 
+    // Defaults are not neutral in every system. A party member without a sheet gets the ruleset's
+    // blank build; a stranger, or a name two cards share, gets no modifier at all.
+    const gritty: RulesetDefinition = {
+      ...fiveE,
+      resolution: {
+        ...fiveE.resolution,
+        proficiencyTiers: [
+          { id: "untrained", label: "Untrained", multiplier: 0, round: "down", flat: -3 },
+          ...fiveE.resolution.proficiencyTiers,
+        ],
+      },
+    };
+    const grittyCards = [...cards, { name: "Twin" }, { name: "twin" }];
+    const grittyContext = { ...context, ruleset: buildSkillCheckRulesetContext(gritty, grittyCards, cards[0]) };
+    const grittyResolve = (content: string) =>
+      resolveSkillCheckTagsInContent(content, {
+        loadContext: async () => grittyContext,
+        rollD20: scripted([10]),
+        rulesetPinned: true,
+      });
+    assert.match(
+      (await grittyResolve(`[skill_check: skill="Arcana" dc="10" who="Sheetless"]`)).content,
+      /modifier="-3" total="7"/,
+    );
+    assert.match(
+      (await grittyResolve(`[skill_check: skill="Arcana" dc="10" who="A Guard"]`)).content,
+      /modifier="0" total="10"/,
+    );
+    assert.match(
+      (await grittyResolve(`[skill_check: skill="Arcana" dc="10" who="Twin"]`)).content,
+      /modifier="0" total="10"/,
+    );
+    // The player keeps a name they share with a party member.
+    const sharedName = buildSkillCheckRulesetContext(fiveE, [{ name: "mira" }, ...cards], cards[0]);
+    assert.equal(sharedName.sheets.get("mira"), sharedName.sheets.get(sharedName.playerKey!));
+    assert.equal(sharedName.sheets.get("mira")!.skillMods.stealth, 9);
+
     // Natural 20 that misses the DC is a plain failure in the saved text and on the card.
     const nat20 = await resolve(`[skill_check: skill="Arcana" dc="25"]`, [20]);
     assert.match(nat20.content, /rolls="20" used="20" modifier="0" total="20" result="failure"/);
@@ -408,6 +445,42 @@ try {
     assert.match(unpooled.content, /dice="2d6"/);
     assert.doesNotMatch(unpooled.content, /pool=/);
     assert.deepEqual(session.pool.values.d20, before, "no pool value was spent");
+  }
+
+  // ── A failed load on the pool path still saves the ask with its name ──
+  {
+    const { createGameDicePoolSession } = await import("../../packages/server/src/services/game/dice-pool.service.js");
+    const { createGameDicePool, DEFAULT_GAME_DICE_POOL_WINDOW, DEFAULT_GAME_DICE_POOL_AGE_TURNS } =
+      await import("../../packages/shared/src/index.js");
+    const pool = createGameDicePool(() => 1);
+    pool.values.d20 = [6, 11, 3];
+    const session = createGameDicePoolSession({
+      chatId: "chat-ruleset-pool-fail",
+      pool,
+      settings: { window: DEFAULT_GAME_DICE_POOL_WINDOW, ageTurns: DEFAULT_GAME_DICE_POOL_AGE_TURNS },
+    });
+    const failed = await resolveSkillCheckTagsInContent(
+      `[skill_check: skill="Athletics" dc="12" who="Tam the Bold" mode="normal" dice="1d20" rolls="19" pool="d20:1"]`,
+      {
+        loadContext: async () => {
+          throw new Error("ruleset 5e-2014 is not available (missing)");
+        },
+        rulesetPinned: true,
+        pool: session,
+      },
+    );
+    assert.match(failed.content, /who="Tam the Bold"\]$/, "the owed check is still Tam's, not the player's");
+    assert.doesNotMatch(failed.content, /total=/);
+  }
+
+  // ── The parser never puts `who` on a result: only the ruleset resolver does ──
+  {
+    const parsed = parseSkillCheckTagBody(
+      ` skill="Stealth" dc="15" who="Tam" rolls="12" used="12" modifier="2" total="14" result="failure" mode="normal" resolution="sum" dice="1d20"`,
+    );
+    assert.equal(parsed?.who, "Tam");
+    assert.ok(parsed?.resolvedResult);
+    assert.equal("who" in parsed.resolvedResult, false);
   }
 
   // ── engine-legacy is untouched ──

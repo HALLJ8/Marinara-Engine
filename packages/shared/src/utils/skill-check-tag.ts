@@ -447,7 +447,6 @@ export function parseSkillCheckTagBody(body: string): SkillCheckTag | null {
     rollMode: normalizedMode,
     resolution,
     dice,
-    ...(tag.who ? { who: tag.who } : {}),
   };
 
   return tag;

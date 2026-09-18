@@ -536,7 +536,8 @@ export function buildGameSkillModifierView(context: SkillCheckModifierContext): 
     // A ruleset's ids are already placeholder-safe and its own to spell: skills and saves by id,
     // abilities by short label or id, and PROF when the ruleset has a proficiency bonus.
     const { sheet, resolution } = context.ruleset.definition;
-    const advertised = (names: string[]) => names.filter(isRollPlaceholderName).slice(0, SHEET_NAMES_MAX);
+    const advertised = (names: string[]) =>
+      names.filter((name) => name.length <= SHEET_NAME_MAX && isRollPlaceholderName(name)).slice(0, SHEET_NAMES_MAX);
     return {
       skills: advertised([...sheet.skills, ...sheet.saves].map((entry) => entry.id)),
       attributes: advertised([
