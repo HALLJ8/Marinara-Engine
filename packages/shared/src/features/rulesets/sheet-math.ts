@@ -93,6 +93,43 @@ export function rulesetAbilityModifier(definition: RulesetDefinition, score: num
   return Math.floor((score - 10) / 2);
 }
 
+/** The tables one value reference reads. Handed in rather than closed over, so the same resolution
+ *  serves the evaluation below — where `derived` is still filling up, top to bottom — and a caller
+ *  resolving a reference against a finished sheet. */
+interface RulesetValueRefTables {
+  abilityScores: Record<string, number>;
+  abilityMods: Record<string, number>;
+  numbers: Record<string, number>;
+  derived: Record<string, number>;
+  skillMod: (id: string) => number;
+  saveMod: (id: string) => number;
+}
+
+function resolveValueRef(
+  definition: RulesetDefinition,
+  build: RulesetSheetBuild,
+  ref: RulesetValueRef,
+  tables: RulesetValueRefTables,
+): number {
+  if (ref.const !== undefined) return ref.const;
+  if (ref.field !== undefined) return tables.numbers[ref.field] ?? 0;
+  if (ref.derived !== undefined) return tables.derived[ref.derived] ?? 0;
+  if (ref.abilityScore !== undefined) return tables.abilityScores[ref.abilityScore] ?? 0;
+  if (ref.abilityMod !== undefined) return tables.abilityMods[ref.abilityMod] ?? 0;
+  if (ref.abilityModFromField !== undefined) {
+    // An unset choice reads as the field's declared default, like every other field. So does a
+    // stored choice the ruleset no longer offers, which is also what the sheet editor shows.
+    const field = definition.sheet.fields.find((entry) => entry.id === ref.abilityModFromField);
+    const stored = build.fields?.[ref.abilityModFromField];
+    const offered = typeof stored === "string" && field?.type === "enum" && field.values.includes(stored);
+    const chosen = offered ? stored : field?.default;
+    return typeof chosen === "string" ? (tables.abilityMods[chosen] ?? 0) : 0;
+  }
+  if (ref.skillMod !== undefined) return tables.skillMod(ref.skillMod);
+  if (ref.saveMod !== undefined) return tables.saveMod(ref.saveMod);
+  return 0;
+}
+
 /** Every number the sheet yields, computed once, top to bottom. */
 export function evaluateRulesetSheet(definition: RulesetDefinition, build: RulesetSheetBuild): EvaluatedRulesetSheet {
   const { sheet, resolution } = definition;
@@ -136,29 +173,20 @@ export function evaluateRulesetSheet(definition: RulesetDefinition, build: Rules
     return (entry.ability ? (abilityMods[entry.ability] ?? 0) : 0) + trained + (finite(build.bonuses?.[entry.id]) ?? 0);
   };
   function resolveRef(ref: RulesetValueRef): number {
-    if (ref.const !== undefined) return ref.const;
-    if (ref.field !== undefined) return numbers[ref.field] ?? 0;
-    if (ref.derived !== undefined) return derived[ref.derived] ?? 0;
-    if (ref.abilityScore !== undefined) return abilityScores[ref.abilityScore] ?? 0;
-    if (ref.abilityMod !== undefined) return abilityMods[ref.abilityMod] ?? 0;
-    if (ref.abilityModFromField !== undefined) {
-      // An unset choice reads as the field's declared default, like every other field. So does a
-      // stored choice the ruleset no longer offers, which is also what the sheet editor shows.
-      const field = sheet.fields.find((entry) => entry.id === ref.abilityModFromField);
-      const stored = build.fields?.[ref.abilityModFromField];
-      const offered = typeof stored === "string" && field?.type === "enum" && field.values.includes(stored);
-      const chosen = offered ? stored : field?.default;
-      return typeof chosen === "string" ? (abilityMods[chosen] ?? 0) : 0;
-    }
-    if (ref.skillMod !== undefined) {
-      const skill = sheet.skills.find((entry) => entry.id === ref.skillMod);
-      return skill ? trainedModifier(skill, build.skills) : 0;
-    }
-    if (ref.saveMod !== undefined) {
-      const save = sheet.saves.find((entry) => entry.id === ref.saveMod);
-      return save ? trainedModifier(save, build.saves) : 0;
-    }
-    return 0;
+    return resolveValueRef(definition, build, ref, {
+      abilityScores,
+      abilityMods,
+      numbers,
+      derived,
+      skillMod: (id) => {
+        const skill = sheet.skills.find((entry) => entry.id === id);
+        return skill ? trainedModifier(skill, build.skills) : 0;
+      },
+      saveMod: (id) => {
+        const save = sheet.saves.find((entry) => entry.id === id);
+        return save ? trainedModifier(save, build.saves) : 0;
+      },
+    });
   }
 
   for (const entry of sheet.derived) {
@@ -192,6 +220,25 @@ export function evaluateRulesetSheet(definition: RulesetDefinition, build: Rules
     derived,
     numbers,
   };
+}
+
+/** One value reference resolved against a sheet, for a reader outside the evaluation — a live
+ *  pool's maximum is the only one today. Takes an evaluation when the caller already has one, so
+ *  resolving a party's worth of pool maximums evaluates each sheet once. */
+export function resolveRulesetValueRef(
+  definition: RulesetDefinition,
+  build: RulesetSheetBuild,
+  ref: RulesetValueRef,
+  evaluated: EvaluatedRulesetSheet = evaluateRulesetSheet(definition, build),
+): number {
+  return resolveValueRef(definition, build, ref, {
+    abilityScores: evaluated.abilityScores,
+    abilityMods: evaluated.abilityMods,
+    numbers: evaluated.numbers,
+    derived: evaluated.derived,
+    skillMod: (id) => evaluated.skillMods[id] ?? 0,
+    saveMod: (id) => evaluated.saveMods[id] ?? 0,
+  });
 }
 
 /** Whether a field, derived value, list or pool is hidden by its `hideWhen`. */

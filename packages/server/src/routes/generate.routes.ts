@@ -130,7 +130,13 @@ import { createPromptsStorage } from "../services/storage/prompts.storage.js";
 import { createCharactersStorage } from "../services/storage/characters.storage.js";
 import { resolveChatUserIdentity } from "../services/chat-user-identity.js";
 import { createAgentsStorage } from "../services/storage/agents.storage.js";
-import { createGameStateStorage } from "../services/storage/game-state.storage.js";
+import { createGameStateStorage, parseStoredRulesetLive } from "../services/storage/game-state.storage.js";
+import {
+  applyGameRulesetSheetTurn,
+  loadGameRulesetSheetContext,
+  renderGameRulesetSheetBlocks,
+  type GameRulesetSheetTurn,
+} from "../services/game/ruleset-sheet-turn.service.js";
 import { createCustomToolsStorage } from "../services/storage/custom-tools.storage.js";
 import { createLorebooksStorage } from "../services/storage/lorebooks.storage.js";
 import { createRegexScriptsStorage } from "../services/storage/regex-scripts.storage.js";
@@ -561,7 +567,11 @@ import {
   loadSkillCheckModifierContext,
   resolveSkillCheckTagsInContent,
 } from "../services/game/skill-check-resolution.service.js";
-import { loadRulesetRegistry, resolveGameRuleset } from "../services/game/ruleset-registry.service.js";
+import {
+  loadRulesetRegistry,
+  resolveGameRuleset,
+  type ResolvedGameRuleset,
+} from "../services/game/ruleset-registry.service.js";
 import { createGameChanceStreamFilter } from "../services/game/chance-stream-filter.js";
 import {
   buildGameSkillModifierView,
@@ -2287,6 +2297,9 @@ export async function generateRoutes(app: FastifyInstance) {
       // the follow-up loop for the same reason: every pass of one turn shares one vocabulary.
       let gmVerbTable: ResolvedGmVerbTable | null = null;
       let gmVerbTableResolved = false;
+      // The pinned ruleset follows the same rule: the resolution the reminder was rendered with is
+      // the one the turn's sheet commands are checked against. Undefined until a game turn resolves it.
+      let turnGameRuleset: ResolvedGameRuleset | null | undefined;
       const getGmVerbTable = async (): Promise<ResolvedGmVerbTable | null> => {
         if (gmVerbTableResolved) return gmVerbTable;
         gmVerbTableResolved = true;
@@ -4066,6 +4079,7 @@ export async function generateRoutes(app: FastifyInstance) {
           // empty registry, which resolves to "unavailable" here.
           const pinnedGameRuleset =
             chatMeta.gameRuleset != null ? resolveGameRuleset(chatMeta, await loadRulesetRegistry()) : null;
+          turnGameRuleset = pinnedGameRuleset;
           // The pool block is rendered from the same session the readers spend out of, and
           // from the same modifier context the resolver uses, so the block and the engine
           // cannot disagree about a value or about a total.
@@ -4097,7 +4111,23 @@ export async function generateRoutes(app: FastifyInstance) {
               // the reminder renders the bytes it renders today.
               oneRequestDice: oneRequestDiceTurn,
               skillModifiers: gameSkillModifierView,
-              ...(pinnedGameRuleset?.status === "ok" ? { ruleset: pinnedGameRuleset.definition } : {}),
+              ...(pinnedGameRuleset?.status === "ok"
+                ? {
+                    ruleset: pinnedGameRuleset.definition,
+                    // Gated on impersonate like the package verbs below: an impersonated turn is the
+                    // player writing, nothing applies sheet commands to it, and a tag the model wrote
+                    // there would land in the player's own message as visible text.
+                    ...(!input.impersonate
+                      ? {
+                          rulesetSheetBlocks: renderGameRulesetSheetBlocks(
+                            pinnedGameRuleset.definition,
+                            chatMeta.gameCharacterCards,
+                            parseStoredRulesetLive((await selectedGameStateSnapshotPromise)?.rulesetLive),
+                          ),
+                        }
+                      : {}),
+                  }
+                : {}),
               dicePoolMode: gameDicePoolTurn,
               dicePoolBlock,
               rollDiceToolAttached,
@@ -8273,6 +8303,41 @@ export async function generateRoutes(app: FastifyInstance) {
             }
           }
 
+          // ── Ruleset sheet commands (Game mode) ──
+          // After every rewrite above, so only the commands of the reply that is actually saved
+          // apply. They are measured against the live state this turn STARTED with: the row of
+          // the message before it, or, for a continuation, the row the continued message already
+          // has. That is what keeps a swipe or a regenerated turn from spending twice.
+          let rulesetSheetTurn: GameRulesetSheetTurn | null = null;
+          if (chatMode === "game" && !input.impersonate && chatMeta.gameRuleset != null) {
+            try {
+              const sheetContext = await loadGameRulesetSheetContext(app.db, input.chatId, turnGameRuleset);
+              if (sheetContext) {
+                const continuedRow = input.continueMessageId
+                  ? await gameStateStore.getByChatAndMessage(
+                      input.chatId,
+                      input.continueMessageId,
+                      Number.isInteger(continueTargetMessage?.activeSwipeIndex)
+                        ? (continueTargetMessage.activeSwipeIndex as number)
+                        : 0,
+                    )
+                  : null;
+                rulesetSheetTurn = applyGameRulesetSheetTurn(
+                  sheetContext,
+                  fullResponse,
+                  parseStoredRulesetLive((continuedRow ?? baseGameStateSnapshot)?.rulesetLive),
+                );
+                if (rulesetSheetTurn.content !== fullResponse) {
+                  fullResponse = rulesetSheetTurn.content;
+                  contentReplaced = true;
+                }
+              }
+            } catch (err) {
+              // The reply is saved as the Game Master wrote it; the commands stay unapplied.
+              logger.error(err, "[game/sheet] Could not load the sheet context for chat %s", input.chatId);
+            }
+          }
+
           // ── One-request dice: the turn notice (#6215) ──
           // Sibling of the narration-failure notice above: a clean turn records nothing, and a
           // turn where something could not be rolled says so in plain words instead of leaving
@@ -8582,6 +8647,34 @@ export async function generateRoutes(app: FastifyInstance) {
           // Empty messageId on the paths that save no message; that costs the claim, never the effect.
           await executeCollectedGmVerbCalls({ messageId: savedMsg?.id ?? "", swipeIndex: savedSwipeIndex ?? 0 });
           await persistGameStateToolCalls(savedMsg?.id ?? "", savedSwipeIndex ?? 0);
+
+          // ── Ruleset live sheet state: this turn's row ──
+          // Written for every saved turn of a ruleset game, changed or not, so each message and
+          // swipe carries the state it ended with and the next turn, a swipe or a new session
+          // always has a row to start from. A tracker that later rebuilds this row keeps it (see
+          // `create` in the game-state storage). The clone base matches the one the trackers use;
+          // the live state itself is passed explicitly, because a sibling swipe's row holds what
+          // THAT telling spent.
+          if (rulesetSheetTurn && savedMsg?.id) {
+            try {
+              const swipeIndex = savedSwipeIndex ?? 0;
+              const siblingSwipeRow =
+                input.regenerateMessageId && swipeIndex > 0
+                  ? await gameStateStore.getByChatAndMessage(input.chatId, savedMsg.id, swipeIndex - 1)
+                  : null;
+              await gameStateStore.updateByMessage(
+                savedMsg.id,
+                swipeIndex,
+                input.chatId,
+                { rulesetLive: rulesetSheetTurn.live },
+                undefined,
+                { baseSnapshot: siblingSwipeRow ?? baseGameStateSnapshot },
+              );
+              sendSseEvent(reply, { type: "game_state_patch", data: { rulesetLive: rulesetSheetTurn.live } });
+            } catch (err) {
+              logger.error(err, "[game/sheet] Could not save live sheet state for chat %s", input.chatId);
+            }
+          }
 
           // ── One-request dice: the pool row (#6215) ──
           // Written in the same block as the message rather than through the game-state

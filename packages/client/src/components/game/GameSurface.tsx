@@ -175,6 +175,10 @@ import {
   validateTacticalBattlefieldBrief,
   type MusicEnemyTier,
   scoreAmbient,
+  normalizeCharacterLookupName,
+  rulesetSheetEnvelopeSchema,
+  type RulesetLiveState,
+  type RulesetSheetEnvelope,
 } from "@marinara-engine/shared";
 import { GameNarration } from "./GameNarration";
 import { formatNarration } from "./game-narration-format";
@@ -182,7 +186,10 @@ import { GameInput } from "./GameInput";
 import { GameMapPanel, MobileMapButton } from "./GameMap";
 import { GamePartyBar } from "./GamePartyBar";
 import { GameCharacterSheet } from "@/components/game/GameCharacterSheet";
-import type { GameCharacterSheetGameCard } from "@/components/game/GameCharacterSheet";
+import type { GameCharacterSheetGameCard, GameCharacterSheetRuleset } from "@/components/game/GameCharacterSheet";
+import { describeRefusedSheetCommands } from "./GameRulesetSheet";
+import { useGameRuleset } from "../../hooks/use-game-ruleset";
+import { useGameStatePatcher } from "../../hooks/use-game-state-patcher";
 import { GameDiceResult } from "./GameDiceResult";
 import { GameSkillCheckResult } from "./GameSkillCheckResult";
 import { GameElementReaction } from "./GameElementReaction";
@@ -5213,6 +5220,11 @@ function GameSurfaceComponent({
       }
     }
 
+    // Sheet changes the Engine refused. The narration can still read as though the spend
+    // happened, so the player is told once per turn what did not take effect.
+    const refusedSheetCommands = describeRefusedSheetCommands(msg.content, localizeUi);
+    if (refusedSheetCommands) toast.warning(refusedSheetCommands);
+
     // NPC reputation actions from inline [reputation:] tags
     if (tags.reputationActions.length > 0) {
       const repActions = tags.reputationActions.map((ra) => ({
@@ -9624,6 +9636,112 @@ function GameSurfaceComponent({
     [activeChatId, chatMeta.gameCharacterCards, updateChatMetadata, localizeUi],
   );
 
+  // ── Ruleset sheets ──
+  // A game that pinned a ruleset carries a per-card BUILD on `gameCharacterCards[].rulesetSheet`
+  // and LIVE state in the game-state snapshot, so a swipe rewinds what was spent.
+  const gameRuleset = useGameRuleset(chatMeta);
+  const { patchField: patchGameStateField } = useGameStatePatcher(activeChatId, "game-ruleset-sheet");
+
+  /** The stored card for a party card's title, matched exactly as `handleSaveCharacterSheet` does. */
+  const findStoredGameCard = useCallback(
+    (cardTitle: string) => {
+      const cards = Array.isArray(chatMeta.gameCharacterCards)
+        ? (chatMeta.gameCharacterCards as Array<Record<string, unknown>>)
+        : [];
+      const wanted = cardTitle.trim().toLowerCase();
+      return {
+        cards,
+        index: cards.findIndex((entry) => typeof entry.name === "string" && entry.name.toLowerCase() === wanted),
+      };
+    },
+    [chatMeta.gameCharacterCards],
+  );
+
+  const handleSaveRulesetSheet = useCallback(
+    async (cardTitle: string, envelope: RulesetSheetEnvelope) => {
+      // Every path that does not save REJECTS, so the sheet keeps the draft instead of closing the
+      // editor on edits that went nowhere.
+      if (!activeChatId) {
+        const message = localizeUi("game.ruleset.sheet.saveFailed", { name: cardTitle });
+        toast.error(message);
+        throw new Error(message);
+      }
+      const { cards, index } = findStoredGameCard(cardTitle);
+      // Sheets belong to cards the game already made. Creating one here would invent a party
+      // member, so an unmatched name is reported instead.
+      if (index < 0) {
+        const message = localizeUi("game.ruleset.sheet.noCard", { name: cardTitle });
+        toast.error(message);
+        throw new Error(message);
+      }
+      // Only `rulesetSheet` is touched: every other field on the card is the legacy editor's.
+      const updatedCards = cards.map((entry, entryIndex) =>
+        entryIndex === index ? { ...entry, rulesetSheet: envelope } : entry,
+      );
+      try {
+        await updateChatMetadata.mutateAsync({ id: activeChatId, gameCharacterCards: updatedCards });
+        toast.success(localizeUi("game.ruleset.sheet.saved", { name: cardTitle }));
+      } catch (error) {
+        toast.error(
+          error instanceof Error ? error.message : localizeUi("game.ruleset.sheet.saveFailed", { name: cardTitle }),
+        );
+        throw error;
+      }
+    },
+    [activeChatId, findStoredGameCard, localizeUi, updateChatMetadata],
+  );
+
+  const handleRulesetLiveChange = useCallback(
+    (cardTitle: string, next: RulesetLiveState) => {
+      if (!activeChatId) return;
+      const key = normalizeCharacterLookupName(cardTitle);
+      if (!key) return;
+      // Read the snapshot at click time, not at render time: a turn's own sheet commands may have
+      // landed since this sheet was rendered, and they must not be written back out.
+      const current = useGameStateStore.getState().current;
+      // The patch replaces the WHOLE live object. Built from a snapshot that is missing, or that
+      // belongs to another chat, it would wipe every other character's state, so the edit is
+      // refused and said out loud instead.
+      if (current?.chatId !== activeChatId) {
+        toast.error(localizeUi("game.ruleset.sheet.stateNotReady"));
+        return;
+      }
+      const { [key]: _previous, ...others } = current.rulesetLive ?? {};
+      // The shared op normalises an untouched sheet back to `{}`; storing that would keep an empty
+      // entry per character forever.
+      patchGameStateField("rulesetLive", Object.keys(next).length > 0 ? { ...others, [key]: next } : others);
+    },
+    [activeChatId, localizeUi, patchGameStateField],
+  );
+
+  const characterSheetRuleset = useMemo<GameCharacterSheetRuleset | undefined>(() => {
+    if (gameRuleset.status === "none" || gameRuleset.status === "loading") return undefined;
+    if (gameRuleset.status === "unavailable") return { status: "unavailable" };
+    const cardTitle = characterSheetCharId ? partyCards[characterSheetCharId]?.title : undefined;
+    if (!cardTitle) return undefined;
+    const { cards, index } = findStoredGameCard(cardTitle);
+    // A stored sheet this version cannot read is kept as it is. Showing the ruleset's defaults in
+    // its place would invite a Save that overwrites it, so the block says so and offers nothing.
+    const parsed = index >= 0 ? rulesetSheetEnvelopeSchema.safeParse(cards[index]?.rulesetSheet) : null;
+    if (parsed && !parsed.success && cards[index]?.rulesetSheet != null) return { status: "unreadable" };
+    return {
+      status: "ok",
+      definition: gameRuleset.definition,
+      envelope: parsed?.success ? parsed.data : undefined,
+      live: gameSnapshot?.rulesetLive?.[normalizeCharacterLookupName(cardTitle)],
+      onLiveChange: (next) => handleRulesetLiveChange(cardTitle, next),
+      onEnvelopeSave: (next) => handleSaveRulesetSheet(cardTitle, next),
+    };
+  }, [
+    characterSheetCharId,
+    findStoredGameCard,
+    gameRuleset,
+    gameSnapshot?.rulesetLive,
+    handleRulesetLiveChange,
+    handleSaveRulesetSheet,
+    partyCards,
+  ]);
+
   // Keep the last settled transcript visible until generation and its scene/agent
   // pipeline are finished. Query refreshes may expose the durable assistant row
   // before those later stages settle, which otherwise previews the next segment.
@@ -13180,6 +13298,7 @@ function GameSurfaceComponent({
           onAvatarSelect={(file) =>
             handlePartyPortraitUpload(characterSheetCharId, partyCards[characterSheetCharId].title, file)
           }
+          ruleset={characterSheetRuleset}
         />
       )}
 

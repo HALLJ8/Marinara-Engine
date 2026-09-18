@@ -99,6 +99,19 @@ The format must serve rulesets nobody has written yet, many of which will be dra
 - **Setup sharing follows the Experience rule.** A shared ruleset is restored for a new game when this install has it at the shared version or newer, and dropped otherwise; the wizard then names the missing ruleset from the file's `rulesetName` label. The pin inside a shared file is untrusted input and is read through `rulesetRefSchema`.
 - **The Rules block is its own component** (`GameSetupRulesChooser`), placed beside Combat Preference, rendered only for a new game with at least one ruleset installed.
 
+## What slice 5 settled
+
+- **Live state is its own snapshot column.** `game_state_snapshots.ruleset_live` holds `RulesetLiveStates`, keyed by normalized card name. A new column on the file-backed store needs no `STORAGE_VERSION` bump: an old row reads the column as null, and null means every pool at its default. It is not a key inside `playerStats`, because several trackers rebuild that object from the fields they know.
+- **Live state is sparse.** Only values that were set are stored, and a value back at its default is dropped again. An untouched "full" pool therefore follows its maximum when a level-up raises it, and a character with nothing spent has no entry at all.
+- **A turn is measured against the state it started with.** `[sheet:]` commands are applied after every rewrite of the reply and before it is saved, on top of the live state of the row the turn follows (for a continuation, the row the continued message already has). A regenerated turn resolves its base from the messages before it, so it cannot spend twice, and each swipe keeps the state it ended with.
+- **Every saved turn of a ruleset game writes its row**, changed or not, so the next turn, a swipe and a new session always have a row to start from. A tracker that later rebuilds the same message and swipe keeps the live state: `create` carries it over from the row it replaces unless the caller passes one.
+- **The command is the Engine's, the names are the ruleset's.** The grammar (`spend`, `restore`, `damage`, `temp`, `track`, `condition`, `note`, `rest`, with `heal` read as `restore`) is the same for every ruleset. `concentrate` from the first proposal became the general `note`, because "concentration" is one system's word. Pool, track, condition, note and rest names come from the ruleset and are matched by id or label.
+- **The saved reply is the record.** Each command is rewritten in place with `result="ok" now="…"` or `result="refused" reason="…"`. A result the model writes itself is ignored. A refused command changes nothing and is logged; the client says so once per turn.
+- **Sheets reach the Game Master late in the prompt.** The sheet blocks and the command lines are part of the per-turn format reminder, never the system prompt, because live state changes every turn and the system prompt is what a provider caches. With no ruleset the reminder is byte-identical.
+- **The player edits through the same rules.** The in-game sheet applies `applyRulesetSheetOp` for every button and saves through `PATCH /chats/:id/game-state`, which bounds live state (`rulesetLiveStatesSchema`) and judges nothing else: it is the player's own game.
+- **`sheet` is reserved.** A package verb with that name is refused, and the verb-name sweep finds the taught tag in the reminder.
+- **Not done here:** party members' own turns (`/party-turn`) do not apply sheet commands; only the Game Master's reply does.
+
 ## Architecture
 
 ### The pin
@@ -146,19 +159,19 @@ Equipment is deliberately not a list: Game Mode already owns inventory. The shee
 | Game build     | Copy taken at setup; edited by Edit Sheet and level-ups                                                       | `chat.metadata.gameCharacterCards[].rulesetSheet`                                                  | No, same as `rpgStats` today |
 | Live state     | Current HP, temp HP, slots left, hit dice, class counters, conditions, concentration, exhaustion, death saves | Game-state snapshot, keyed by card name                                                            | Yes                          |
 
-Live state belongs in the snapshot because sheet commands are relative ("spend one 3rd-level slot"), and a regenerated turn must not spend twice. `game-state.storage.ts` was not read for this document; slice 5 starts by confirming whether a new snapshot field needs a `STORAGE_VERSION` bump. If the snapshot cannot take it, fall back to absolute-per-message commands and say so in the GM guidance.
+Live state belongs in the snapshot because sheet commands are relative ("spend one 3rd-level slot"), and a regenerated turn must not spend twice. It is its own column, `game_state_snapshots.ruleset_live`, which needed no `STORAGE_VERSION` bump. See § What slice 5 settled for how a turn reads and writes it.
 
 Each stored sheet is `{ v, build }` and is refused above 64 KB serialized.
 
 ### GM surface
 
-`GmPromptContext` gains the resolved ruleset. When present, `gm-prompts.ts`:
+When the game's ruleset resolves, the per-turn format reminder (`buildGmFormatReminder`, never the system prompt):
 
 1. replaces the built-in skill-check paragraph with `gm.checkGuidance` and the difficulty ladder;
-2. adds a compact sheet block per party member: ability modifiers, proficient skills and saves, passive Perception, AC, remaining resources, prepared spells by level, active conditions;
-3. teaches one Engine-owned command, proposed as `[sheet: who="Name" …]`, with a closed operation set: `spend`, `restore`, `damage`, `heal`, `temp`, `condition`, `concentrate`, `rest`.
+2. adds a compact sheet block per party member inside `<character_sheets>`: ability modifiers, trained skills and saves, the `gm.sheetSummary` fields, remaining resources, tracks away from their default, notes, active conditions, and the summary lists;
+3. teaches one Engine-owned command, `[sheet: who="Name" op="…" …]`, with a closed operation set: `spend`, `restore` (`heal` is read as `restore`), `damage`, `temp`, `track`, `condition`, `note`, `rest`. The first proposal's `concentrate` became the general `note`.
 
-The Engine validates every operation against the live sheet. A cast with no slot left is refused, logged, and surfaced as a turn notice, never applied as a negative pool. `sheet` must join the reserved GM tag set and its parser must be swept by the verb-name regression. With no ruleset pinned, the prompt is byte-identical; prove it with `pnpm regression:prompt`.
+The Engine validates every operation against the live sheet. A cast with no slot left is refused, logged, written back into the reply as refused, and surfaced once per turn, never applied as a negative pool. `sheet` is in the reserved GM tag set, and the verb-name regression finds the taught tag in the reminder. With no ruleset pinned, the prompt is byte-identical; `game-ruleset-checks.regression.ts` and `one-request-dice-prompt.regression.ts` pin that, and `pnpm regression:prompt` covers the rest of the prompt.
 
 `[skill_check:]` gains an optional `who=`. Without it the player is checked, as today. Saves are requested as `skill="Dexterity save"`, which the existing normaliser already recognises.
 
@@ -249,6 +262,8 @@ Slice 7a depends only on slice 1, and 7b only on slice 2. Neither should wait fo
 2. **XP or milestones.** Default: the sheet stores XP, nothing awards it automatically, and level is edited by hand.
 3. **Command tag name.** `[sheet:]` is a proposal; any name works provided it joins the reserved set.
 4. **Who builds `dice-pool`.** Default: invite the requester to specify it on the issue, and to contribute it if they want to. They have a working implementation and the systems knowledge; the Engine side supplies the seam and review.
+
+5. **Layers on top of a ruleset (for example Low Magic on 5e).** Not designed yet; revisit when slice 7a (community lanes) starts, because both are about content that someone other than the ruleset's author ships. What is already settled: a game pins exactly one base ruleset, so two systems can never mix and base rulesets never need to declare each other incompatible. A layer is different: it would be data that names the ruleset id (and lowest version) it applies to, because a base ruleset cannot know every future homebrew. A ruleset may ship its own layers, and a package may ship one for someone else's ruleset without forking it. The wizard would offer them as toggles under the chosen ruleset, and the choice would be frozen into the pin, whose `options` record exists for this and is empty today. Effects would be a closed set like everything else in the format, with no added model calls: extra Game Master guidance (including a world-generation guidance slot, which base rulesets lack too), restrictions on sheet fields (for example removing classes from an enum), and changes to the difficulty ladder or a declared extra check (spell failure is an ordinary check at a stated difficulty). Nothing shipped so far blocks this: the pin keeps unknown keys.
 
 ## Not verified for this document
 

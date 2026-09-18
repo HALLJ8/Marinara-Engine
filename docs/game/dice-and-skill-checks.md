@@ -136,6 +136,7 @@ When a game has a ruleset:
 - A die you rolled yourself before the check is used only when the ruleset rolls a single d20. A ruleset that rolls other dice, such as 2d6, ignores it and rolls normally.
 - Roll placeholders can name the ruleset's abilities, skills and saves, and `PROF` for the proficiency bonus when the ruleset has one.
 - If the ruleset's package is missing or older than the one the game was created on, checks are saved without numbers and stay owed. They are never rolled with another system's rules.
+- The Game Master also keeps each character's resources, conditions and rests up to date on the sheet, and the Engine refuses a change the sheet does not allow. See [The ruleset sheet](party-and-npcs.md#the-ruleset-sheet).
 
 ## Finishing a rolled turn in one request
 
