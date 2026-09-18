@@ -124,6 +124,11 @@ import {
   type CapturedEngineState,
   type CheckpointTrigger,
 } from "../services/game/checkpoint.service.js";
+import {
+  createRulesetRef,
+  loadRulesetRegistry,
+  resolveGameRuleset,
+} from "../services/game/ruleset-registry.service.js";
 import { resolveChatSkillCheck } from "../services/game/skill-check-resolution.service.js";
 import { applyAllSegmentEdits, stripGmCommandTags } from "../services/game/segment-edits.js";
 import { processLorebooks, type LorebookScanResult } from "../services/lorebook/index.js";
@@ -176,6 +181,10 @@ import {
   parseTrackerFieldLocks,
   parseTrackerHiddenFields,
   normalizeRpgStatPools,
+  copyRulesetSheetForGame,
+  rulesetRefSchema,
+  type RulesetDefinition,
+  type RulesetRef,
   normalizeIllustratorImagesPerGeneration,
   resolveGameImageDynamicPromptEnabled,
   resolveGameSetupArtStylePrompt,
@@ -1810,6 +1819,8 @@ const gameSetupConfigSchema = z.object({
   /** Installed package that provides this game's experience. Same shape the manifest allows for an id,
    *  since this is matched against one to mount the surface. */
   gameExperienceId: z.string().regex(GAME_EXPERIENCE_ID_PATTERN).max(GAME_EXPERIENCE_ID_MAX_CHARS).optional(),
+  // Only the id is trusted; the pin itself is rebuilt from the server's own registry at creation.
+  ruleset: rulesetRefSchema.optional(),
   /** Opaque config owned by that experience — persisted verbatim, never read by the host. */
   experienceConfig: z
     .record(z.string().max(120), z.unknown())
@@ -1870,6 +1881,7 @@ const createGameSchema = z.object({
   shareLabels: z
     .object({
       experienceName: z.string().max(120).optional(),
+      rulesetName: z.string().max(120).optional(),
       experienceSeedKey: z.string().max(120).optional(),
       characterNames: z.record(z.string(), z.string().max(500)).optional(),
       lorebookNames: z.record(z.string(), z.string().max(500)).optional(),
@@ -2490,7 +2502,7 @@ function hasGeneratedGameCharacterCardContent(card: ReturnType<typeof normalizeG
   );
 }
 
-function applyGeneratedGameCharacterCards(
+export function applyGeneratedGameCharacterCards(
   currentCards: Array<Record<string, unknown>>,
   rawCards: unknown,
 ): { cards: Array<Record<string, unknown>>; updatedCount: number } {
@@ -2520,12 +2532,13 @@ function applyGeneratedGameCharacterCards(
 
     updatedCount += 1;
     const normalizedCard = normalizeGeneratedGameCharacterCard(generatedCard, existingName);
-    return existingCard.rpgStats
-      ? {
-          ...normalizedCard,
-          rpgStats: existingCard.rpgStats,
-        }
-      : normalizedCard;
+    // The generated card is rebuilt from an allow-list. What the model never writes and the game
+    // owns rides along: the RPG stats and this game's copy of the ruleset sheet.
+    return {
+      ...normalizedCard,
+      ...(existingCard.rpgStats ? { rpgStats: existingCard.rpgStats } : {}),
+      ...(existingCard.rulesetSheet ? { rulesetSheet: existingCard.rulesetSheet } : {}),
+    };
   });
 
   return { cards, updatedCount };
@@ -6032,8 +6045,56 @@ export async function gameRoutes(app: FastifyInstance) {
     return { partyRpgStats, personaRpgStats, personaName };
   };
 
+  /** The party's and the persona's stored sheets for the game's pinned ruleset, by normalized
+   *  name, which is how a generated card is matched to its source everywhere else in setup. Null
+   *  when the game has no ruleset or the install cannot honour the pin. Read here, once, so both
+   *  setup entry points copy sheets the same way. */
+  const loadSetupRulesetSheets = async (
+    chatId: string,
+    chatPersonaId: string | null,
+    meta: Record<string, unknown>,
+    setupConfig: GameSetupConfig | null,
+  ): Promise<{ definition: RulesetDefinition; stored: Map<string, unknown> } | null> => {
+    if (meta.gameRuleset == null) return null;
+    // loadRulesetRegistry never throws (a failed read is an empty registry) and resolving is pure,
+    // so an install that cannot honour the pin arrives here as a status, not as an exception.
+    const pinned = resolveGameRuleset(meta, await loadRulesetRegistry());
+    if (pinned.status !== "ok") {
+      logger.warn("[game/setup] Chat %s is pinned to a ruleset that is not available; no sheets were copied", chatId);
+      return null;
+    }
+    const rulesetId = pinned.definition.id;
+    const characters = createCharactersStorage(app.db);
+    const stored = new Map<string, unknown>();
+    for (const pcId of setupConfig?.partyCharacterIds ?? []) {
+      const pc = await characters.getById(pcId);
+      if (!pc) continue;
+      try {
+        const data = typeof pc.data === "string" ? JSON.parse(pc.data) : pc.data;
+        const sheet = data?.extensions?.rulesetSheets?.[rulesetId];
+        if (sheet && typeof data.name === "string") stored.set(normalizeCharacterLookupName(data.name), sheet);
+      } catch {
+        /* an unreadable card simply has no sheet to copy */
+      }
+    }
+    const personaId = chatPersonaId || setupConfig?.personaId;
+    const persona = personaId ? await characters.getPersona(personaId) : null;
+    if (persona) {
+      try {
+        const stats = persona.personaStats ? JSON.parse(persona.personaStats) : null;
+        const sheet = stats?.rulesetSheets?.[rulesetId];
+        // The persona is the player, so its sheet wins a name it shares with a party member.
+        if (sheet) stored.set(normalizeCharacterLookupName(persona.name), sheet);
+      } catch {
+        /* skip */
+      }
+    }
+    return { definition: pinned.definition, stored };
+  };
+
   const applyGameSetupPayload = async (args: {
     chatId: string;
+    chatPersonaId: string | null;
     chatCharacterIds: string[];
     meta: Record<string, unknown>;
     setupData: Record<string, unknown>;
@@ -6169,6 +6230,7 @@ export async function gameRoutes(app: FastifyInstance) {
     }
 
     if (setupData.characterCards && Array.isArray(setupData.characterCards)) {
+      const rulesetSheets = await loadSetupRulesetSheets(chatId, args.chatPersonaId, meta, setupConfig);
       const cards = (setupData.characterCards as Array<Record<string, unknown>>)
         .map((c) => {
           const name = (c.name as string) || "";
@@ -6192,6 +6254,15 @@ export async function gameRoutes(app: FastifyInstance) {
                   pools: normalizeRpgStatPools(rpg),
                 }
               : undefined,
+            // The game's own copy of the starting build, or a blank one, so every card has a sheet.
+            ...(rulesetSheets
+              ? {
+                  rulesetSheet: copyRulesetSheetForGame(
+                    rulesetSheets.definition,
+                    rulesetSheets.stored.get(normalizedCardName),
+                  ),
+                }
+              : {}),
           };
         })
         .filter((c) => c.name);
@@ -6406,8 +6477,23 @@ export async function gameRoutes(app: FastifyInstance) {
       Boolean(parsedCreateGameInput.setupConfig.spatialMapInstructions?.trim())
         ? "hierarchical"
         : "standard");
+    // A ruleset is pinned once, here, from what is installed right now. A ruleset the install
+    // does not have is refused rather than dropped, because silently starting the game on other
+    // rules is the one outcome the player did not choose.
+    let gameRuleset: RulesetRef | null = null;
+    if (parsedCreateGameInput.setupConfig.ruleset) {
+      const registered = (await loadRulesetRegistry()).get(parsedCreateGameInput.setupConfig.ruleset.id);
+      if (!registered) {
+        return reply.status(400).send({
+          error: `The ruleset "${parsedCreateGameInput.setupConfig.ruleset.id}" is not installed.`,
+          code: "ruleset_not_installed",
+        });
+      }
+      gameRuleset = createRulesetRef(registered);
+    }
     const setupConfig: GameSetupConfig = {
       ...parsedCreateGameInput.setupConfig,
+      ...(gameRuleset ? { ruleset: gameRuleset } : {}),
       gameWorldMapMode:
         requestedWorldMapMode === "hierarchical" && parsedCreateGameInput.setupConfig.enableAgents === true
           ? "hierarchical"
@@ -6549,6 +6635,9 @@ export async function gameRoutes(app: FastifyInstance) {
       gameSceneConnectionId: setupConfig.sceneConnectionId || null,
       // Chosen at creation and fixed for the game's lifetime (see GameSetupConfig).
       gameExperienceId: setupConfig.gameExperienceId || null,
+      // Likewise fixed for the game's lifetime. Written only when a ruleset was chosen, so a game
+      // on Marinara's own rules carries exactly the metadata it always has.
+      ...(gameRuleset ? { gameRuleset } : {}),
       gameNpcs: [],
       enableAgents: setupConfig.enableAgents === true,
       activeAgentIds: setupActiveAgentIds,
@@ -6940,6 +7029,7 @@ export async function gameRoutes(app: FastifyInstance) {
     try {
       setupResult = await applyGameSetupPayload({
         chatId,
+        chatPersonaId: chat.personaId ?? null,
         chatCharacterIds: parseChatCharacterIds(chat.characterIds),
         meta,
         setupData,
@@ -7004,6 +7094,7 @@ export async function gameRoutes(app: FastifyInstance) {
     try {
       setupResult = await applyGameSetupPayload({
         chatId,
+        chatPersonaId: chat.personaId ?? null,
         chatCharacterIds: parseChatCharacterIds(chat.characterIds),
         meta,
         setupData,
@@ -8924,12 +9015,23 @@ export async function gameRoutes(app: FastifyInstance) {
       ? buildFallbackGameCharacterCard(recruit.data, recruit.name)
       : buildNpcPartyCard(npcRecruit!);
     const recruitRpgStats = recruit ? extractRecruitCharacterRpgStats(recruit.data) : undefined;
+    // In a game on a ruleset a recruit joins the way the party did at setup: with a copy of the
+    // library card's starting build, or a blank sheet (an NPC has no library card to copy from).
+    const pinnedRuleset = meta.gameRuleset != null ? resolveGameRuleset(meta, await loadRulesetRegistry()) : null;
+    const recruitRulesetSheet =
+      pinnedRuleset?.status === "ok"
+        ? copyRulesetSheetForGame(
+            pinnedRuleset.definition,
+            recruit?.data.extensions?.rulesetSheets?.[pinnedRuleset.definition.id],
+          )
+        : undefined;
     const recruitSourceCard = recruit
       ? buildRecruitCharacterSourceCard(recruit.data)
       : buildNpcRecruitCharacterSourceCard(npcRecruit!);
     let nextCard: Record<string, unknown> = {
       ...fallbackCard,
       ...(recruitRpgStats ? { rpgStats: recruitRpgStats } : {}),
+      ...(recruitRulesetSheet ? { rulesetSheet: recruitRulesetSheet } : {}),
     };
 
     if (existingCardIndex >= 0) {
@@ -9042,6 +9144,7 @@ export async function gameRoutes(app: FastifyInstance) {
           nextCard = {
             ...normalizeGeneratedGameCharacterCard(rawCard, recruitName),
             ...(recruitRpgStats ? { rpgStats: recruitRpgStats } : {}),
+            ...(recruitRulesetSheet ? { rulesetSheet: recruitRulesetSheet } : {}),
           };
         }
       } catch (error) {

@@ -79,11 +79,13 @@ import {
 import { useConnections } from "../../hooks/use-connections";
 import { useDefaultPreset, usePresets } from "../../hooks/use-presets";
 import { useCharacterGroups, usePersonas } from "../../hooks/use-characters";
+import { GameSetupRulesChooser, GameSetupRulesetSheetStatus } from "./GameSetupRulesChooser";
 import { useSidecarStore } from "../../stores/sidecar.store";
 import { useEntriesAcrossLorebooks, useLorebooks } from "../../hooks/use-lorebooks";
 import {
   selectGameExperiencePackages,
   useInstalledCapabilityPackages,
+  useInstalledRulesets,
   useCapabilityAgentRegistry,
 } from "../../hooks/use-capability-packages";
 import { useGameAssetStore } from "../../stores/game-asset.store";
@@ -504,6 +506,12 @@ export function GameSetupWizard({
   const activeExperience = (isNewGame ? experiences.find((item) => item.id === experienceId) : null) ?? null;
   const experienceSetup = activeExperience?.manifest.contributions?.gameSurface?.setup;
   const [experienceSeed, setExperienceSeed] = useState(() => String(crypto.getRandomValues(new Uint32Array(1))[0]));
+  // Rules are chosen once, for a new game only, and stay independent of combat presentation.
+  const { data: installedRulesets, isLoading: rulesetsLoading } = useInstalledRulesets(isNewGame);
+  const rulesets = useMemo(() => (isNewGame ? (installedRulesets ?? []) : []), [installedRulesets, isNewGame]);
+  const [rulesetId, setRulesetId] = useState<string | null>(null);
+  const activeRuleset = rulesets.find((entry) => entry.definition.id === rulesetId) ?? null;
+  const [rulesetImportNotice, setRulesetImportNotice] = useState<string | null>(null);
   const experienceSeedInvalid = Boolean(experienceSetup?.seed && parseExperienceSeed(experienceSeed) === null);
   const [experienceImportNotice, setExperienceImportNotice] = useState<string | null>(null);
   const [generationElapsedSeconds, setGenerationElapsedSeconds] = useState(0);
@@ -792,8 +800,15 @@ export function GameSetupWizard({
     () => (lorebooksList as Array<{ id: string; name: string; enabled?: boolean }>) ?? [],
     [lorebooksList],
   );
+  // An import resolves its ruleset against what is installed, so a list that is still loading must
+  // not read as "nothing installed" and drop a ruleset this install does have.
   const setupImportResourcesReady =
-    !connectionsLoading && !promptPresetsLoading && !personasLoading && !lorebooksLoading && !experiencesLoading;
+    !connectionsLoading &&
+    !promptPresetsLoading &&
+    !personasLoading &&
+    !lorebooksLoading &&
+    !experiencesLoading &&
+    !rulesetsLoading;
 
   const availableLorebooks = useMemo(
     () =>
@@ -1071,9 +1086,21 @@ export function GameSetupWizard({
         personas,
         promptPresets,
         experiencePackages: experiences,
+        installedRulesets: rulesets,
         isNewGame,
       });
       const config = imported.config;
+      setRulesetId(config.ruleset?.id ?? null);
+      const sharedRuleset = shareFile.setup.config.ruleset;
+      setRulesetImportNotice(
+        sharedRuleset && !config.ruleset
+          ? !isNewGame
+            ? localizeUi("game.ruleset.setup.existingImport")
+            : localizeUi("game.ruleset.setup.unavailableImport", {
+                name: shareFile.setup.labels?.rulesetName ?? sharedRuleset.id,
+              })
+          : null,
+      );
       const importedExperience = experiences.find((item) => item.id === config.gameExperienceId);
       const importedSetup = importedExperience?.manifest.contributions?.gameSurface?.setup;
       const importedSeed = importedSetup?.seed
@@ -1269,6 +1296,16 @@ export function GameSetupWizard({
       tone: tones.join(", ") || "Heroic",
       difficulty: normalizeGameDifficulty(difficulty),
       combatStyle,
+      ...(activeRuleset
+        ? {
+            ruleset: {
+              id: activeRuleset.definition.id,
+              version: activeRuleset.definition.version,
+              packageId: activeRuleset.packageId,
+              options: {},
+            },
+          }
+        : {}),
       combatDirector: true,
       gmBossControl,
       ...(Object.keys(tacticalBattlefield).length > 0 ? { tacticalBattlefield } : {}),
@@ -1340,6 +1377,7 @@ export function GameSetupWizard({
 
   const buildSetupShareLabels = (): GameInitialSetupLabels => ({
     experienceName: activeExperience?.manifest.name,
+    rulesetName: activeRuleset?.definition.name,
     experienceSeedKey: experienceSetup?.seed?.key,
     characterNames: Object.fromEntries(
       characters
@@ -1968,6 +2006,22 @@ export function GameSetupWizard({
                       )}
                     </div>
 
+                    {rulesets.length > 0 && (
+                      <GameSetupRulesChooser
+                        rulesets={rulesets}
+                        activeId={activeRuleset?.definition.id ?? null}
+                        onSelect={(id) => {
+                          setRulesetId(id);
+                          setRulesetImportNotice(null);
+                        }}
+                      />
+                    )}
+                    {rulesetImportNotice && (
+                      <p role="status" className="text-xs text-[var(--muted-foreground)]">
+                        {rulesetImportNotice}
+                      </p>
+                    )}
+
                     {/* Content Rating */}
                     <div>
                       <label className="mb-1.5 block text-xs font-medium text-[var(--foreground)]">
@@ -2407,6 +2461,16 @@ export function GameSetupWizard({
                         </div>
                       </div>
                     </div>
+
+                    {/* Shown here, after the persona and the party are picked, not beside the
+                        Rules choice on the earlier step where neither is known yet. */}
+                    {activeRuleset && (
+                      <GameSetupRulesetSheetStatus
+                        ruleset={activeRuleset}
+                        partyCharacterIds={partyCharacterIds}
+                        personaId={personaId}
+                      />
+                    )}
                   </>
                 )}
 

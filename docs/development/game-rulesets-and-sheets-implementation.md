@@ -1,6 +1,6 @@
 # Game Mode rulesets and ruleset character sheets: implementation handoff
 
-Status: in progress. Written September 18, 2026 against `staging` at `459f8b85` (v2.4.6). Slice 1 (the shared schema, the pin, the registry and Capability API 1.20) slice 2 (the `dice-sum` resolver, `who=`, and the Game Master reminder swap) and slice 3 (sheets on cards and personas) are implemented; every later slice is still a proposal. § Format decisions records where the implemented format differs from the first draft and why. It complements `game-combat-rulesets-implementation.md` (the combat handoff). Where the two differ, § Relationship to the combat handoff says so and asks for sign-off rather than quietly overriding it.
+Status: in progress. Written September 18, 2026 against `staging` at `459f8b85` (v2.4.6). Slice 1 (the shared schema, the pin, the registry and Capability API 1.20) slice 2 (the `dice-sum` resolver, `who=`, and the Game Master reminder swap) slice 3 (sheets on cards and personas) and slice 4 (the Rules choice, the pin at creation, copy-at-setup and setup sharing) are implemented; every later slice is still a proposal. § Format decisions records where the implemented format differs from the first draft and why. It complements `game-combat-rulesets-implementation.md` (the combat handoff). Where the two differ, § Relationship to the combat handoff says so and asks for sign-off rather than quietly overriding it.
 
 Companion file: [`ruleset-5e-2014.example.json`](ruleset-5e-2014.example.json), the first ruleset definition, the precise statement of what "the whole sheet" means, and the file the slice 1 regression validates. The authority for the format is the zod schema in `packages/shared/src/schemas/ruleset.schema.ts`.
 
@@ -90,6 +90,14 @@ The format must serve rulesets nobody has written yet, many of which will be dra
 - **The editor is one generic component** (`RulesetSheetEditor`) rendered from the definition, mounted by `RulesetSheetsSection` in both **Stats** tabs. Installed rulesets come from `GET /api/capability-packages/rulesets`, keyed under the capability package query keys so an install or removal refreshes it.
 - **Values are clamped when edited, never when read**, and a stored proficiency tier the ruleset no longer offers still shows as what it is.
 - **Nothing is called dormant until the installed list has loaded**, so a slow request never shows a live sheet as missing.
+
+## What slice 4 settled
+
+- **The server builds the pin.** The wizard sends a `ruleset` in `GameSetupConfig`, but only its `id` is trusted: `POST /game/create` rebuilds the `RulesetRef` from its own registry and writes it to both `gameSetupConfig.ruleset` and `chat.metadata.gameRuleset`. A ruleset that is not installed is refused with `ruleset_not_installed`, never swapped for other rules.
+- **A game with no ruleset gains no key.** `gameRuleset` is written only when a ruleset was chosen, so legacy metadata keeps its bytes.
+- **Copy-at-setup lives in one place.** `applyGameSetupPayload` loads the party's and the persona's stored sheets itself, so both setup entry points (`/game/setup` and `/game/setup/apply-json`) copy the same way. Cards are matched by normalized name, as `rpgStats` already is, and the persona wins a name it shares with a party member. A member with no stored sheet gets a blank default build.
+- **Setup sharing follows the Experience rule.** A shared ruleset is restored for a new game when this install has it at the shared version or newer, and dropped otherwise; the wizard then names the missing ruleset from the file's `rulesetName` label. The pin inside a shared file is untrusted input and is read through `rulesetRefSchema`.
+- **The Rules block is its own component** (`GameSetupRulesChooser`), placed beside Combat Preference, rendered only for a new game with at least one ruleset installed.
 
 ## Architecture
 

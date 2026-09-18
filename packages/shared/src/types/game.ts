@@ -242,6 +242,9 @@ export interface GameSetupConfig {
    *  own surface over the shared narration. Chosen at creation and fixed for the game's lifetime, since an
    *  experience owns the whole run. Omitted = the built-in Game mode, unchanged. */
   gameExperienceId?: string;
+  /** The Game Mode ruleset chosen for a NEW game. The server pins it as `chat.metadata.gameRuleset`
+   *  from its own registry, so only `id` is trusted. Absent means Marinara's own rules. */
+  ruleset?: import("../schemas/ruleset.schema.js").RulesetRef;
   /** Whatever the experience's own setup collected, stored verbatim and never interpreted by the host, so
    *  it can always recover the options the game was created with. */
   experienceConfig?: Record<string, unknown>;
@@ -352,6 +355,8 @@ export interface GameInitialSetupConnectionSnapshot {
 /** Creation-time display names for local resources referenced by the setup. */
 export interface GameInitialSetupLabels {
   experienceName?: string;
+  /** Display name of the chosen ruleset, so a shared setup can name one the recipient lacks. */
+  rulesetName?: string;
   experienceSeedKey?: string;
   characterNames?: Record<string, string>;
   lorebookNames?: Record<string, string>;

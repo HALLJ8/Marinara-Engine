@@ -6,11 +6,12 @@
 // number reads as its default. Definitions are assumed validated (`parseRulesetDefinition`), but a
 // dangling reference still reads as 0 instead of failing a turn.
 
-import type {
-  RulesetDefinition,
-  RulesetSheetBuild,
-  RulesetSheetEnvelope,
-  RulesetValueRef,
+import {
+  rulesetSheetEnvelopeSchema,
+  type RulesetDefinition,
+  type RulesetSheetBuild,
+  type RulesetSheetEnvelope,
+  type RulesetValueRef,
 } from "../../schemas/ruleset.schema.js";
 
 type StepTable = ReadonlyArray<readonly [number, number]>;
@@ -60,6 +61,15 @@ export function createRulesetSheetEnvelope(
   build: RulesetSheetBuild = defaultRulesetSheetBuild(definition),
 ): RulesetSheetEnvelope {
   return { v: definition.sheet.version, build };
+}
+
+/** The copy a new game takes of a starting build: the stored sheet when it reads as one, else a
+ *  blank default, so every party member has a sheet from the first turn. Always a deep copy — a
+ *  game edits its own sheet and nothing in a game writes back to the library. */
+export function copyRulesetSheetForGame(definition: RulesetDefinition, stored: unknown): RulesetSheetEnvelope {
+  const parsed = rulesetSheetEnvelopeSchema.safeParse(stored);
+  if (!parsed.success) return createRulesetSheetEnvelope(definition);
+  return { v: definition.sheet.version, build: structuredClone(parsed.data.build) };
 }
 
 export interface EvaluatedRulesetSheet {
