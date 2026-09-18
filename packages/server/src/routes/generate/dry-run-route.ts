@@ -129,6 +129,7 @@ import {
   COMMITTED_TRACKER_AGENT_TYPES,
 } from "../../services/generation/committed-tracker-context.js";
 import {
+  buildRuntimeAgentSectionEligibleTypes,
   makeRuntimeAgentSectionTokens,
   replaceRuntimeAgentSection,
   clearUnusedRuntimeAgentSections,
@@ -137,6 +138,9 @@ import {
 import { loadPriorBeholderState } from "../../services/agents/beholder-state.js";
 import { logger } from "../../lib/logger.js";
 import { resolveGameGmPromptTemplate } from "../../services/generation/game-gm-prompt-runtime.js";
+
+import { injectCapabilityContexts } from "../../services/generation/capability-prompt-runtime.js";
+import { getCapabilityPromptContextPackageIds } from "../../services/capability-packages/capability-prompt-context.service.js";
 
 type WrapFormat = "xml" | "markdown" | "none";
 type DryRunPromptMessage = {
@@ -767,6 +771,7 @@ export async function registerDryRunRoute(app: FastifyInstance) {
     // Build prompt messages
     let finalMessages: DryRunPromptMessage[] = [];
     const trackerSectionTokens = new Map<string, RuntimeAgentSectionTokens>();
+    const runtimeAgentSectionTypes = new Set<string>();
     let wrapFormat: WrapFormat = "xml";
 
     // Optional: fine-grained prompt assembly (server-side) for extensions.
@@ -1376,16 +1381,33 @@ export async function registerDryRunRoute(app: FastifyInstance) {
         presets.listChoiceBlocksForPreset(effectivePresetId),
       ]);
 
+      const eligibleTypes = buildRuntimeAgentSectionEligibleTypes({
+        enableAgents: dryRunChatEnableAgents,
+        activeAgentIds: dryRunActiveAgentIds,
+        chatMode: chatMode as "roleplay" | "conversation" | "game",
+        configuredAgents: (await createAgentsStorage(app.db).list()).filter(
+          (agent) => !isAgentConfigDeleted(agent.settings),
+        ),
+      });
+      const packageIds = new Set(getCapabilityPromptContextPackageIds());
+      for (const section of sections) {
+        if (section.enabled !== "true" || section.isMarker !== "true" || !section.markerConfig) continue;
+        try {
+          const marker = JSON.parse(section.markerConfig) as { type?: string; agentType?: string };
+          const id = marker.agentType;
+          if (marker.type !== "agent_data" || !id || !eligibleTypes.has(id)) continue;
+          runtimeAgentSectionTypes.add(id);
+          if (!packageIds.has(id) && !(resolvedInjectTrackers && COMMITTED_TRACKER_AGENT_TYPES.has(id))) continue;
+          trackerSectionTokens.set(id, makeRuntimeAgentSectionTokens(id, `preview_${crypto.randomUUID()}`));
+        } catch {
+          /* Ignore malformed marker config, as generation does. */
+        }
+      }
       const runtimeAgentData = Object.fromEntries(
-        resolvedInjectTrackers && dryRunChatEnableAgents
-          ? dryRunActiveAgentIds
-              .filter((id) => COMMITTED_TRACKER_AGENT_TYPES.has(id))
-              .map((id) => {
-                const tokens = makeRuntimeAgentSectionTokens(id, `preview_${crypto.randomUUID()}`);
-                trackerSectionTokens.set(id, tokens);
-                return [id, { text: tokens.placeholder, startToken: tokens.start, endToken: tokens.end }];
-              })
-          : [],
+        [...trackerSectionTokens].map(([id, tokens]) => [
+          id,
+          { text: tokens.placeholder, startToken: tokens.start, endToken: tokens.end },
+        ]),
       );
 
       const assemblerInput: AssemblerInput = {
@@ -1700,8 +1722,23 @@ export async function registerDryRunRoute(app: FastifyInstance) {
         dedupeLastMessageWrappers,
         findTrackerContextInsertIndex,
       });
-      clearUnusedRuntimeAgentSections(finalMessages, trackerSectionTokens);
     }
+
+    await injectCapabilityContexts(
+      finalMessages,
+      {
+        chatId,
+        chatMeta,
+        mode: chatMode,
+        targetCharacterIds: promptTargetCharacterId ? [promptTargetCharacterId] : characterIds,
+        personaId,
+        placedAgentTypes: [...runtimeAgentSectionTypes],
+        wrapFormat,
+      },
+      app.db,
+      trackerSectionTokens,
+    );
+    clearUnusedRuntimeAgentSections(finalMessages, trackerSectionTokens);
 
     // ── Impersonate: same instruction block as POST /api/generate (no DB writes) ──
     if (impersonate) {

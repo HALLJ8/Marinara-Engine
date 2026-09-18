@@ -375,7 +375,7 @@ import {
   waitForConversationPresenceDelay,
 } from "./generate/conversation-presence-runtime.js";
 import { resolveProfessorMariPromptContext } from "./generate/professor-mari-prompt-context.js";
-import { collectCapabilityPromptContext } from "../services/capability-packages/capability-prompt-context.service.js";
+import { injectCapabilityContexts } from "../services/generation/capability-prompt-runtime.js";
 import {
   executeGmVerbCalls,
   parseAndStripGmVerbCalls,
@@ -384,7 +384,6 @@ import {
   type GmVerbCall,
   type ResolvedGmVerbTable,
 } from "../services/capability-packages/capability-gm-verb-runtime.service.js";
-import { collectRoleplayEventContext } from "../services/capability-packages/capability-roleplay-events.service.js";
 import {
   appendToFirstSystemMessage,
   CONVERSATION_NO_REPEAT_INSTRUCTION,
@@ -3825,50 +3824,6 @@ export async function generateRoutes(app: FastifyInstance) {
         }
 
         let canonicalGamePartyNames: string[] = [];
-        const injectCapabilityContexts = async ({
-          messages,
-          chatMetadata,
-          mode,
-          targetCharacterIds,
-          selectedPersonaId,
-          db,
-        }: {
-          messages: typeof finalMessages;
-          chatMetadata: typeof chatMeta;
-          mode: typeof chatMode;
-          targetCharacterIds: string[];
-          selectedPersonaId: typeof personaId;
-          db: typeof app.db;
-        }) => {
-          const promptContext = await collectCapabilityPromptContext({
-            chatId: input.chatId,
-            chatMeta: chatMetadata,
-            mode,
-            targetCharacterIds,
-            personaId: selectedPersonaId,
-            placedAgentTypes: [...runtimeAgentSectionTypes],
-            wrapFormat,
-          });
-          const placedPackageIds = new Set<string>();
-          for (const block of promptContext.packageBlocks) {
-            const tokens = runtimeAgentSectionTokens.get(block.packageId);
-            if (tokens && replaceRuntimeAgentSection(messages, tokens, block.text)) {
-              placedPackageIds.add(block.packageId);
-            }
-          }
-          const blocks = promptContext.packageBlocks
-            .filter((block) => !placedPackageIds.has(block.packageId))
-            .map((block) => block.text);
-          const eventBlock = await collectRoleplayEventContext(db, input.chatId, targetCharacterIds);
-          if (eventBlock) blocks.push(eventBlock);
-          if (blocks.length > 0) {
-            const context = blocks.join("\n\n");
-            const systemMessage = messages.find((message) => message.role === "system");
-            if (systemMessage) systemMessage.content += "\n\n" + context;
-            else messages.unshift({ role: "system" as const, content: context });
-          }
-          return promptContext;
-        };
 
         // ── One-request dice: the roll_dice split (#6215) ──
         // Resolved here, above the GM format reminder, because the reminder has to describe the
@@ -4031,14 +3986,20 @@ export async function generateRoutes(app: FastifyInstance) {
 
           // A package holding `prompt-context` appends its live state to the system message, the same way
           // the lorebook block above does. Nothing registered (the normal case) ⇒ no effect on the prompt.
-          const capabilityPromptContext = await injectCapabilityContexts({
-            messages: finalMessages,
-            chatMetadata: chatMeta,
-            mode: "game",
-            targetCharacterIds: promptTargetCharacterId ? [promptTargetCharacterId] : characterIds,
-            selectedPersonaId: personaId,
-            db: app.db,
-          });
+          const capabilityPromptContext = await injectCapabilityContexts(
+            finalMessages,
+            {
+              chatId: input.chatId,
+              chatMeta,
+              mode: "game",
+              targetCharacterIds: promptTargetCharacterId ? [promptTargetCharacterId] : characterIds,
+              personaId,
+              placedAgentTypes: [...runtimeAgentSectionTypes],
+              wrapFormat,
+            },
+            app.db,
+            runtimeAgentSectionTokens,
+          );
 
           // Game bypasses the preset assembler, so card-authored depth and
           // post-history instructions must be injected explicitly before the
@@ -4171,14 +4132,20 @@ export async function generateRoutes(app: FastifyInstance) {
         }
 
         if (chatMode !== "game") {
-          await injectCapabilityContexts({
-            messages: finalMessages,
-            chatMetadata: chatMeta,
-            mode: chatMode,
-            targetCharacterIds: promptTargetCharacterId ? [promptTargetCharacterId] : characterIds,
-            selectedPersonaId: personaId,
-            db: app.db,
-          });
+          await injectCapabilityContexts(
+            finalMessages,
+            {
+              chatId: input.chatId,
+              chatMeta,
+              mode: chatMode,
+              targetCharacterIds: promptTargetCharacterId ? [promptTargetCharacterId] : characterIds,
+              personaId,
+              placedAgentTypes: [...runtimeAgentSectionTypes],
+              wrapFormat,
+            },
+            app.db,
+            runtimeAgentSectionTokens,
+          );
         }
 
         if (chatMode === "conversation" && !conversationScopesAwarenessToResponder) {
