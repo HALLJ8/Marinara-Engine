@@ -42,6 +42,12 @@ test("Claude subscription cache duration saves and restores without enabling API
       await toggle.scrollIntoViewIfNeeded();
       await toggle.press("Space");
       await expect(toggle).toBeChecked({ checked: enabled });
+      await page.getByRole("button", { name: "Export connection", exact: true }).click();
+      const downloadPromise = page.waitForEvent("download");
+      await page.getByRole("dialog").getByRole("button", { name: "Export", exact: true }).click();
+      const download = await downloadPromise;
+      const exported = JSON.parse(readFileSync((await download.path())!, "utf8"));
+      expect(exported.connections[0].anthropicExtendedCacheTtl).toBe(enabled);
       await page.getByRole("button", { name: "Save", exact: true }).click();
       await expect
         .poll(async () => {
