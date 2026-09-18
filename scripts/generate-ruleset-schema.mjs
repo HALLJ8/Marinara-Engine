@@ -25,8 +25,9 @@ function allowAnnotations(node, isRoot = true) {
     else allowAnnotations(value, false);
   }
   if (node.type === "object" && node.additionalProperties === false) {
-    node.properties = { ...node.properties, $comment: { type: "string" } };
-    if (isRoot) node.properties.$schema = { type: "string" };
+    // Any value, not just text: the Engine drops the key whatever it holds.
+    node.properties = { ...node.properties, $comment: {} };
+    if (isRoot) node.properties.$schema = {};
   }
 }
 

@@ -102,11 +102,13 @@ const sourceSchema = z
 type RepositoryIdentity = Pick<CustomAgentRepository, "id" | "url" | "owner" | "name">;
 type StoredAgent = Awaited<ReturnType<ReturnType<typeof createAgentsStorage>["list"]>>[number];
 
-/** One `<top>/rulesets/*.json` entry as it came out of the archive. `text` is null when the bytes are
- *  not valid UTF-8, which makes that one file unusable rather than refusing the whole repository. */
+/** One `<top>/rulesets/*.json` entry as it came out of the archive. `text` is null when the file is
+ *  too large or not valid UTF-8, which makes that one file unusable (`issue` says why) rather than
+ *  refusing the whole repository. */
 export interface RepositoryRulesetFile {
   file: string;
   text: string | null;
+  issue?: string;
 }
 
 export interface CustomAgentRepositoryContents {
@@ -221,10 +223,12 @@ function readRepositoryRulesets(entries: AdmZip.IZipEntry[]): RepositoryRulesetF
       .map((entry) => {
         const file = normalizeArchivePath(entry.entryName).split("/")[2]!;
         // Both the header's claim and the real decompressed length, because a header is only what the
-        // archive says about itself.
-        if (entry.header.size > RULESET_MAX_BYTES) throw new Error(`Ruleset file ${file} is too large`);
+        // archive says about itself. The archive as a whole is already bounded, so one oversized file
+        // is that file's problem and not the repository's.
+        const tooLarge = { file, text: null, issue: `The file is over the ${RULESET_MAX_BYTES}-byte limit` };
+        if (entry.header.size > RULESET_MAX_BYTES) return tooLarge;
         const data = entry.getData();
-        if (data.byteLength > RULESET_MAX_BYTES) throw new Error(`Ruleset file ${file} is too large`);
+        if (data.byteLength > RULESET_MAX_BYTES) return tooLarge;
         try {
           return { file, text: utf8Decoder.decode(data) };
         } catch {
@@ -264,14 +268,14 @@ export function classifyRepositoryRulesets(
   files: readonly RepositoryRulesetFile[],
 ): RepositoryRulesetCandidate[] {
   const claimedBy = new Map<string, string>();
-  return files.map(({ file, text }): RepositoryRulesetCandidate => {
+  return files.map(({ file, text, issue }): RepositoryRulesetCandidate => {
     const unusable = (...issues: string[]): RepositoryRulesetCandidate => ({ file, ruleset: null, issues });
     // `local/` is where rulesets imported from a file live. A GitHub account that happens to be
     // called "local" must not be able to file its rulesets among the user's own.
     if (owner === RULESET_LOCAL_NAMESPACE) {
       return unusable(`Rulesets cannot be installed from an account named "${RULESET_LOCAL_NAMESPACE}"`);
     }
-    if (text === null) return unusable("The file is not valid UTF-8 text");
+    if (text === null) return unusable(issue ?? "The file is not valid UTF-8 text");
     let json: unknown;
     try {
       json = JSON.parse(text);

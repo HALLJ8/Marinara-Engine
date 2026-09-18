@@ -155,14 +155,21 @@ try {
       "only direct children of rulesets/ are published",
     );
 
-    assert.throws(
-      () =>
-        parseCustomAgentRepositoryContents(
-          archiveOf({ [`${TOP}/rulesets/huge.json`]: " ".repeat(RULESET_MAX_BYTES + 1) }),
-        ),
-      /huge\.json is too large/u,
-      "the size ceiling is checked before anything reads the file",
-    );
+    {
+      // One oversized file is that file's problem: it becomes an unusable row and its neighbour
+      // still installs.
+      const withHuge = parseCustomAgentRepositoryContents(
+        archiveOf({
+          [`${TOP}/rulesets/huge.json`]: " ".repeat(RULESET_MAX_BYTES + 1),
+          [`${TOP}/rulesets/my-5e.json`]: my5eV1,
+        }),
+      );
+      const huge = withHuge.rulesets.find((entry) => entry.file === "huge.json");
+      assert.equal(huge?.text, null, "an oversized file is never decoded");
+      const rows = classifyRepositoryRulesets("alice", withHuge.rulesets);
+      assert.match(rows.find((entry) => entry.file === "huge.json")!.issues[0]!, /over the \d+-byte limit/u);
+      assert.equal(rows.find((entry) => entry.file === "my-5e.json")!.ruleset?.rulesetId, "alice/my-5e");
+    }
 
     const tooMany: Record<string, string> = {};
     for (let index = 0; index <= 32; index += 1) tooMany[`${TOP}/rulesets/pack-${index}.json`] = my5eV1;

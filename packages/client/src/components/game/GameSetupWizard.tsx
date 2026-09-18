@@ -1104,13 +1104,20 @@ export function GameSetupWizard({
       const config = imported.config;
       setRulesetId(config.ruleset?.id ?? null);
       const sharedRuleset = shareFile.setup.config.ruleset;
+      // Installed but left off the list means the import switch hid it, which needs a different
+      // fix from the user than installing something.
+      const hiddenByImportPolicy =
+        sharedRuleset &&
+        !rulesets.some((entry) => entry.definition.id === sharedRuleset.id) &&
+        (installedRulesets ?? []).some((entry) => entry.definition.id === sharedRuleset.id);
       setRulesetImportNotice(
         sharedRuleset && !config.ruleset
           ? !isNewGame
             ? localizeUi("game.ruleset.setup.existingImport")
-            : localizeUi("game.ruleset.setup.unavailableImport", {
-                name: shareFile.setup.labels?.rulesetName ?? sharedRuleset.id,
-              })
+            : localizeUi(
+                hiddenByImportPolicy ? "game.ruleset.setup.importsOffImport" : "game.ruleset.setup.unavailableImport",
+                { name: shareFile.setup.labels?.rulesetName ?? sharedRuleset.id },
+              )
           : null,
       );
       const importedExperience = experiences.find((item) => item.id === config.gameExperienceId);

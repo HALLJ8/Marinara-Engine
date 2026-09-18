@@ -38,9 +38,7 @@
           "type": "string",
           "maxLength": 4000
         },
-        "$comment": {
-          "type": "string"
-        }
+        "$comment": {}
       },
       "additionalProperties": false
     },
@@ -76,9 +74,7 @@
           "minLength": 1,
           "maxLength": 400
         },
-        "$comment": {
-          "type": "string"
-        }
+        "$comment": {}
       },
       "required": [
         "summary"
@@ -107,9 +103,7 @@
                   "minimum": 2,
                   "maximum": 1000
                 },
-                "$comment": {
-                  "type": "string"
-                }
+                "$comment": {}
               },
               "required": [
                 "count",
@@ -130,9 +124,7 @@
                       "type": "string",
                       "const": "floorHalfMinusTen"
                     },
-                    "$comment": {
-                      "type": "string"
-                    }
+                    "$comment": {}
                   },
                   "required": [
                     "op"
@@ -146,9 +138,7 @@
                       "type": "string",
                       "const": "identity"
                     },
-                    "$comment": {
-                      "type": "string"
-                    }
+                    "$comment": {}
                   },
                   "required": [
                     "op"
@@ -180,9 +170,7 @@
                       "minItems": 1,
                       "maxItems": 100
                     },
-                    "$comment": {
-                      "type": "string"
-                    }
+                    "$comment": {}
                   },
                   "required": [
                     "op",
@@ -236,15 +224,11 @@
                       "maxLength": 40,
                       "pattern": "^[a-z][a-z0-9_]*$"
                     },
-                    "$comment": {
-                      "type": "string"
-                    }
+                    "$comment": {}
                   },
                   "additionalProperties": false
                 },
-                "$comment": {
-                  "type": "string"
-                }
+                "$comment": {}
               },
               "required": [
                 "bonus"
@@ -287,9 +271,7 @@
                     "maximum": 50,
                     "default": 0
                   },
-                  "$comment": {
-                    "type": "string"
-                  }
+                  "$comment": {}
                 },
                 "required": [
                   "id",
@@ -327,9 +309,7 @@
                   ],
                   "default": "none"
                 },
-                "$comment": {
-                  "type": "string"
-                }
+                "$comment": {}
               },
               "additionalProperties": false,
               "default": {}
@@ -349,9 +329,7 @@
                     "minimum": -100,
                     "maximum": 1000
                   },
-                  "$comment": {
-                    "type": "string"
-                  }
+                  "$comment": {}
                 },
                 "required": [
                   "label",
@@ -362,9 +340,7 @@
               "minItems": 1,
               "maxItems": 12
             },
-            "$comment": {
-              "type": "string"
-            }
+            "$comment": {}
           },
           "required": [
             "kind",
@@ -398,9 +374,7 @@
                 "minLength": 1,
                 "maxLength": 80
               },
-              "$comment": {
-                "type": "string"
-              }
+              "$comment": {}
             },
             "required": [
               "id",
@@ -440,9 +414,7 @@
               "default": {
                 "type": "integer"
               },
-              "$comment": {
-                "type": "string"
-              }
+              "$comment": {}
             },
             "required": [
               "id",
@@ -476,9 +448,7 @@
                 "maxLength": 40,
                 "pattern": "^[a-z][a-z0-9_]*$"
               },
-              "$comment": {
-                "type": "string"
-              }
+              "$comment": {}
             },
             "required": [
               "id",
@@ -509,9 +479,7 @@
                 "maxLength": 40,
                 "pattern": "^[a-z][a-z0-9_]*$"
               },
-              "$comment": {
-                "type": "string"
-              }
+              "$comment": {}
             },
             "required": [
               "id",
@@ -553,9 +521,7 @@
               "type": "integer",
               "maximum": 100
             },
-            "$comment": {
-              "type": "string"
-            }
+            "$comment": {}
           },
           "required": [
             "min",
@@ -611,9 +577,7 @@
                           }
                         ]
                       },
-                      "$comment": {
-                        "type": "string"
-                      }
+                      "$comment": {}
                     },
                     "required": [
                       "field",
@@ -638,9 +602,7 @@
                     "type": "boolean",
                     "default": true
                   },
-                  "$comment": {
-                    "type": "string"
-                  }
+                  "$comment": {}
                 },
                 "required": [
                   "id",
@@ -691,9 +653,7 @@
                           }
                         ]
                       },
-                      "$comment": {
-                        "type": "string"
-                      }
+                      "$comment": {}
                     },
                     "required": [
                       "field",
@@ -714,9 +674,7 @@
                     "type": "string",
                     "maxLength": 500
                   },
-                  "$comment": {
-                    "type": "string"
-                  }
+                  "$comment": {}
                 },
                 "required": [
                   "id",
@@ -766,9 +724,7 @@
                           }
                         ]
                       },
-                      "$comment": {
-                        "type": "string"
-                      }
+                      "$comment": {}
                     },
                     "required": [
                       "field",
@@ -789,9 +745,7 @@
                     "type": "string",
                     "maxLength": 4000
                   },
-                  "$comment": {
-                    "type": "string"
-                  }
+                  "$comment": {}
                 },
                 "required": [
                   "id",
@@ -841,9 +795,7 @@
                           }
                         ]
                       },
-                      "$comment": {
-                        "type": "string"
-                      }
+                      "$comment": {}
                     },
                     "required": [
                       "field",
@@ -858,9 +810,7 @@
                   "default": {
                     "type": "boolean"
                   },
-                  "$comment": {
-                    "type": "string"
-                  }
+                  "$comment": {}
                 },
                 "required": [
                   "id",
@@ -909,9 +859,7 @@
                           }
                         ]
                       },
-                      "$comment": {
-                        "type": "string"
-                      }
+                      "$comment": {}
                     },
                     "required": [
                       "field",
@@ -945,9 +893,7 @@
                     "type": "string",
                     "maxLength": 80
                   },
-                  "$comment": {
-                    "type": "string"
-                  }
+                  "$comment": {}
                 },
                 "required": [
                   "id",
@@ -997,9 +943,7 @@
                           }
                         ]
                       },
-                      "$comment": {
-                        "type": "string"
-                      }
+                      "$comment": {}
                     },
                     "required": [
                       "field",
@@ -1019,9 +963,7 @@
                     "type": "string",
                     "maxLength": 40
                   },
-                  "$comment": {
-                    "type": "string"
-                  }
+                  "$comment": {}
                 },
                 "required": [
                   "id",
@@ -1079,9 +1021,7 @@
                           }
                         ]
                       },
-                      "$comment": {
-                        "type": "string"
-                      }
+                      "$comment": {}
                     },
                     "required": [
                       "field",
@@ -1136,18 +1076,14 @@
                           "maxLength": 40,
                           "pattern": "^[a-z][a-z0-9_]*$"
                         },
-                        "$comment": {
-                          "type": "string"
-                        }
+                        "$comment": {}
                       },
                       "additionalProperties": false
                     },
                     "minItems": 1,
                     "maxItems": 12
                   },
-                  "$comment": {
-                    "type": "string"
-                  }
+                  "$comment": {}
                 },
                 "required": [
                   "id",
@@ -1197,9 +1133,7 @@
                           }
                         ]
                       },
-                      "$comment": {
-                        "type": "string"
-                      }
+                      "$comment": {}
                     },
                     "required": [
                       "field",
@@ -1252,9 +1186,7 @@
                         "maxLength": 40,
                         "pattern": "^[a-z][a-z0-9_]*$"
                       },
-                      "$comment": {
-                        "type": "string"
-                      }
+                      "$comment": {}
                     },
                     "additionalProperties": false
                   },
@@ -1276,9 +1208,7 @@
                     "minItems": 1,
                     "maxItems": 100
                   },
-                  "$comment": {
-                    "type": "string"
-                  }
+                  "$comment": {}
                 },
                 "required": [
                   "id",
@@ -1329,9 +1259,7 @@
                           }
                         ]
                       },
-                      "$comment": {
-                        "type": "string"
-                      }
+                      "$comment": {}
                     },
                     "required": [
                       "field",
@@ -1384,9 +1312,7 @@
                         "maxLength": 40,
                         "pattern": "^[a-z][a-z0-9_]*$"
                       },
-                      "$comment": {
-                        "type": "string"
-                      }
+                      "$comment": {}
                     },
                     "additionalProperties": false
                   },
@@ -1402,9 +1328,7 @@
                     ],
                     "default": "down"
                   },
-                  "$comment": {
-                    "type": "string"
-                  }
+                  "$comment": {}
                 },
                 "required": [
                   "id",
@@ -1455,9 +1379,7 @@
                           }
                         ]
                       },
-                      "$comment": {
-                        "type": "string"
-                      }
+                      "$comment": {}
                     },
                     "required": [
                       "field",
@@ -1512,18 +1434,14 @@
                           "maxLength": 40,
                           "pattern": "^[a-z][a-z0-9_]*$"
                         },
-                        "$comment": {
-                          "type": "string"
-                        }
+                        "$comment": {}
                       },
                       "additionalProperties": false
                     },
                     "minItems": 2,
                     "maxItems": 12
                   },
-                  "$comment": {
-                    "type": "string"
-                  }
+                  "$comment": {}
                 },
                 "required": [
                   "id",
@@ -1573,9 +1491,7 @@
                           }
                         ]
                       },
-                      "$comment": {
-                        "type": "string"
-                      }
+                      "$comment": {}
                     },
                     "required": [
                       "field",
@@ -1630,18 +1546,14 @@
                           "maxLength": 40,
                           "pattern": "^[a-z][a-z0-9_]*$"
                         },
-                        "$comment": {
-                          "type": "string"
-                        }
+                        "$comment": {}
                       },
                       "additionalProperties": false
                     },
                     "minItems": 2,
                     "maxItems": 12
                   },
-                  "$comment": {
-                    "type": "string"
-                  }
+                  "$comment": {}
                 },
                 "required": [
                   "id",
@@ -1698,9 +1610,7 @@
                       }
                     ]
                   },
-                  "$comment": {
-                    "type": "string"
-                  }
+                  "$comment": {}
                 },
                 "required": [
                   "field",
@@ -1751,9 +1661,7 @@
                           "type": "boolean",
                           "default": true
                         },
-                        "$comment": {
-                          "type": "string"
-                        }
+                        "$comment": {}
                       },
                       "required": [
                         "id",
@@ -1794,9 +1702,7 @@
                           "type": "string",
                           "maxLength": 500
                         },
-                        "$comment": {
-                          "type": "string"
-                        }
+                        "$comment": {}
                       },
                       "required": [
                         "id",
@@ -1836,9 +1742,7 @@
                           "type": "string",
                           "maxLength": 4000
                         },
-                        "$comment": {
-                          "type": "string"
-                        }
+                        "$comment": {}
                       },
                       "required": [
                         "id",
@@ -1872,9 +1776,7 @@
                         "default": {
                           "type": "boolean"
                         },
-                        "$comment": {
-                          "type": "string"
-                        }
+                        "$comment": {}
                       },
                       "required": [
                         "id",
@@ -1926,9 +1828,7 @@
                           "type": "string",
                           "maxLength": 80
                         },
-                        "$comment": {
-                          "type": "string"
-                        }
+                        "$comment": {}
                       },
                       "required": [
                         "id",
@@ -1967,9 +1867,7 @@
                           "type": "string",
                           "maxLength": 40
                         },
-                        "$comment": {
-                          "type": "string"
-                        }
+                        "$comment": {}
                       },
                       "required": [
                         "id",
@@ -2001,9 +1899,7 @@
                     "maxLength": 40,
                     "pattern": "^[a-z][a-z0-9_]*$"
                   },
-                  "$comment": {
-                    "type": "string"
-                  }
+                  "$comment": {}
                 },
                 "required": [
                   "nameColumn",
@@ -2011,9 +1907,7 @@
                 ],
                 "additionalProperties": false
               },
-              "$comment": {
-                "type": "string"
-              }
+              "$comment": {}
             },
             "required": [
               "id",
@@ -2085,9 +1979,7 @@
                         "maxLength": 40,
                         "pattern": "^[a-z][a-z0-9_]*$"
                       },
-                      "$comment": {
-                        "type": "string"
-                      }
+                      "$comment": {}
                     },
                     "additionalProperties": false
                   },
@@ -2130,9 +2022,7 @@
                           }
                         ]
                       },
-                      "$comment": {
-                        "type": "string"
-                      }
+                      "$comment": {}
                     },
                     "required": [
                       "field",
@@ -2140,9 +2030,7 @@
                     ],
                     "additionalProperties": false
                   },
-                  "$comment": {
-                    "type": "string"
-                  }
+                  "$comment": {}
                 },
                 "required": [
                   "id",
@@ -2178,9 +2066,7 @@
                   "default": {
                     "type": "integer"
                   },
-                  "$comment": {
-                    "type": "string"
-                  }
+                  "$comment": {}
                 },
                 "required": [
                   "id",
@@ -2213,9 +2099,7 @@
                     "minimum": 1,
                     "maximum": 500
                   },
-                  "$comment": {
-                    "type": "string"
-                  }
+                  "$comment": {}
                 },
                 "required": [
                   "id",
@@ -2242,9 +2126,7 @@
                     "minLength": 1,
                     "maxLength": 80
                   },
-                  "$comment": {
-                    "type": "string"
-                  }
+                  "$comment": {}
                 },
                 "required": [
                   "id",
@@ -2255,16 +2137,12 @@
               "maxItems": 80,
               "default": []
             },
-            "$comment": {
-              "type": "string"
-            }
+            "$comment": {}
           },
           "additionalProperties": false,
           "default": {}
         },
-        "$comment": {
-          "type": "string"
-        }
+        "$comment": {}
       },
       "required": [
         "version"
@@ -2344,9 +2222,7 @@
                         "const": {
                           "type": "integer"
                         },
-                        "$comment": {
-                          "type": "string"
-                        }
+                        "$comment": {}
                       },
                       "required": [
                         "const"
@@ -2375,9 +2251,7 @@
                           "minimum": 0,
                           "default": 0
                         },
-                        "$comment": {
-                          "type": "string"
-                        }
+                        "$comment": {}
                       },
                       "required": [
                         "fractionOfMax"
@@ -2386,9 +2260,7 @@
                     }
                   ]
                 },
-                "$comment": {
-                  "type": "string"
-                }
+                "$comment": {}
               },
               "additionalProperties": false
             },
@@ -2426,16 +2298,12 @@
                 ],
                 "default": []
               },
-              "$comment": {
-                "type": "string"
-              }
+              "$comment": {}
             },
             "additionalProperties": false,
             "default": {}
           },
-          "$comment": {
-            "type": "string"
-          }
+          "$comment": {}
         },
         "required": [
           "id",
@@ -2507,9 +2375,7 @@
                     "maxLength": 40,
                     "pattern": "^[a-z][a-z0-9_]*$"
                   },
-                  "$comment": {
-                    "type": "string"
-                  }
+                  "$comment": {}
                 },
                 "required": [
                   "list",
@@ -2520,28 +2386,20 @@
               "maxItems": 8,
               "default": []
             },
-            "$comment": {
-              "type": "string"
-            }
+            "$comment": {}
           },
           "additionalProperties": false,
           "default": {}
         },
-        "$comment": {
-          "type": "string"
-        }
+        "$comment": {}
       },
       "required": [
         "checkGuidance"
       ],
       "additionalProperties": false
     },
-    "$comment": {
-      "type": "string"
-    },
-    "$schema": {
-      "type": "string"
-    }
+    "$comment": {},
+    "$schema": {}
   },
   "required": [
     "schemaVersion",

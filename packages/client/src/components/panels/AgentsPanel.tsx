@@ -264,6 +264,7 @@ export function AgentsPanel() {
   const [agentImportSuccess, setAgentImportSuccess] = useState<string | null>(null);
   const [pendingAgentImport, setPendingAgentImport] = useState<PendingAgentImport | null>(null);
   const [pendingRulesetImport, setPendingRulesetImport] = useState<PendingRulesetImport | null>(null);
+  const [rulesetImportFailure, setRulesetImportFailure] = useState<string | null>(null);
   const [approvedImportCapabilities, setApprovedImportCapabilities] = useState<Record<string, CustomAgentCapability[]>>(
     {},
   );
@@ -947,7 +948,13 @@ export function AgentsPanel() {
         );
         return;
       }
-      const text = await file.text();
+      let text: string;
+      try {
+        text = await file.text();
+      } catch {
+        setAgentImportError(localizeUi("game.ruleset.import.unreadable"));
+        return;
+      }
       let parsed: ReturnType<typeof parseRulesetDefinition>;
       try {
         parsed = parseRulesetDefinition(JSON.parse(text));
@@ -962,6 +969,7 @@ export function AgentsPanel() {
         return;
       }
       try {
+        setRulesetImportFailure(null);
         setPendingRulesetImport({
           definition: parsed.definition,
           rulesetId: communityRulesetId(RULESET_LOCAL_NAMESPACE, parsed.definition.id),
@@ -979,6 +987,7 @@ export function AgentsPanel() {
     if (!pending) return;
     setAgentImportError(null);
     setAgentImportSuccess(null);
+    setRulesetImportFailure(null);
     try {
       const result = await importRuleset.mutateAsync(pending.text);
       setPendingRulesetImport(null);
@@ -990,9 +999,9 @@ export function AgentsPanel() {
       );
     } catch (error) {
       // The server's refusals are already sentences the author can act on, version conflicts
-      // included, so they go straight into the banner the other imports use.
-      setPendingRulesetImport(null);
-      setAgentImportError(error instanceof Error ? error.message : localizeUi("game.ruleset.import.failed"));
+      // included. The review stays open with the reason in it, so a network hiccup can be retried
+      // without picking the file again.
+      setRulesetImportFailure(error instanceof Error ? error.message : localizeUi("game.ruleset.import.failed"));
     }
   }, [importRuleset, localizeUi, pendingRulesetImport]);
 
@@ -1856,6 +1865,7 @@ export function AgentsPanel() {
           installedRulesets.find((entry) => entry.definition.id === pendingRulesetImport?.rulesetId)?.versions ?? []
         }
         importing={importRuleset.isPending}
+        failure={rulesetImportFailure}
         onCancel={() => setPendingRulesetImport(null)}
         onConfirm={() => void handleConfirmRulesetImport()}
       />
