@@ -124,7 +124,7 @@ You can queue your own `d20` from the dice menu before the check happens. When y
 
 ## Games that use a ruleset
 
-A game can carry a ruleset, such as 5e (SRD 5.1), in place of Marinara's own rules. The ruleset belongs to that one game and stays with it. There is no setup choice for it yet, so every game you create today uses Marinara's own rules and behaves exactly as described above.
+A game can carry a ruleset, such as 5e (SRD 5.1), in place of Marinara's own rules. The ruleset belongs to that one game and stays with it. You pick it under **Rules** in the setup wizard when you create the game (see [Choosing rules](getting-started.md#choosing-rules)). A game with no ruleset behaves exactly as described above.
 
 When a game has a ruleset:
 
