@@ -1,6 +1,15 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { BUILT_IN_AGENT_MANIFESTS, type InstalledRuleset } from "@marinara-engine/shared";
+import {
+  BUILT_IN_AGENT_MANIFESTS,
+  parseRulesetCatalogFile,
+  type InstalledRuleset,
+  type ListedRulesetDefinition,
+  type RulesetCatalogEntry,
+  type RulesetCatalogPayload,
+  type RulesetDefinition,
+} from "@marinara-engine/shared";
+import { logger } from "../lib/logger.js";
 import { requirePrivilegedAccess } from "../middleware/privileged-gate.js";
 import { readRulesetRegistry } from "../services/game/ruleset-registry.service.js";
 import {
@@ -22,6 +31,27 @@ const packageParams = z.object({
     .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/)
     .max(80),
 });
+
+/** Ids are only ever looked up, never joined into a path: the asset path is built from the catalog
+ *  the definition itself declares, so an id nothing matches is a 404 and nothing more. */
+const rulesetCatalogQuery = z.object({
+  rulesetId: z.string().min(1).max(140),
+  catalogId: z.string().min(1).max(40),
+  version: z.coerce.number().int().min(1).optional(),
+});
+
+/** The definition as the ruleset LIST reports it: an inline catalog's entries are replaced by their
+ *  count, because the list is read whenever a sheet editor opens and the entries have a route of
+ *  their own. A ruleset with no catalogs is passed through untouched, byte for byte. */
+function listedRulesetDefinition(definition: RulesetDefinition): ListedRulesetDefinition {
+  if (!definition.catalogs) return definition;
+  return {
+    ...definition,
+    catalogs: definition.catalogs.map(({ entries, ...header }) =>
+      entries ? { ...header, entryCount: entries.length } : header,
+    ),
+  };
+}
 
 /** Strong ETag from the manifest-recorded sha256 — the same value the serve
  *  path re-verifies the bytes against, so the validator can never drift. */
@@ -91,7 +121,7 @@ export async function capabilityPackagesRoutes(app: FastifyInstance) {
     async (): Promise<InstalledRuleset[]> =>
       [...(await readRulesetRegistry(app.db)).values()].map(({ definition, packageId, source, versions }) => ({
         packageId,
-        definition,
+        definition: listedRulesetDefinition(definition),
         ...(source ? { source } : {}),
         ...(versions ? { versions: [...versions.keys()].sort((left, right) => left - right) } : {}),
       })),
@@ -110,11 +140,75 @@ export async function capabilityPackagesRoutes(app: FastifyInstance) {
     }
     const listed: InstalledRuleset = {
       packageId: registered.packageId,
-      definition,
+      definition: listedRulesetDefinition(definition),
       ...(registered.source ? { source: registered.source } : {}),
       versions: [...registered.versions!.keys()].sort((left, right) => left - right),
     };
     return listed;
+  });
+  // Registered before the `/:id/...` routes so a package could never take the path. One catalog's
+  // entries, which is the only part of a ruleset big enough to be worth asking for separately. No
+  // privileged gate: it is read-only data of a ruleset this install already has, exactly like
+  // `/rulesets`, and the picker that reads it is the ordinary sheet editor.
+  app.get("/rulesets/catalog", async (request, reply) => {
+    const { rulesetId, catalogId, version } = rulesetCatalogQuery.parse(request.query);
+    const registered = (await readRulesetRegistry(app.db)).get(rulesetId);
+    if (!registered) {
+      return reply.status(404).send({ error: "That ruleset is not installed", code: "ruleset_not_installed" });
+    }
+    let definition = registered.definition;
+    if (version !== undefined && version !== definition.version) {
+      // A community ruleset keeps every version it was imported at, so a game built on an older one
+      // picks its own entries rather than the author's latest.
+      const exact = registered.versions?.get(version);
+      if (!exact) {
+        return reply
+          .status(404)
+          .send({ error: "That version of the ruleset is not installed", code: "ruleset_version_missing" });
+      }
+      definition = exact;
+    }
+    const catalog = definition.catalogs?.find((entry) => entry.id === catalogId);
+    if (!catalog) {
+      return reply.status(404).send({ error: "That ruleset has no such catalog", code: "ruleset_catalog_missing" });
+    }
+    const { entries: inline, asset, ...header } = catalog;
+    const payload = (entries: RulesetCatalogEntry[]): RulesetCatalogPayload => ({
+      rulesetId: definition.id,
+      version: definition.version,
+      catalog: header,
+      entries,
+    });
+    const unusable = (issues: string[]) =>
+      reply.status(422).send({ error: "That catalog cannot be read", code: "ruleset_catalog_unusable", issues });
+    if (inline) return payload(inline);
+    if (!registered.packageId) {
+      // Only a package can ship a catalog file; an imported ruleset carries its catalogs inline,
+      // inside the one file the user imported.
+      return unusable([`asset: ${asset} can only be shipped by a package`]);
+    }
+    const source = await capabilityPackageManager.rulesetCatalogAsset(registered.packageId, catalog.id);
+    if (!source) {
+      return reply.status(404).send({ error: "That ruleset has no such catalog", code: "ruleset_catalog_missing" });
+    }
+    if ("issue" in source) return unusable([source.issue]);
+    let document: unknown;
+    try {
+      document = JSON.parse(source.data.toString("utf8"));
+    } catch {
+      return unusable(["(root): the catalog file is not valid JSON"]);
+    }
+    const parsed = parseRulesetCatalogFile(definition, catalog.id, document);
+    if (!parsed.ok) {
+      logger.warn(
+        "[capability/rulesets] Catalog %s of %s is unusable: %s",
+        catalog.id,
+        definition.id,
+        parsed.issues.slice(0, 5).join("; "),
+      );
+      return unusable(parsed.issues);
+    }
+    return payload(parsed.entries);
   });
   app.get<{ Params: { id: string } }>("/:id/release-notes", async (request) => {
     const { id } = packageParams.parse(request.params);

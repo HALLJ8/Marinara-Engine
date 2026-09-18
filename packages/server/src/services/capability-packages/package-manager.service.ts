@@ -13,7 +13,9 @@ import {
   GM_VERB_TABLE_ASSET_PATH,
   GM_VERB_TABLE_MAX_BYTES,
   RULESET_ASSET_PATH,
+  RULESET_CATALOG_MAX_BYTES,
   RULESET_MAX_BYTES,
+  rulesetCatalogAssetPath,
   isInstalledCapabilityReady,
   installedCapabilityRegistrySchema,
   installedCapabilityPackageSchema,
@@ -482,7 +484,15 @@ function supportsEngineVersion(entry: CapabilityCatalogPackage, engineVersion: s
   );
 }
 
-export function getCapabilityPackageInstallIssue(manifest: CapabilityCatalogPackage["manifest"]): string | null {
+/** `rulesetDocument` is the package's own `ruleset.json`, parsed, when the install already has its
+ *  verified bytes. Catalogs live INSIDE that file, so the manifest alone cannot show them, and the
+ *  gate that keeps a package off an Engine too old to serve them has to read it. A document that is
+ *  absent or unparseable simply skips the catalog check: install has never validated a ruleset's
+ *  contents, and an unusable one is the registry's story to tell, with a log line. */
+export function getCapabilityPackageInstallIssue(
+  manifest: CapabilityCatalogPackage["manifest"],
+  rulesetDocument?: unknown,
+): string | null {
   if (manifest.kind.includes("turn-game") && !manifest.entrypoints.server) {
     return "Turn-game packages require a server entrypoint";
   }
@@ -506,6 +516,16 @@ export function getCapabilityPackageInstallIssue(manifest: CapabilityCatalogPack
   // hash-pinned in files[] is already the manifest schema's rule for every declared asset.
   if (declaresRuleset && !manifest.kind.includes("ruleset")) {
     return `Packages that list ${RULESET_ASSET_PATH} must declare the "ruleset" kind`;
+  }
+  const catalogs =
+    rulesetDocument && typeof rulesetDocument === "object"
+      ? (rulesetDocument as { catalogs?: unknown }).catalogs
+      : undefined;
+  if (Array.isArray(catalogs) && catalogs.length > 0) {
+    const api = manifest.schemaVersion === 2 ? manifest.capabilityApi : null;
+    if (!api || api.major < 1 || (api.major === 1 && api.minor < 21)) {
+      return "A ruleset with catalogs requires schemaVersion 2 and capabilityApi 1.21 or newer";
+    }
   }
   return null;
 }
@@ -771,6 +791,19 @@ async function installCatalogPackage(entry: CapabilityCatalogPackage, activateDu
       const detailIssue = getCapabilityAgentDetailDefinitionIssue(agentId, agentDefinitions);
       if (detailIssue) throw new Error(detailIssue);
     }
+  }
+  // Run again now that the ruleset's verified bytes are here: what the manifest could be judged on
+  // was already checked before the download, and this adds the one gate that needs the file itself.
+  const rulesetBytes = verifiedFiles.get(RULESET_ASSET_PATH);
+  if (rulesetBytes) {
+    let rulesetDocument: unknown;
+    try {
+      rulesetDocument = JSON.parse(rulesetBytes.toString("utf8"));
+    } catch {
+      rulesetDocument = undefined;
+    }
+    const rulesetIssue = getCapabilityPackageInstallIssue(installedManifest, rulesetDocument);
+    if (rulesetIssue) throw new Error(rulesetIssue);
   }
 
   const temporary = join(ROOT, `.install-${manifest.id}-${Date.now()}`);
@@ -1331,6 +1364,71 @@ export const capabilityPackageManager = {
       }
     }
     return sources;
+  },
+
+  /** One package's `catalogs/<id>.json`, verified, for the catalog route. Same discipline as
+   *  `rulesetSources`, and the same reasons: declared as an asset, hash-pinned in `files[]`, refused
+   *  on its DECLARED size before the read, and re-verified against the install-time hash.
+   *
+   *  Three answers, because the route owes the user different words for each: `null` when this
+   *  package serves no such catalog file at all (not installed, not ready, not declared), `{ issue }`
+   *  when it declares one the Engine will not read, and `{ data }` for the verified bytes. Never
+   *  throws. */
+  async rulesetCatalogAsset(
+    packageId: string,
+    catalogId: string,
+  ): Promise<{ data: Buffer } | { issue: string } | null> {
+    const assetPath = rulesetCatalogAssetPath(catalogId);
+    const installed = (await readRegistry()).packages.find((item) => item.id === packageId);
+    if (!installed) return null;
+    if (!isInstalledCapabilityReady(installed)) {
+      logger.info(
+        "[capability/rulesets] Package %s is not ready (status=%s); its catalogs stay unavailable until restart",
+        packageId,
+        installed.status,
+      );
+      return null;
+    }
+    const tryNormalize = (path: string): string | null => {
+      try {
+        return normalizeArchivePath(path);
+      } catch {
+        return null;
+      }
+    };
+    const declared = installed.manifest.contributions?.assets?.paths ?? [];
+    if (!declared.some((path) => tryNormalize(path) === assetPath)) return null;
+    const declaration = installed.manifest.files.find((item) => tryNormalize(item.path) === assetPath);
+    if (!declaration) {
+      logger.warn(
+        "[capability/rulesets] Package %s declares %s as an asset but does not list it in files[]",
+        packageId,
+        assetPath,
+      );
+      return { issue: `${assetPath} is not listed in the package file manifest` };
+    }
+    if (declaration.bytes > RULESET_CATALOG_MAX_BYTES) {
+      logger.warn(
+        "[capability/rulesets] Package %s declares a %d-byte catalog over the %d-byte ceiling; refused unread",
+        packageId,
+        declaration.bytes,
+        RULESET_CATALOG_MAX_BYTES,
+      );
+      return {
+        issue: `${assetPath} is ${declaration.bytes} bytes, over the ${RULESET_CATALOG_MAX_BYTES}-byte limit`,
+      };
+    }
+    try {
+      return { data: (await readVerifiedInstalledPackageFile(installed, assetPath)).data };
+    } catch (error) {
+      logger.error(
+        error,
+        "[capability/rulesets] Catalog %s for %s failed integrity verification",
+        assetPath,
+        packageId,
+      );
+      return { issue: `${assetPath} is not the file that was installed` };
+    }
   },
 
   async markRuntimeStatus(

@@ -44,6 +44,7 @@ You may add a `"$comment": "..."` line to any object in the file to leave yourse
 | `sheet`         | Everything on the character sheet.                                                                |
 | `rests`         | What each kind of rest restores and clears.                                                       |
 | `gm`            | The text the Game Master model is given, and which sheet values it sees for each character.       |
+| `catalogs`      | Optional. Ready-made entries the sheet editor offers, so players do not type long lists by hand.  |
 
 The file may be up to 256 KB. Text that ends up in a prompt (names, labels, Game Master text) cannot contain line breaks, square brackets, or double curly braces.
 
@@ -97,6 +98,110 @@ A rest is a list of restore steps and things to clear. Each step names one targe
 - `checkGuidance` replaces the built-in paragraph that tells the Game Master how to ask for a check. Say which system this is and when to call for a roll. The Game Master only names the skill and the difficulty. The Engine rolls the dice and does the arithmetic from the sheet, so do not ask the model to do math.
 - `sheetGuidance` introduces the character sheets in the prompt. Use it to say which resources matter and when to spend them.
 - `sheetSummary` chooses which fields, derived values, and list rows the Game Master sees for each character. The Engine always shows ability modifiers, trained skills and saves, and live values. Keep the rest short, because it is sent on every turn.
+
+## Catalogs: ready-made entries for the sheet's lists
+
+Typing a spell list, a gear table, or a page of class features row by row is miserable. A catalog is a named collection of ready-made entries that you ship with the ruleset. The sheet editor offers them in a picker on every list the catalog feeds, and picking one fills the row in.
+
+A catalog is optional. A ruleset may have up to twelve of them, and nothing in the Engine knows what any of them are about: every id, column, filter, and word comes from your file.
+
+### The header
+
+The header goes in `catalogs` at the top level of the file, beside `gm`.
+
+```json
+"catalogs": [
+  {
+    "id": "knacks",
+    "label": "Knacks",
+    "feeds": ["knacks", "tricks"],
+    "filters": [
+      { "id": "grit", "label": "Grit cost", "type": "number" },
+      { "id": "road", "label": "Road", "type": "text" },
+      { "id": "callings", "label": "Calling", "type": "tags", "startFrom": { "field": "calling" } }
+    ],
+    "units": { "distance": { "label": "paces", "perCell": 2 } },
+    "entries": []
+  }
+]
+```
+
+- `id` and `label`: the id follows the sheet id rules, and the label is what the picker is called.
+- `feeds`: the lists on your sheet that this catalog's entries may write into, one to eight of them. An entry can never write into a list that is not here, and it can never write a value the list's columns could not hold.
+- `filters`: optional, up to eight. What the picker can narrow the list by. A filter is a `number`, a `text` value, or `tags` (several words). `startFrom` names a sheet field the picker opens on, so a character whose Calling is Tinker sees Tinker entries first.
+- `units`: optional. What a range or an area size in an entry's `mechanics` block means in your system.
+
+### An entry
+
+```json
+{
+  "id": "road-sense",
+  "label": "Road Sense",
+  "summary": "You read a road the way other people read a face.",
+  "filters": { "grit": 0, "road": "Ash Flats", "callings": ["Scout", "Courier"] },
+  "rows": [
+    {
+      "list": "knacks",
+      "values": { "name": "Road Sense", "notes": "Sneak to notice where a road turns bad." }
+    }
+  ]
+}
+```
+
+- `id`: lowercase letters, digits, and single hyphens, unique inside the catalog.
+- `label` and `summary`: what the picker shows. The summary is optional, one line, and up to 300 characters.
+- `filters`: the values for the filters the header declared. A `number` filter takes a number, a `text` filter takes one string, and a `tags` filter takes a list of strings.
+- `rows`: what picking the entry writes, one to six rows. `list` is one of the catalog's `feeds`, and `values` are keyed by that list's column ids.
+
+Every value is checked against the target list's columns when the ruleset is loaded, so a mistyped column name or a number outside a column's range is reported with the entry it came from, before anybody plays on it.
+
+### One entry, several lists
+
+A feature with limited uses is two rows on a sheet: the feature itself, and the counter that tracks it. That is still one pick.
+
+```json
+{
+  "id": "last-ember",
+  "label": "Last Ember",
+  "rows": [
+    {
+      "list": "knacks",
+      "values": { "name": "Last Ember", "notes": "Spend 1 Grit to give a downed friend 3 Grit back." }
+    },
+    { "list": "tricks", "values": { "name": "Last Ember", "uses": 1, "recharge": "camp" } }
+  ]
+}
+```
+
+### Picked rows are copies
+
+Each picked row is copied onto the sheet with one extra key, `_catalog`, holding `<catalog id>/<entry id>`. Column ids always start with a letter, so this key can never be one of yours.
+
+The copy is the character's. The player can edit any of it afterwards, the sheet keeps working while your ruleset is not installed, and publishing a new version of the ruleset never rewrites anyone's character. The mark is only there so the picker can show what a sheet already has.
+
+### `mechanics`, for later
+
+An entry may carry an optional `mechanics` block that says what it does in numbers: `kind` (`attack`, `heal`, `buff`, `debuff`, `utility`), `range`, `area`, `targets`, `friendlyFire`, `amount` (dice such as `2d6`, or a flat number), `damageType`, `attackRoll`, `save` (one of your sheet's saves, and what a success does), `cost` (which pool using it spends), `perCostStep`, `concentration`, and `reaction`.
+
+Today the Engine only checks this block and shows it as one line in the picker. **Battles do not use it yet.** It is here so that the content is entered once, ready for the combat work that will read it later. The vocabulary is closed, so a key or a value that is not in the list above is refused instead of being quietly ignored.
+
+### Inline, or a file of its own
+
+A small catalog sits inline in `ruleset.json`, in the header's `entries`. A long one lives in its own file and the header names it with `asset` instead. A catalog has exactly one of the two.
+
+```json
+{ "id": "knacks", "label": "Knacks", "feeds": ["knacks"], "asset": "catalogs/knacks.json" }
+```
+
+The path is always `catalogs/<the catalog's id>.json`. The file itself looks like this:
+
+```json
+{ "schemaVersion": 1, "catalog": "knacks", "entries": [] }
+```
+
+Separate catalog files are for packages published through the official catalog: the package lists the file in `contributions.assets.paths` beside `ruleset.json`, and it needs Capability API 1.21. **A ruleset you import as a single file, or share through a GitHub repository, carries its catalogs inline**, which means they have to fit inside the 256 KB limit on the whole ruleset file. That is room for a few hundred short entries.
+
+The limits are 12 catalogs per ruleset, 2000 entries per catalog either way, and 1 MB for one catalog file.
 
 ## Trying your ruleset
 
