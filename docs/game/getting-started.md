@@ -44,12 +44,14 @@ For Tactical games, leaving the battlefield options blank lets the GM choose a s
 
 ### Choosing rules
 
-**Rules** only appears when at least one ruleset package is installed, and only for a new game. It is separate from **Combat Preference**: one decides how checks and character sheets work, the other decides how battles are shown.
+**Rules** only appears when at least one ruleset is installed, and only for a new game. It is separate from **Combat Preference**: one decides how checks and character sheets work, the other decides how battles are shown.
 
 - **Marinara's own rules** is the default: the built-in d20 checks and the six-attribute sheet.
-- A ruleset, such as **5e (SRD 5.1)**, shows a short summary of what it covers. If it does not cover combat, the wizard says that battles still use Marinara's default combat.
+- A ruleset, such as **5e (SRD 5.1)**, shows a short summary of what it covers. If it does not cover combat, the wizard says that battles still run on Marinara's combat, and names the **Combat Preference** you picked.
 
 The ruleset is set when the game is created and stays with that game. It cannot be changed or added later.
+
+Rulesets come from two places. Official ones are installed from **Download Agents**, where they are marked **Rules**. Community ones are imported from a file or from an author's GitHub repository, and are filed under where they came from, such as `local/ember-roads` or `alice/v20`. Importing uses the same **Allow custom Agent imports** switch as imported agents. While that switch is off, imported rulesets are left out of new games, and games that already use one keep working. A game on an imported ruleset always plays on the exact version it was created on. To write your own, see [Writing Game Mode Rulesets](../extending/writing-rulesets.md).
 
 After you pick a ruleset, the **Party** step lists your persona and party members below the pickers and says who **Has a sheet** for it and who **Starts on a blank sheet**. A sheet is added under **Stats** in the character or persona editor (see [Ruleset sheets](../characters/colors-and-stats.md#ruleset-sheets)). The game takes a copy of each sheet when the world is generated. Nothing you change in the game goes back to the character or persona. A member without a sheet gets a blank one with every value at the ruleset's default; world generation never makes up scores.
 

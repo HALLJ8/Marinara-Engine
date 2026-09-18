@@ -17,7 +17,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { RULESET_MAX_BYTES, type GameSetupConfig } from "../../packages/shared/src/index.js";
+import { parseRulesetDefinition, RULESET_MAX_BYTES, type GameSetupConfig } from "../../packages/shared/src/index.js";
 
 const exampleUrl = new URL("../../docs/development/ruleset-5e-2014.example.json", import.meta.url);
 const exampleText = readFileSync(fileURLToPath(exampleUrl), "utf8");
@@ -47,6 +47,18 @@ const v20 = ruleset((doc) => {
   doc.id = "v20";
   doc.name = "Vampire-ish";
 });
+
+// ── The authoring guide's example is a real ruleset, and deliberately not a d20 one ──
+{
+  const guideExampleUrl = new URL("../../docs/examples/rulesets/ember-roads.json", import.meta.url);
+  const parsed = parseRulesetDefinition(JSON.parse(readFileSync(fileURLToPath(guideExampleUrl), "utf8")));
+  assert.ok(parsed.ok, `the guide's example must import cleanly: ${parsed.ok ? "" : parsed.issues.join("; ")}`);
+  assert.deepEqual(
+    parsed.definition.resolution.dice,
+    { count: 2, sides: 6 },
+    "the example shows authors a system that is not 5e-shaped",
+  );
+}
 
 // ── A really installed package shipping the BARE id `my-5e`, written before the server loads ──
 const dataDir = mkdtempSync(join(tmpdir(), "marinara-ruleset-community-"));
