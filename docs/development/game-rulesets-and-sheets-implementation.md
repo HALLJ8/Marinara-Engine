@@ -99,6 +99,19 @@ The format must serve rulesets nobody has written yet, many of which will be dra
 - **Setup sharing follows the Experience rule.** A shared ruleset is restored for a new game when this install has it at the shared version or newer, and dropped otherwise; the wizard then names the missing ruleset from the file's `rulesetName` label. The pin inside a shared file is untrusted input and is read through `rulesetRefSchema`.
 - **The Rules block is its own component** (`GameSetupRulesChooser`), placed beside Combat Preference, rendered only for a new game with at least one ruleset installed.
 
+## What slice 5 settled
+
+- **Live state is its own snapshot column.** `game_state_snapshots.ruleset_live` holds `RulesetLiveStates`, keyed by normalized card name. A new column on the file-backed store needs no `STORAGE_VERSION` bump: an old row reads the column as null, and null means every pool at its default. It is not a key inside `playerStats`, because several trackers rebuild that object from the fields they know.
+- **Live state is sparse.** Only values that were set are stored, and a value back at its default is dropped again. An untouched "full" pool therefore follows its maximum when a level-up raises it, and a character with nothing spent has no entry at all.
+- **A turn is measured against the state it started with.** `[sheet:]` commands are applied after every rewrite of the reply and before it is saved, on top of the live state of the row the turn follows (for a continuation, the row the continued message already has). A regenerated turn resolves its base from the messages before it, so it cannot spend twice, and each swipe keeps the state it ended with.
+- **Every saved turn of a ruleset game writes its row**, changed or not, so the next turn, a swipe and a new session always have a row to start from. A tracker that later rebuilds the same message and swipe keeps the live state: `create` carries it over from the row it replaces unless the caller passes one.
+- **The command is the Engine's, the names are the ruleset's.** The grammar (`spend`, `restore`, `damage`, `temp`, `track`, `condition`, `note`, `rest`, with `heal` read as `restore`) is the same for every ruleset. `concentrate` from the first proposal became the general `note`, because "concentration" is one system's word. Pool, track, condition, note and rest names come from the ruleset and are matched by id or label.
+- **The saved reply is the record.** Each command is rewritten in place with `result="ok" now="…"` or `result="refused" reason="…"`. A result the model writes itself is ignored. A refused command changes nothing and is logged; the client says so once per turn.
+- **Sheets reach the Game Master late in the prompt.** The sheet blocks and the command lines are part of the per-turn format reminder, never the system prompt, because live state changes every turn and the system prompt is what a provider caches. With no ruleset the reminder is byte-identical.
+- **The player edits through the same rules.** The in-game sheet applies `applyRulesetSheetOp` for every button and saves through `PATCH /chats/:id/game-state`, which bounds live state (`rulesetLiveStatesSchema`) and judges nothing else: it is the player's own game.
+- **`sheet` is reserved.** A package verb with that name is refused, and the verb-name sweep finds the taught tag in the reminder.
+- **Not done here:** party members' own turns (`/party-turn`) do not apply sheet commands; only the Game Master's reply does.
+
 ## Architecture
 
 ### The pin
@@ -249,6 +262,8 @@ Slice 7a depends only on slice 1, and 7b only on slice 2. Neither should wait fo
 2. **XP or milestones.** Default: the sheet stores XP, nothing awards it automatically, and level is edited by hand.
 3. **Command tag name.** `[sheet:]` is a proposal; any name works provided it joins the reserved set.
 4. **Who builds `dice-pool`.** Default: invite the requester to specify it on the issue, and to contribute it if they want to. They have a working implementation and the systems knowledge; the Engine side supplies the seam and review.
+
+5. **Layers on top of a ruleset (for example Low Magic on 5e).** Not designed yet; revisit when slice 7a (community lanes) starts, because both are about content that someone other than the ruleset's author ships. What is already settled: a game pins exactly one base ruleset, so two systems can never mix and base rulesets never need to declare each other incompatible. A layer is different: it would be data that names the ruleset id (and lowest version) it applies to, because a base ruleset cannot know every future homebrew. A ruleset may ship its own layers, and a package may ship one for someone else's ruleset without forking it. The wizard would offer them as toggles under the chosen ruleset, and the choice would be frozen into the pin, whose `options` record exists for this and is empty today. Effects would be a closed set like everything else in the format, with no added model calls: extra Game Master guidance (including a world-generation guidance slot, which base rulesets lack too), restrictions on sheet fields (for example removing classes from an enum), and changes to the difficulty ladder or a declared extra check (spell failure is an ordinary check at a stated difficulty). Nothing shipped so far blocks this: the pin keeps unknown keys.
 
 ## Not verified for this document
 

@@ -662,6 +662,48 @@ function renderRulesetSkillCheckLine(
   ].join(" ");
 }
 
+/** The sheet command, the ruleset's own guidance for it, and the party's sheets as they stand.
+ *  The command grammar is the Engine's and is the same for every ruleset; every NAME in it (pools,
+ *  tracks, conditions, rests) comes from the ruleset and is shown on the sheets themselves. */
+function renderRulesetSheetSection(
+  ruleset: import("@marinara-engine/shared").RulesetDefinition,
+  sheetBlocks: string[],
+): string[] {
+  const blocks = sheetBlocks.map((block) => block.trim()).filter(Boolean);
+  if (blocks.length === 0) return [];
+  const names = (entries: ReadonlyArray<{ label: string }>) => entries.map((entry) => entry.label).join(", ");
+  const lines = [
+    ``,
+    `CHARACTER SHEETS:`,
+    `The Engine keeps every character sheet. Record each change with one command per change, written where it happens:`,
+    `- [sheet: who="Name" op="spend" pool="Pool" amount="N"] - uses up a resource. Refused when not enough is left.`,
+    `- [sheet: who="Name" op="restore" pool="Pool" amount="N"] - gives it back, up to the maximum (healing included).`,
+    `- [sheet: who="Name" op="damage" pool="Pool" amount="N"] - takes it away, temporary points first.`,
+    `- [sheet: who="Name" op="temp" pool="Pool" amount="N"] - sets temporary points on a pool that has them.`,
+    `- [sheet: who="Name" op="track" track="Track" by="+1"] - or to="N" to set it.`,
+    `- [sheet: who="Name" op="condition" condition="Condition" state="on|off"]`,
+    `- [sheet: who="Name" op="note" field="Field" value="text"] - an empty value clears it.`,
+    ...(ruleset.rests.length > 0
+      ? [`- [sheet: who="Name" op="rest" rest="Rest"] - rests: ${names(ruleset.rests)}.`]
+      : []),
+    `Leave out who for the player; who="party" applies to every member. Use the pool, track, field and condition names shown on the sheets. Never write result, reason or now yourself: the Engine adds them. A refused command did not happen, so do not narrate it as if it had.`,
+    // A sheet block leaves out a track or a note that still has its default, so the names a command
+    // can use are listed once here.
+    ...(ruleset.sheet.live.tracks.length > 0
+      ? [
+          `Tracks: ${ruleset.sheet.live.tracks.map((track) => `${track.label} (${track.min} to ${track.max})`).join(", ")}.`,
+        ]
+      : []),
+    ...(ruleset.sheet.live.text.length > 0 ? [`Note fields: ${names(ruleset.sheet.live.text)}.`] : []),
+    ...(ruleset.sheet.live.conditions.length > 0 ? [`Conditions: ${names(ruleset.sheet.live.conditions)}.`] : []),
+    ...(ruleset.gm.sheetGuidance ? [ruleset.gm.sheetGuidance] : []),
+    ``,
+  ];
+  for (const block of blocks) lines.push(block, ``);
+  lines.pop();
+  return lines;
+}
+
 export function buildGmFormatReminder(
   ctx: Pick<
     GmPromptContext,
@@ -691,6 +733,10 @@ export function buildGmFormatReminder(
      *  difficulty ladder replace the built-in skill-check lines. Absent is the Engine's own rules
      *  and renders today's reminder byte for byte. */
     ruleset?: import("@marinara-engine/shared").RulesetDefinition;
+    /** One rendered sheet block per party member (`renderRulesetSheetBlock`), current as of this
+     *  turn. They live in this late reminder and never in the system prompt, because live state
+     *  changes every turn and the system prompt is what a provider caches. Only read with `ruleset`. */
+    rulesetSheetBlocks?: string[];
     /** Built-in systems an installed experience replaces with its own. Undeclared systems stay built-in. */
     experienceProvidedSystems?: { inventory?: boolean };
     /** Rendered COMMANDS lines for the verbs an installed experience declares (#5798). They belong
@@ -976,6 +1022,8 @@ export function buildGmFormatReminder(
       `- If the tool is not available to you on this connection, work from the tag alone and say nothing about tools.`,
     );
   }
+
+  if (ctx.ruleset) lines.push(...renderRulesetSheetSection(ctx.ruleset, ctx.rulesetSheetBlocks ?? []));
 
   // The installed experience's own verbs, last in the block so the built-ins keep their order. Each
   // line already arrives fully rendered from the verb runtime; nothing here inspects or reformats it.

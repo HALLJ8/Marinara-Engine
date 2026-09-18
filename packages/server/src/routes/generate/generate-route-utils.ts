@@ -35,6 +35,7 @@ import {
   type WrapFormat,
 } from "@marinara-engine/shared";
 import { wrapContent } from "../../services/prompt/format-engine.js";
+import { parseStoredRulesetLive } from "../../services/storage/game-state.storage.js";
 import {
   appendReadableAttachmentsToContent,
   extractFileAttachmentInputs,
@@ -1969,6 +1970,7 @@ export function parseGameStateRow(row: Record<string, unknown>): GameState {
     manualOverrides,
     fieldLocks,
     hiddenTrackerFields,
+    rulesetLive: parseStoredRulesetLive(row.rulesetLive),
     createdAt: row.createdAt as string,
   };
 }
