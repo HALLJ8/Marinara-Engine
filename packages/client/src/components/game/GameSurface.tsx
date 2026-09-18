@@ -9596,7 +9596,10 @@ function GameSurfaceComponent({
       const updatedCards = [...currentCards];
       if (sanitizedGameCard) {
         if (currentIndex >= 0) {
-          updatedCards[currentIndex] = sanitizedGameCard;
+          // This editor only knows the fields above. The game's copy of the ruleset sheet lives on
+          // the same card and is edited elsewhere, so it rides along instead of being dropped.
+          const rulesetSheet = currentCards[currentIndex]?.rulesetSheet;
+          updatedCards[currentIndex] = rulesetSheet ? { ...sanitizedGameCard, rulesetSheet } : sanitizedGameCard;
         } else {
           updatedCards.push(sanitizedGameCard);
         }

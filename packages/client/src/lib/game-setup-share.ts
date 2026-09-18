@@ -1,4 +1,4 @@
-import { normalizeGameDifficulty } from "@marinara-engine/shared";
+import { normalizeGameDifficulty, rulesetRefSchema } from "@marinara-engine/shared";
 import {
   ANIME_GAME_PROMPT_TEMPLATE_ID,
   COMIC_PAGE_GAME_VIDEO_PROMPT_TEMPLATE_ID,
@@ -11,6 +11,7 @@ import {
   type GameInitialSetupSnapshot,
   type GameSetupConfig,
   type InstalledCapabilityPackage,
+  InstalledRuleset,
   type GenerationParameters,
 } from "@marinara-engine/shared";
 
@@ -22,6 +23,7 @@ export const GAME_SETUP_SHARE_VERSION = 1;
 
 export interface GameSetupShareLabels {
   experienceName?: string;
+  rulesetName?: string;
   experienceSeedKey?: string;
   characterNames?: Readonly<Record<string, string>>;
   connectionNames?: Readonly<Record<string, string>>;
@@ -68,6 +70,8 @@ export interface GameSetupImportConnection {
 
 export interface GameSetupImportContext {
   experiencePackages?: readonly InstalledCapabilityPackage[];
+  /** Installed Game Mode rulesets; a shared ruleset this install lacks is dropped on import. */
+  installedRulesets?: readonly InstalledRuleset[];
   isNewGame?: boolean;
   characters: ReadonlyArray<{ id: string; name: string }>;
   connections: ReadonlyArray<GameSetupImportConnection>;
@@ -135,6 +139,7 @@ function parseShareLabels(value: unknown): GameInitialSetupLabels | undefined {
   if (!isRecord(value)) return undefined;
   const labels: GameInitialSetupLabels = {
     experienceName: typeof value.experienceName === "string" ? value.experienceName.slice(0, 120) : undefined,
+    rulesetName: typeof value.rulesetName === "string" ? value.rulesetName.slice(0, 120) : undefined,
     experienceSeedKey: typeof value.experienceSeedKey === "string" ? value.experienceSeedKey.slice(0, 120) : undefined,
     characterNames: optionalStringRecord(value.characterNames),
     lorebookNames: optionalStringRecord(value.lorebookNames),
@@ -330,6 +335,9 @@ function parseShareConfig(value: unknown): GameSetupConfig {
   if (value.customHudWidgets !== undefined && !Array.isArray(value.customHudWidgets)) {
     throw new Error("This file has invalid HUD widgets.");
   }
+  // A shared file is untrusted, so the pin is read through the same schema the server uses.
+  const ruleset = value.ruleset == null ? undefined : rulesetRefSchema.safeParse(value.ruleset);
+  if (ruleset && !ruleset.success) throw new Error(translate("game.ruleset.setup.invalidImport"));
   const generationParameters = parseGenerationParameters(value.generationParameters);
   const spatialMapDraftOptions =
     value.spatialMapDraftSize !== undefined || value.spatialMapTargetLocationCount !== undefined
@@ -346,6 +354,7 @@ function parseShareConfig(value: unknown): GameSetupConfig {
     gmMode,
     rating,
     partyCharacterIds: [...value.partyCharacterIds],
+    ...(ruleset ? { ruleset: ruleset.data } : {}),
     generationParameters,
     ...(spatialMapDraftOptions
       ? {
@@ -390,6 +399,7 @@ export function buildGameSetupShareFile(
   const labels: GameInitialSetupLabels | undefined = source.labels
     ? {
         experienceName: source.labels.experienceName,
+        rulesetName: source.labels.rulesetName,
         experienceSeedKey: source.labels.experienceSeedKey,
         characterNames: source.labels.characterNames ? { ...source.labels.characterNames } : undefined,
         lorebookNames: source.labels.lorebookNames ? { ...source.labels.lorebookNames } : undefined,
@@ -547,7 +557,35 @@ export function resolveGameSetupImport(
         experienceConfig: setup?.seed && isExperienceSeed(seed) ? { [setup.seed.key]: seed } : {},
       }
     : {};
-  const { gameExperienceId: _experienceId, experienceConfig: _experienceConfig, ...ordinaryConfig } = sourceConfig;
+  // A ruleset follows the Experience rule: restored for a new game when this install has it, at
+  // the shared version or newer, and otherwise dropped so the game starts on Marinara's own rules.
+  // The wizard says so; the pin itself is always rebuilt by the server from what is installed.
+  // Ruleset versions are whole numbers (the schema that parsed this pin refuses anything else), so
+  // `>=` is a numeric comparison, the same one the server's registry makes.
+  const installedRuleset =
+    context.isNewGame !== false && sourceConfig.ruleset
+      ? context.installedRulesets?.find(
+          (entry) =>
+            entry.definition.id === sourceConfig.ruleset!.id &&
+            entry.definition.version >= sourceConfig.ruleset!.version,
+        )
+      : undefined;
+  const rulesetSelection = installedRuleset
+    ? {
+        ruleset: {
+          id: installedRuleset.definition.id,
+          version: installedRuleset.definition.version,
+          packageId: installedRuleset.packageId,
+          options: {},
+        },
+      }
+    : {};
+  const {
+    gameExperienceId: _experienceId,
+    experienceConfig: _experienceConfig,
+    ruleset: _ruleset,
+    ...ordinaryConfig
+  } = sourceConfig;
 
   const gmCharacterName = sourceConfig.gmCharacterId ? labels?.characterNames?.[sourceConfig.gmCharacterId] : null;
   const gmCharacterId = resolveNamedResourceId(sourceConfig.gmCharacterId, gmCharacterName, context.characters);
@@ -621,6 +659,7 @@ export function resolveGameSetupImport(
     config: {
       ...ordinaryConfig,
       ...experienceSelection,
+      ...rulesetSelection,
       gmMode,
       gmCharacterId,
       partyCharacterIds: [...new Set(partyCharacterIds)],
