@@ -105,12 +105,15 @@ export function CustomAgentRepositoriesModal({ open, onClose }: { open: boolean;
   const changeCount = contentChanges.length + rulesetChanges.length;
   const pending =
     previewMutation.isPending || addMutation.isPending || syncMutation.isPending || removeMutation.isPending;
+  // A preview from a server that predates repository rulesets has no `rulesets` at all.
+  const previewRulesets = preview?.rulesets ?? [];
   const agentImportsEnabled = agentImportPolicy?.enabled === true;
 
   /** Adding or syncing reports what happened to the rulesets separately, because a version already
    *  installed with other contents is deliberately left alone rather than replaced. */
-  const reportRulesets = (result: CustomAgentRepositoryRulesetResult) => {
-    if (result.added + result.unchanged + result.skipped === 0) return;
+  const reportRulesets = (result: CustomAgentRepositoryRulesetResult | undefined) => {
+    // A server that predates repository rulesets answers without this part.
+    if (!result || result.added + result.unchanged + result.skipped === 0) return;
     toast.info(localizeUi("ui.agents.customagentrepositoriesmodal.rulesetsApplied", { ...result }));
   };
 
@@ -491,7 +494,7 @@ export function CustomAgentRepositoriesModal({ open, onClose }: { open: boolean;
               ))}
             </div>
 
-            {preview.rulesets.length > 0 && (
+            {previewRulesets.length > 0 && (
               <div className="mt-6">
                 <h4 className="text-base font-semibold">
                   {localizeUi("ui.agents.customagentrepositoriesmodal.rulesets")}
@@ -500,7 +503,7 @@ export function CustomAgentRepositoriesModal({ open, onClose }: { open: boolean;
                   {localizeUi("ui.agents.customagentrepositoriesmodal.rulesetGameMasterNotice")}
                 </p>
                 <ul className="mt-3 divide-y divide-[var(--border)] border-y border-[var(--border)]">
-                  {preview.rulesets.map((ruleset) => (
+                  {previewRulesets.map((ruleset) => (
                     <li key={ruleset.file} className="flex flex-col gap-1 py-3 sm:flex-row sm:items-start sm:gap-3">
                       <span className={cn("w-28 shrink-0 text-xs font-semibold", rulesetTone(ruleset.status))}>
                         {localizeUi(RULESET_STATUS_KEYS[ruleset.status])}
