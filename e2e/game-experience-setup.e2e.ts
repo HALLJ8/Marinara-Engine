@@ -133,6 +133,72 @@ function stepNavigation(wizard: Locator) {
   return { next: () => navigate("Next"), back: () => navigate("Back") };
 }
 
+test("Game Features switches keep equal thumb insets and do not shrink on mobile", async ({ page }, info) => {
+  await page.route("**/api/capability-packages/installed", (route) => route.fulfill({ json: [] }));
+  await page.route("**/api/capability-packages/agents", (route) =>
+    route.fulfill({
+      json: [
+        {
+          id: "world-state",
+          name: "World State",
+          description: "Fixture",
+          phase: "post_processing",
+          settings: {},
+        },
+      ],
+    }),
+  );
+  await page.route("**/api/connections", (route) => route.fulfill({ json: wizardConnections }));
+  await page.route("**/api/lorebooks", (route) => route.fulfill({ json: [] }));
+  const wizard = await mountWizard(page, info, { isNewGame: true });
+  const { next } = stepNavigation(wizard);
+  for (let step = 0; step < 5; step++) await next();
+  const names = [
+    /^Quick Time Events/u,
+    /^Enable Agents/u,
+    /^Custom HUD Widgets/u,
+    /^Build Widget Setup/u,
+    /^Sound effects/u,
+    /^Music Generate/u,
+  ];
+  for (const name of names) {
+    const button = wizard.getByRole("button", { name });
+    await button.scrollIntoViewIfNeeded();
+    const track = button.locator(":scope > .rounded-full");
+    const assertInsets = async () => {
+      await expect
+        .poll(() =>
+          track.evaluate((element) => {
+            const outer = element.getBoundingClientRect();
+            const inner = element.firstElementChild!.getBoundingClientRect();
+            const scale = parseFloat(getComputedStyle(document.documentElement).fontSize) / 16;
+            const px = (value: number) => Math.round((value / scale) * 1000) / 1000;
+            return {
+              width: px(outer.width),
+              height: px(outer.height),
+              top: px(inner.top - outer.top),
+              bottom: px(outer.bottom - inner.bottom),
+              edge: px(Math.min(inner.left - outer.left, outer.right - inner.right)),
+            };
+          }),
+        )
+        .toEqual({ width: 36, height: 20, top: 2, bottom: 2, edge: 2 });
+    };
+    await assertInsets();
+    if (await button.isEnabled()) {
+      const before = await button.getAttribute("aria-pressed");
+      await button.press("Space");
+      await expect(button).toHaveAttribute("aria-pressed", before === "true" ? "false" : "true");
+      await assertInsets();
+      await button.press("Space");
+    } else {
+      await expect(button).toHaveAttribute("aria-pressed", "false");
+    }
+  }
+  await wizard.getByRole("button", { name: /^Quick Time Events/u }).scrollIntoViewIfNeeded();
+  await page.screenshot({ path: info.outputPath("game-feature-switches.png"), animations: "disabled" });
+});
+
 /** A fresh new-game wizard with only the inline-setup Experience installed and switched on. */
 async function openWizardWithExperience(page: Page, testInfo: TestInfo): Promise<Locator> {
   await page.route("**/api/capability-packages/installed", (route) => route.fulfill({ json: [experienceFixture] }));

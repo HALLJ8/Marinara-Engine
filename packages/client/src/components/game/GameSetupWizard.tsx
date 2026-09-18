@@ -80,6 +80,7 @@ import { useConnections } from "../../hooks/use-connections";
 import { useDefaultPreset, usePresets } from "../../hooks/use-presets";
 import { useCharacterGroups, usePersonas } from "../../hooks/use-characters";
 import { GameSetupRulesChooser, GameSetupRulesetSheetStatus } from "./GameSetupRulesChooser";
+import { SettingsSwitchTrack } from "../panels/settings/SettingControls";
 import { useSidecarStore } from "../../stores/sidecar.store";
 import { useEntriesAcrossLorebooks, useLorebooks } from "../../hooks/use-lorebooks";
 import {
@@ -2509,20 +2510,7 @@ export function GameSetupWizard({
                               </span>
                             </span>
                           </span>
-                          <span
-                            aria-hidden="true"
-                            className={cn(
-                              "h-5 w-9 shrink-0 rounded-full p-0.5 transition-colors",
-                              enableQuickTimeEvents ? "bg-[var(--primary)]" : "bg-[var(--muted-foreground)]/50",
-                            )}
-                          >
-                            <span
-                              className={cn(
-                                "block h-4 w-4 rounded-full bg-white transition-transform",
-                                enableQuickTimeEvents && "translate-x-3.5",
-                              )}
-                            />
-                          </span>
+                          <SettingsSwitchTrack checked={enableQuickTimeEvents} />
                         </button>
 
                         {installedAgentsLoading ? (
@@ -2556,6 +2544,7 @@ export function GameSetupWizard({
                         {!installedAgentsLoading && hasInstalledAgents && (
                           <button
                             type="button"
+                            aria-pressed={enableAgents}
                             onClick={() => setEnableAgents((enabled) => !enabled)}
                             className={cn(
                               "flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-left transition-all",
@@ -2578,20 +2567,7 @@ export function GameSetupWizard({
                                 </span>
                               </span>
                             </span>
-                            <span
-                              aria-hidden="true"
-                              className={cn(
-                                "h-5 w-9 shrink-0 rounded-full p-0.5 transition-colors",
-                                enableAgents ? "bg-[var(--primary)]" : "bg-[var(--muted-foreground)]/50",
-                              )}
-                            >
-                              <span
-                                className={cn(
-                                  "block h-4 w-4 rounded-full bg-white transition-transform",
-                                  enableAgents && "translate-x-3.5",
-                                )}
-                              />
-                            </span>
+                            <SettingsSwitchTrack checked={enableAgents} />
                           </button>
                         )}
 
@@ -2599,6 +2575,7 @@ export function GameSetupWizard({
                           <div>
                             <button
                               type="button"
+                              aria-pressed={enableSpotifyDj}
                               onClick={() => setEnableSpotifyDj((prev) => !prev)}
                               className={cn(
                                 "flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-left transition-all",
@@ -2623,19 +2600,7 @@ export function GameSetupWizard({
                                   </span>
                                 </div>
                               </div>
-                              <div
-                                className={cn(
-                                  "h-5 w-9 shrink-0 rounded-full p-0.5 transition-colors",
-                                  enableSpotifyDj ? "bg-[var(--primary)]" : "bg-[var(--muted-foreground)]/50",
-                                )}
-                              >
-                                <div
-                                  className={cn(
-                                    "h-4 w-4 rounded-full bg-white transition-transform",
-                                    enableSpotifyDj && "translate-x-3.5",
-                                  )}
-                                />
-                              </div>
+                              <SettingsSwitchTrack checked={enableSpotifyDj} />
                             </button>
 
                             {enableSpotifyDj && (
@@ -2748,6 +2713,7 @@ export function GameSetupWizard({
                         {enableAgents && lorebookKeeperInstalled && (
                           <button
                             type="button"
+                            aria-pressed={enableLorebookKeeper}
                             onClick={() => setEnableLorebookKeeper((prev) => !prev)}
                             className={cn(
                               "flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-left transition-all",
@@ -2772,19 +2738,7 @@ export function GameSetupWizard({
                                 </span>
                               </div>
                             </div>
-                            <div
-                              className={cn(
-                                "h-5 w-9 shrink-0 rounded-full p-0.5 transition-colors",
-                                enableLorebookKeeper ? "bg-[var(--primary)]" : "bg-[var(--muted-foreground)]/50",
-                              )}
-                            >
-                              <div
-                                className={cn(
-                                  "h-4 w-4 rounded-full bg-white transition-transform",
-                                  enableLorebookKeeper && "translate-x-3.5",
-                                )}
-                              />
-                            </div>
+                            <SettingsSwitchTrack checked={enableLorebookKeeper} />
                           </button>
                         )}
 
@@ -2792,6 +2746,7 @@ export function GameSetupWizard({
                           <div>
                             <button
                               type="button"
+                              aria-pressed={enableSpriteGeneration}
                               onClick={toggleVisualGeneration}
                               className={cn(
                                 "flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left transition-all",
@@ -2816,19 +2771,7 @@ export function GameSetupWizard({
                                   )}
                                 </span>
                               </div>
-                              <div
-                                className={cn(
-                                  "h-5 w-9 rounded-full p-0.5 transition-colors",
-                                  enableSpriteGeneration ? "bg-[var(--primary)]" : "bg-[var(--muted-foreground)]/50",
-                                )}
-                              >
-                                <div
-                                  className={cn(
-                                    "h-4 w-4 rounded-full bg-white transition-transform",
-                                    enableSpriteGeneration && "translate-x-3.5",
-                                  )}
-                                />
-                              </div>
+                              <SettingsSwitchTrack checked={enableSpriteGeneration} />
                             </button>
 
                             {/* Image Connection Picker — shown when sprite gen is enabled */}
@@ -2884,21 +2827,7 @@ export function GameSetupWizard({
                                       )}
                                     </span>
                                   </span>
-                                  <span
-                                    className={cn(
-                                      "h-5 w-9 shrink-0 rounded-full p-0.5 transition-colors",
-                                      gameImageDynamicPromptEnabled
-                                        ? "bg-[var(--primary)]"
-                                        : "bg-[var(--muted-foreground)]/50",
-                                    )}
-                                  >
-                                    <span
-                                      className={cn(
-                                        "block h-4 w-4 rounded-full bg-white transition-transform",
-                                        gameImageDynamicPromptEnabled && "translate-x-3.5",
-                                      )}
-                                    />
-                                  </span>
+                                  <SettingsSwitchTrack checked={gameImageDynamicPromptEnabled} />
                                 </button>
                                 <div className="mt-3 border-t border-[var(--border)] pt-3">
                                   <label className="mb-1 flex items-center gap-1 text-[0.625rem] font-medium text-[var(--muted-foreground)]">
@@ -2994,21 +2923,7 @@ export function GameSetupWizard({
                             {localizeUi("ui.game.gamesetupwizard.generateShortSceneSoundEffectsAfterGmTurns")}
                           </span>
                         </span>
-                        <span
-                          className={cn(
-                            "h-5 w-9 shrink-0 rounded-full p-0.5 transition-colors",
-                            enableGameSoundEffects && audioConnectionSupportsSfx
-                              ? "bg-[var(--primary)]"
-                              : "bg-[var(--muted-foreground)]/50",
-                          )}
-                        >
-                          <span
-                            className={cn(
-                              "block h-4 w-4 rounded-full bg-white transition-transform",
-                              enableGameSoundEffects && audioConnectionSupportsSfx && "translate-x-3.5",
-                            )}
-                          />
-                        </span>
+                        <SettingsSwitchTrack checked={enableGameSoundEffects && audioConnectionSupportsSfx} />
                       </button>
                       <button
                         type="button"
@@ -3028,21 +2943,7 @@ export function GameSetupWizard({
                             {localizeUi("ui.game.gamesetupwizard.generateBackgroundMusicForScenes")}
                           </span>
                         </span>
-                        <span
-                          className={cn(
-                            "h-5 w-9 shrink-0 rounded-full p-0.5 transition-colors",
-                            enableGameMusic && audioConnectionSupportsMusic
-                              ? "bg-[var(--primary)]"
-                              : "bg-[var(--muted-foreground)]/50",
-                          )}
-                        >
-                          <span
-                            className={cn(
-                              "block h-4 w-4 rounded-full bg-white transition-transform",
-                              enableGameMusic && audioConnectionSupportsMusic && "translate-x-3.5",
-                            )}
-                          />
-                        </span>
+                        <SettingsSwitchTrack checked={enableGameMusic && audioConnectionSupportsMusic} />
                       </button>
                       {resolvedAudioConnection != null &&
                         (!audioConnectionSupportsSfx || !audioConnectionSupportsMusic) && (
@@ -3086,19 +2987,7 @@ export function GameSetupWizard({
                             </p>
                           </div>
                         </div>
-                        <div
-                          className={cn(
-                            "flex h-5 w-8 items-center rounded-full px-0.5 transition-colors",
-                            enableCustomWidgets ? "bg-[var(--primary)]" : "bg-[var(--secondary)]",
-                          )}
-                        >
-                          <div
-                            className={cn(
-                              "h-4 w-4 rounded-full bg-white transition-transform",
-                              enableCustomWidgets && "translate-x-3.5",
-                            )}
-                          />
-                        </div>
+                        <SettingsSwitchTrack checked={enableCustomWidgets} />
                       </button>
                       {customWidgetsLocked && (
                         <p className="mt-2 text-xs text-[var(--muted-foreground)]">
@@ -3125,6 +3014,7 @@ export function GameSetupWizard({
                           />
                           <button
                             type="button"
+                            aria-pressed={manualWidgetSetupEnabled}
                             onClick={() => setManualWidgetSetupEnabled((enabled) => !enabled)}
                             className={cn(
                               "flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2 text-left transition-all",
@@ -3141,19 +3031,7 @@ export function GameSetupWizard({
                                 {localizeUi("ui.game.gamesetupwizard.chooseTheStartingHudWidgetsYourself")}
                               </p>
                             </div>
-                            <div
-                              className={cn(
-                                "flex h-5 w-8 items-center rounded-full px-0.5 transition-colors",
-                                manualWidgetSetupEnabled ? "bg-[var(--primary)]" : "bg-[var(--secondary)]",
-                              )}
-                            >
-                              <div
-                                className={cn(
-                                  "h-4 w-4 rounded-full bg-white transition-transform",
-                                  manualWidgetSetupEnabled && "translate-x-3.5",
-                                )}
-                              />
-                            </div>
+                            <SettingsSwitchTrack checked={manualWidgetSetupEnabled} />
                           </button>
 
                           {manualWidgetSetupEnabled && (
@@ -3421,20 +3299,7 @@ export function GameSetupWizard({
                           </span>
                         </span>
                       </span>
-                      <span
-                        aria-hidden="true"
-                        className={cn(
-                          "h-5 w-9 shrink-0 rounded-full p-0.5 transition-colors",
-                          draftSpatialMap ? "bg-[var(--primary)]" : "bg-[var(--muted-foreground)]/50",
-                        )}
-                      >
-                        <span
-                          className={cn(
-                            "block h-4 w-4 rounded-full bg-white transition-transform",
-                            draftSpatialMap && "translate-x-3.5",
-                          )}
-                        />
-                      </span>
+                      <SettingsSwitchTrack checked={draftSpatialMap} />
                     </button>
 
                     <button
@@ -3469,20 +3334,7 @@ export function GameSetupWizard({
                           </span>
                         </span>
                       </span>
-                      <span
-                        aria-hidden="true"
-                        className={cn(
-                          "h-5 w-9 shrink-0 rounded-full p-0.5 transition-colors",
-                          manualSpatialMap ? "bg-[var(--primary)]" : "bg-[var(--muted-foreground)]/50",
-                        )}
-                      >
-                        <span
-                          className={cn(
-                            "block h-4 w-4 rounded-full bg-white transition-transform",
-                            manualSpatialMap && "translate-x-3.5",
-                          )}
-                        />
-                      </span>
+                      <SettingsSwitchTrack checked={manualSpatialMap} />
                     </button>
 
                     <button
@@ -3519,20 +3371,7 @@ export function GameSetupWizard({
                           </span>
                         </span>
                       </span>
-                      <span
-                        aria-hidden="true"
-                        className={cn(
-                          "h-5 w-9 shrink-0 rounded-full p-0.5 transition-colors",
-                          templateSpatialMap ? "bg-[var(--primary)]" : "bg-[var(--muted-foreground)]/50",
-                        )}
-                      >
-                        <span
-                          className={cn(
-                            "block h-4 w-4 rounded-full bg-white transition-transform",
-                            templateSpatialMap && "translate-x-3.5",
-                          )}
-                        />
-                      </span>
+                      <SettingsSwitchTrack checked={templateSpatialMap} />
                     </button>
 
                     {draftSpatialMap && (
@@ -3707,6 +3546,8 @@ export function GameSetupWizard({
                     {/* Start Muted */}
                     <div className="rounded-lg border border-[var(--border)] bg-[var(--card)] p-3">
                       <button
+                        type="button"
+                        aria-pressed={startMuted}
                         onClick={() => setStartMuted(!startMuted)}
                         className="flex w-full items-center justify-between gap-2 text-left"
                       >
@@ -3725,19 +3566,7 @@ export function GameSetupWizard({
                             </p>
                           </div>
                         </div>
-                        <div
-                          className={cn(
-                            "flex h-5 w-8 items-center rounded-full px-0.5 transition-colors",
-                            startMuted ? "bg-[var(--primary)]" : "bg-[var(--secondary)]",
-                          )}
-                        >
-                          <div
-                            className={cn(
-                              "h-4 w-4 rounded-full bg-white transition-transform",
-                              startMuted && "translate-x-3.5",
-                            )}
-                          />
-                        </div>
+                        <SettingsSwitchTrack checked={startMuted} />
                       </button>
                     </div>
 

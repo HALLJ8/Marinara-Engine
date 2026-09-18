@@ -4,6 +4,11 @@ This file is the release-notes source of truth for Marinara Engine. Reuse these 
 
 ## [Unreleased]
 
+- Returning to a chat while a background translation is being saved now replaces the old translation correctly when Show Only Translation is enabled (#6337).
+- Game Features switches share consistent track sizing and thumb spacing, including custom HUD widgets and narrow mobile layouts (#6339).
+- Custom Tracker accepts top-level incremental updates as well as updates nested under `fields`, using the existing row merge and lock handling (#6340).
+- Claude Subscription connections can request a one-hour prompt cache. Cache logs report the actual five-minute and one-hour write counts and avoid cost estimates when the write duration is unknown (#6341).
+
 - Character name resolution exposes each chat member's saved aliases alongside their canonical name, including disabled members, without changing existing name-only callers (#6328).
 - Peek Prompt includes capability package context and roleplay events through the same placement path as generation, including package Agent Sections (#6331).
 - Visual Novel portraits open the existing full-size image viewer with mouse, keyboard or touch (#6332).
