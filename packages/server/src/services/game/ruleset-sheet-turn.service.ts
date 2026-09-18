@@ -21,7 +21,7 @@ import type { DB } from "../../db/connection.js";
 import { logger } from "../../lib/logger.js";
 import { createChatsStorage } from "../storage/chats.storage.js";
 import { createCharactersStorage } from "../storage/characters.storage.js";
-import { loadRulesetRegistry, resolveGameRuleset } from "./ruleset-registry.service.js";
+import { loadRulesetRegistry, resolveGameRuleset, type ResolvedGameRuleset } from "./ruleset-registry.service.js";
 
 export interface GameRulesetSheetContext {
   definition: RulesetDefinition;
@@ -42,8 +42,11 @@ function parseMetadata(raw: unknown): Record<string, unknown> {
   return raw && typeof raw === "object" && !Array.isArray(raw) ? (raw as Record<string, unknown>) : {};
 }
 
-/** Every party card with the build its live state is measured against. A card with no readable
- *  sheet gets the ruleset's blank build, the same one setup would have copied for it. */
+/** Every party card with the build its live state is measured against. A card with NO sheet gets
+ *  the ruleset's blank build, the same one setup would have copied for it. A card that HOLDS a sheet
+ *  this version cannot read is left out: its maximums are unknown, so a command against a guessed
+ *  build would store wrong values that the in-game sheet (which shows a notice for such a card)
+ *  would not even display. Commands that name it are refused as naming nobody. */
 export function sheetCommandCards(
   definition: RulesetDefinition,
   cards: ReadonlyArray<Record<string, unknown>>,
@@ -52,8 +55,13 @@ export function sheetCommandCards(
   return cards.flatMap((card) => {
     const name = typeof card.name === "string" ? card.name.trim() : "";
     if (!name) return [];
+    if (card.rulesetSheet == null) return [{ name, build: blank }];
     const envelope = rulesetSheetEnvelopeSchema.safeParse(card.rulesetSheet);
-    return [{ name, build: envelope.success ? envelope.data.build : blank }];
+    if (!envelope.success) {
+      logger.warn("[game/sheet] The ruleset sheet for %s is unreadable; its live state is left alone", name);
+      return [];
+    }
+    return [{ name, build: envelope.data.build }];
   });
 }
 
@@ -72,12 +80,19 @@ export function renderGameRulesetSheetBlocks(
 /** The ruleset, the party's builds and the player's name for one game. Null when the game has no
  *  ruleset, or pins one this install cannot honour: then no command is applied and none is lost,
  *  because the tags stay in the saved reply exactly as the Game Master wrote them. */
-export async function loadGameRulesetSheetContext(db: DB, chatId: string): Promise<GameRulesetSheetContext | null> {
+export async function loadGameRulesetSheetContext(
+  db: DB,
+  chatId: string,
+  /** The resolution the turn's prompt was rendered with. Passing it keeps one turn on one ruleset:
+   *  a package updated mid-turn must not have its commands checked against a definition the Game
+   *  Master was never shown. Omitted, the pin is resolved here. */
+  resolved?: ResolvedGameRuleset | null,
+): Promise<GameRulesetSheetContext | null> {
   const chat = await createChatsStorage(db).getById(chatId);
   if (!chat) return null;
   const meta = parseMetadata(chat.metadata);
   if (meta.gameRuleset == null) return null;
-  const pinned = resolveGameRuleset(meta, await loadRulesetRegistry());
+  const pinned = resolved ?? resolveGameRuleset(meta, await loadRulesetRegistry());
   if (pinned.status !== "ok") {
     logger.warn("[game/sheet] Chat %s pins a ruleset that is not available; sheet commands were not applied", chatId);
     return null;

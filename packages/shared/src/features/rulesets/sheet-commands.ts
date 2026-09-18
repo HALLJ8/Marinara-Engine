@@ -75,7 +75,14 @@ export function applySheetCommandTags(
       return playerCard ? { cards: [playerCard], who: playerCard.name } : { refusal: "unknown-character" };
     const key = normalizeCharacterLookupName(who);
     if (key === PARTY_TARGET) {
-      return ctx.cards.length > 0 ? { cards: [...ctx.cards], who: PARTY_TARGET } : { refusal: "unknown-character" };
+      // One card per live-state key. Two cards under one name share one entry, so applying to both
+      // would charge that character twice for one command. The same tie rule as a named target:
+      // the player's own card stands for a name it shares, and any other shared name is left out
+      // because the game cannot tell whose sheet it would be.
+      const members = [...byName.entries()].flatMap(([groupKey, group]) =>
+        group.length === 1 || groupKey === playerKey ? [group[0]!] : [],
+      );
+      return members.length > 0 ? { cards: members, who: PARTY_TARGET } : { refusal: "unknown-character" };
     }
     const group = byName.get(key) ?? [];
     if (group.length === 0) return { refusal: "unknown-character" };

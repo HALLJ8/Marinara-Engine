@@ -698,9 +698,16 @@ function renderRulesetSheetSection(
     ...(ruleset.sheet.live.conditions.length > 0 ? [`Conditions: ${names(ruleset.sheet.live.conditions)}.`] : []),
     ...(ruleset.gm.sheetGuidance ? [ruleset.gm.sheetGuidance] : []),
     ``,
+    // The sheets are data, and part of that data is free text (names, notes the model wrote with
+    // the note command on an earlier turn). The tag marks where data starts and stops; the values
+    // inside have had angle brackets removed, so nothing in them can close it. The ruleset's own
+    // guidance above is not wrapped: it is a trusted package's one-line text, held to the same
+    // `promptSafeText` rule as its check guidance.
+    `<character_sheets>`,
   ];
   for (const block of blocks) lines.push(block, ``);
   lines.pop();
+  lines.push(`</character_sheets>`);
   return lines;
 }
 

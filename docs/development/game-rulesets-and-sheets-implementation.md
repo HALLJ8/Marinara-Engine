@@ -159,19 +159,19 @@ Equipment is deliberately not a list: Game Mode already owns inventory. The shee
 | Game build     | Copy taken at setup; edited by Edit Sheet and level-ups                                                       | `chat.metadata.gameCharacterCards[].rulesetSheet`                                                  | No, same as `rpgStats` today |
 | Live state     | Current HP, temp HP, slots left, hit dice, class counters, conditions, concentration, exhaustion, death saves | Game-state snapshot, keyed by card name                                                            | Yes                          |
 
-Live state belongs in the snapshot because sheet commands are relative ("spend one 3rd-level slot"), and a regenerated turn must not spend twice. `game-state.storage.ts` was not read for this document; slice 5 starts by confirming whether a new snapshot field needs a `STORAGE_VERSION` bump. If the snapshot cannot take it, fall back to absolute-per-message commands and say so in the GM guidance.
+Live state belongs in the snapshot because sheet commands are relative ("spend one 3rd-level slot"), and a regenerated turn must not spend twice. It is its own column, `game_state_snapshots.ruleset_live`, which needed no `STORAGE_VERSION` bump. See § What slice 5 settled for how a turn reads and writes it.
 
 Each stored sheet is `{ v, build }` and is refused above 64 KB serialized.
 
 ### GM surface
 
-`GmPromptContext` gains the resolved ruleset. When present, `gm-prompts.ts`:
+When the game's ruleset resolves, the per-turn format reminder (`buildGmFormatReminder`, never the system prompt):
 
 1. replaces the built-in skill-check paragraph with `gm.checkGuidance` and the difficulty ladder;
-2. adds a compact sheet block per party member: ability modifiers, proficient skills and saves, passive Perception, AC, remaining resources, prepared spells by level, active conditions;
-3. teaches one Engine-owned command, proposed as `[sheet: who="Name" …]`, with a closed operation set: `spend`, `restore`, `damage`, `heal`, `temp`, `condition`, `concentrate`, `rest`.
+2. adds a compact sheet block per party member inside `<character_sheets>`: ability modifiers, trained skills and saves, the `gm.sheetSummary` fields, remaining resources, tracks away from their default, notes, active conditions, and the summary lists;
+3. teaches one Engine-owned command, `[sheet: who="Name" op="…" …]`, with a closed operation set: `spend`, `restore` (`heal` is read as `restore`), `damage`, `temp`, `track`, `condition`, `note`, `rest`. The first proposal's `concentrate` became the general `note`.
 
-The Engine validates every operation against the live sheet. A cast with no slot left is refused, logged, and surfaced as a turn notice, never applied as a negative pool. `sheet` must join the reserved GM tag set and its parser must be swept by the verb-name regression. With no ruleset pinned, the prompt is byte-identical; prove it with `pnpm regression:prompt`.
+The Engine validates every operation against the live sheet. A cast with no slot left is refused, logged, written back into the reply as refused, and surfaced once per turn, never applied as a negative pool. `sheet` is in the reserved GM tag set, and the verb-name regression finds the taught tag in the reminder. With no ruleset pinned, the prompt is byte-identical; `game-ruleset-checks.regression.ts` and `one-request-dice-prompt.regression.ts` pin that, and `pnpm regression:prompt` covers the rest of the prompt.
 
 `[skill_check:]` gains an optional `who=`. Without it the player is checked, as today. Saves are requested as `skill="Dexterity save"`, which the existing normaliser already recognises.
 

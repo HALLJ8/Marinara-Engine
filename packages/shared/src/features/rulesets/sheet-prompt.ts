@@ -17,10 +17,13 @@ const MAX_VALUE_LENGTH = 80;
 /** How many rows of one list are named. A longer list is a spellbook, not a summary. */
 const MAX_LIST_NAMES = 40;
 
+/** Sheet values are written by players and, through the note command, by the model itself, and
+ *  the block they land in is wrapped in a tag in the prompt. Brackets and braces could forge a
+ *  command or a macro; angle brackets could close that tag and speak as the Engine. */
 function safeValue(value: string): string {
   return value
     .replace(/\p{Cc}+/gu, " ")
-    .replace(/[{}[\]]/g, "")
+    .replace(/[{}[\]<>]/g, "")
     .replace(/\s{2,}/g, " ")
     .trim()
     .slice(0, MAX_VALUE_LENGTH);

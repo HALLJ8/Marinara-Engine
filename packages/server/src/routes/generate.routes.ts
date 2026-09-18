@@ -567,7 +567,11 @@ import {
   loadSkillCheckModifierContext,
   resolveSkillCheckTagsInContent,
 } from "../services/game/skill-check-resolution.service.js";
-import { loadRulesetRegistry, resolveGameRuleset } from "../services/game/ruleset-registry.service.js";
+import {
+  loadRulesetRegistry,
+  resolveGameRuleset,
+  type ResolvedGameRuleset,
+} from "../services/game/ruleset-registry.service.js";
 import { createGameChanceStreamFilter } from "../services/game/chance-stream-filter.js";
 import {
   buildGameSkillModifierView,
@@ -2293,6 +2297,9 @@ export async function generateRoutes(app: FastifyInstance) {
       // the follow-up loop for the same reason: every pass of one turn shares one vocabulary.
       let gmVerbTable: ResolvedGmVerbTable | null = null;
       let gmVerbTableResolved = false;
+      // The pinned ruleset follows the same rule: the resolution the reminder was rendered with is
+      // the one the turn's sheet commands are checked against. Undefined until a game turn resolves it.
+      let turnGameRuleset: ResolvedGameRuleset | null | undefined;
       const getGmVerbTable = async (): Promise<ResolvedGmVerbTable | null> => {
         if (gmVerbTableResolved) return gmVerbTable;
         gmVerbTableResolved = true;
@@ -4072,6 +4079,7 @@ export async function generateRoutes(app: FastifyInstance) {
           // empty registry, which resolves to "unavailable" here.
           const pinnedGameRuleset =
             chatMeta.gameRuleset != null ? resolveGameRuleset(chatMeta, await loadRulesetRegistry()) : null;
+          turnGameRuleset = pinnedGameRuleset;
           // The pool block is rendered from the same session the readers spend out of, and
           // from the same modifier context the resolver uses, so the block and the engine
           // cannot disagree about a value or about a total.
@@ -8303,7 +8311,7 @@ export async function generateRoutes(app: FastifyInstance) {
           let rulesetSheetTurn: GameRulesetSheetTurn | null = null;
           if (chatMode === "game" && !input.impersonate && chatMeta.gameRuleset != null) {
             try {
-              const sheetContext = await loadGameRulesetSheetContext(app.db, input.chatId);
+              const sheetContext = await loadGameRulesetSheetContext(app.db, input.chatId, turnGameRuleset);
               if (sheetContext) {
                 const continuedRow = input.continueMessageId
                   ? await gameStateStore.getByChatAndMessage(

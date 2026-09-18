@@ -76,7 +76,7 @@ const { chatsRoutes } = await import("../../packages/server/src/routes/chats.rou
 const { createChatsStorage } = await import("../../packages/server/src/services/storage/chats.storage.js");
 const { createGameStateStorage, parseStoredRulesetLive } =
   await import("../../packages/server/src/services/storage/game-state.storage.js");
-const { applyGameRulesetSheetTurn, loadGameRulesetSheetContext, renderGameRulesetSheetBlocks } =
+const { applyGameRulesetSheetTurn, loadGameRulesetSheetContext, renderGameRulesetSheetBlocks, sheetCommandCards } =
   await import("../../packages/server/src/services/game/ruleset-sheet-turn.service.js");
 const { buildGmFormatReminder } = await import("../../packages/server/src/services/game/gm-prompts.js");
 
@@ -207,6 +207,11 @@ try {
       payload: { rulesetLive: { mira: { pools: { hp: { value: 20 } }, conditions: ["poisoned"] } } },
     });
     assert.equal(edited.statusCode, 200, edited.body);
+    assert.deepEqual(
+      edited.json().rulesetLive,
+      { mira: { pools: { hp: { value: 20 } }, conditions: ["poisoned"] } },
+      "the PATCH answers with the object, not the stored JSON text",
+    );
     const shown = await app.inject({ method: "GET", url: `/api/chats/${chatId}/game-state` });
     assert.equal(shown.statusCode, 200, shown.body);
     assert.deepEqual(shown.json().rulesetLive, { mira: { pools: { hp: { value: 20 } }, conditions: ["poisoned"] } });
@@ -242,9 +247,43 @@ try {
     assert.match(withSheets, /rests: Short rest, Long rest\./);
     assert.match(withSheets, /Tracks: .*Exhaustion \(0 to 6\)/);
     assert.match(withSheets, /3rd-level slots 0\/2/);
+    assert.match(withSheets, /<character_sheets>\nMira\n[\s\S]*<\/character_sheets>/, "sheets are delimited as data");
     // No sheets to show (or no ruleset): the section is not rendered at all.
     assert.doesNotMatch(buildGmFormatReminder({ ...base, ruleset: fiveE }), /CHARACTER SHEETS:/);
     assert.doesNotMatch(buildGmFormatReminder(base), /\[sheet:/);
+  }
+
+  // ── A card that HOLDS a sheet this version cannot read is left alone ──
+  // No sheet at all gets the blank build. An unreadable one has unknown maximums, so commands that
+  // name it are refused instead of being measured against a guess.
+  {
+    const party = sheetCommandCards(fiveE, [
+      { name: "Mira", rulesetSheet: wizard },
+      { name: "Tam the Bold" },
+      { name: "Old Save", rulesetSheet: { v: "two", build: "lost" } },
+    ]);
+    assert.deepEqual(
+      party.map((card) => card.name),
+      ["Mira", "Tam the Bold"],
+    );
+    const refused = applyGameRulesetSheetTurn(
+      { definition: fiveE, cards: party, playerName: null },
+      '[sheet: who="Old Save" op="damage" pool="hp" amount="3"]',
+      null,
+    );
+    assert.match(refused.content, /result="refused" reason="unknown-character"/);
+    assert.deepEqual(refused.live, {});
+  }
+
+  // ── One turn, one ruleset: the resolution the prompt used is the one commands are checked with ──
+  {
+    const handedIn = await loadGameRulesetSheetContext(db, chatId, {
+      status: "unavailable",
+      reason: "missing",
+      ref: null,
+      installedVersion: null,
+    });
+    assert.equal(handedIn, null, "a turn that rendered no ruleset applies no commands, whatever is installed now");
   }
 
   // ── A pin the install cannot honour applies nothing and loses nothing ──

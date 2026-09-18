@@ -9699,12 +9699,19 @@ function GameSurfaceComponent({
       // Read the snapshot at click time, not at render time: a turn's own sheet commands may have
       // landed since this sheet was rendered, and they must not be written back out.
       const current = useGameStateStore.getState().current;
-      const { [key]: _previous, ...others } = current?.chatId === activeChatId ? (current.rulesetLive ?? {}) : {};
+      // The patch replaces the WHOLE live object. Built from a snapshot that is missing, or that
+      // belongs to another chat, it would wipe every other character's state, so the edit is
+      // refused and said out loud instead.
+      if (current?.chatId !== activeChatId) {
+        toast.error(localizeUi("game.ruleset.sheet.stateNotReady"));
+        return;
+      }
+      const { [key]: _previous, ...others } = current.rulesetLive ?? {};
       // The shared op normalises an untouched sheet back to `{}`; storing that would keep an empty
       // entry per character forever.
       patchGameStateField("rulesetLive", Object.keys(next).length > 0 ? { ...others, [key]: next } : others);
     },
-    [activeChatId, patchGameStateField],
+    [activeChatId, localizeUi, patchGameStateField],
   );
 
   const characterSheetRuleset = useMemo<GameCharacterSheetRuleset | undefined>(() => {

@@ -2742,7 +2742,11 @@ export async function chatsRoutes(app: FastifyInstance) {
       updated = await gameStateStore.getLatest(req.params.id);
     }
     if (!updated) return reply.status(404).send({ error: "No game state found" });
-    return projectGameSnapshotLocation(updated, ownerSpatialProjection);
+    // The row stores live sheet state as JSON text; callers get the same object the GET returns.
+    return projectGameSnapshotLocation(
+      { ...updated, rulesetLive: parseStoredRulesetLive(updated.rulesetLive) },
+      ownerSpatialProjection,
+    );
   });
 
   // Delete all game state for a chat
@@ -4493,6 +4497,9 @@ export async function chatsRoutes(app: FastifyInstance) {
               personaStats: parseSnapshotJson(snapshot.personaStats, null),
               fieldLocks: parseTrackerFieldLocks(snapshot.fieldLocks),
               hiddenTrackerFields: parseTrackerHiddenFields(snapshot.hiddenTrackerFields),
+              // A branch is a new chat, so there is no row to inherit from: without this a branched
+              // game would start with every pool full again.
+              rulesetLive: parseStoredRulesetLive(snapshot.rulesetLive),
               committed: (snapshot.committed as any) === 1,
             } as any,
             overrides,

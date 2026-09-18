@@ -14758,6 +14758,8 @@ export async function gameRoutes(app: FastifyInstance) {
         personaStats: parseJsonField(snapshot.personaStats, null),
         fieldLocks: parseTrackerFieldLocks(snapshot.fieldLocks),
         hiddenTrackerFields: parseTrackerHiddenFields(snapshot.hiddenTrackerFields),
+        // Restoring a checkpoint restores the sheets as they stood then, spent slots included.
+        rulesetLive: parseStoredRulesetLive(snapshot.rulesetLive),
         committed: true,
       },
       manualOverrides,

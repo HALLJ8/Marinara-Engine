@@ -866,6 +866,7 @@
   "game.ruleset.sheet.saveFailed": "The sheet for {{name}} could not be saved.",
   "game.ruleset.sheet.saving": "Saving...",
   "game.ruleset.sheet.spendAria": "Spend one {{name}} for {{who}}",
+  "game.ruleset.sheet.stateNotReady": "The game state is still loading, so the change was not saved. Try again in a moment.",
   "game.ruleset.sheet.temp": "Temp",
   "game.ruleset.sheet.tempAria": "Temporary {{name}} for {{who}}",
   "game.ruleset.sheet.title": "Ruleset sheet",
