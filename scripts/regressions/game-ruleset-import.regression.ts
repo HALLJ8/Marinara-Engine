@@ -121,6 +121,24 @@ try {
     assert.equal(engineOwned.statusCode, 400, engineOwned.body);
     assert.match(engineOwned.json().error, /Engine-owned ruleset id/);
 
+    // Exactly at the ceiling is still a file the Engine takes. `$comment` is dropped before the
+    // strict schema sees it, so it pads the file without changing what it means.
+    const ceilingBase = ruleset((doc) => {
+      doc.id = "ceiling-rules";
+      doc.name = "Ceiling Rules";
+      doc.$comment = "";
+    });
+    const atCeiling = ruleset((doc) => {
+      doc.id = "ceiling-rules";
+      doc.name = "Ceiling Rules";
+      doc.$comment = " ".repeat(RULESET_MAX_BYTES - Buffer.byteLength(ceilingBase, "utf8"));
+    });
+    assert.equal(Buffer.byteLength(atCeiling, "utf8"), RULESET_MAX_BYTES);
+    const accepted = await importFile(atCeiling);
+    assert.equal(accepted.statusCode, 200, accepted.body);
+    // Taken out again so the counts below stay about the refusals.
+    assert.equal(await rulesets.removeAll("local/ceiling-rules"), 1);
+
     const oversize = await importFile(" ".repeat(RULESET_MAX_BYTES + 1));
     assert.equal(oversize.statusCode, 400, oversize.body);
     assert.match(oversize.json().error, new RegExp(`over the ${RULESET_MAX_BYTES}-byte limit`));

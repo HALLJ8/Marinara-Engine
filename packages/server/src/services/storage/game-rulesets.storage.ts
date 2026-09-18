@@ -163,24 +163,34 @@ export function createGameRulesetsStorage(db: DB) {
     async put(input: PutGameRulesetInput): Promise<PutGameRulesetResult> {
       assertStorableRuleset(input);
       const sha256 = createHash("sha256").update(input.definition, "utf8").digest("hex");
-      const existing = await this.get(input.rulesetId, input.version);
-      if (existing) {
-        if (existing.sha256 !== sha256) throw new RulesetVersionConflictError(input.rulesetId, input.version);
-        return { status: "unchanged", row: existing };
-      }
-      const row: GameRulesetRow = {
-        id: gameRulesetRowId(input.rulesetId, input.version),
-        rulesetId: input.rulesetId,
-        version: input.version,
-        sourceKind: input.sourceKind,
-        sourceUrl: input.sourceUrl ?? null,
-        repositoryId: input.repositoryId ?? null,
-        sha256,
-        definition: input.definition,
-        createdAt: now(),
-      };
-      await db.insert(gameRulesets).values(row);
-      return { status: "added", row };
+      // One transaction, so two imports of the same version cannot both see "not stored yet": the
+      // second one has to come back as unchanged or as a conflict, never as a key collision.
+      return db.transaction(async (tx) => {
+        const rows = (await tx
+          .select()
+          .from(gameRulesets)
+          .where(
+            and(eq(gameRulesets.rulesetId, input.rulesetId), eq(gameRulesets.version, input.version)),
+          )) as GameRulesetRow[];
+        const existing = rows[0];
+        if (existing) {
+          if (existing.sha256 !== sha256) throw new RulesetVersionConflictError(input.rulesetId, input.version);
+          return { status: "unchanged" as const, row: existing };
+        }
+        const row: GameRulesetRow = {
+          id: gameRulesetRowId(input.rulesetId, input.version),
+          rulesetId: input.rulesetId,
+          version: input.version,
+          sourceKind: input.sourceKind,
+          sourceUrl: input.sourceUrl ?? null,
+          repositoryId: input.repositoryId ?? null,
+          sha256,
+          definition: input.definition,
+          createdAt: now(),
+        };
+        await tx.insert(gameRulesets).values(row);
+        return { status: "added" as const, row };
+      });
     },
 
     /** Forget which repository manages these versions, keeping the versions themselves. Removing a
@@ -198,9 +208,12 @@ export function createGameRulesetsStorage(db: DB) {
     /** Forget every stored version of one ruleset, and say how many went. Whether a game still
      *  plays on it is the caller's question: this path only writes. */
     async removeAll(rulesetId: string): Promise<number> {
-      const removed = db.count(gameRulesets, eq(gameRulesets.rulesetId, rulesetId));
-      await db.delete(gameRulesets).where(eq(gameRulesets.rulesetId, rulesetId));
-      return removed;
+      // Counted and deleted in one transaction, so the number is the number that went.
+      return db.transaction(async (tx) => {
+        const removed = tx.count(gameRulesets, eq(gameRulesets.rulesetId, rulesetId));
+        await tx.delete(gameRulesets).where(eq(gameRulesets.rulesetId, rulesetId));
+        return removed;
+      });
     },
   };
 }

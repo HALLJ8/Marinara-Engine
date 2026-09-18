@@ -1105,19 +1105,22 @@ export function GameSetupWizard({
       setRulesetId(config.ruleset?.id ?? null);
       const sharedRuleset = shareFile.setup.config.ruleset;
       // Installed but left off the list means the import switch hid it, which needs a different
-      // fix from the user than installing something.
-      const hiddenByImportPolicy =
+      // fix from the user than installing something. Only an answer that says "off" counts as off:
+      // a policy that could not be read gets its own notice, not a wrong diagnosis.
+      const hiddenFromList =
         sharedRuleset &&
         !rulesets.some((entry) => entry.definition.id === sharedRuleset.id) &&
         (installedRulesets ?? []).some((entry) => entry.definition.id === sharedRuleset.id);
+      const droppedRulesetNotice = !hiddenFromList
+        ? "game.ruleset.setup.unavailableImport"
+        : agentImportPolicy?.enabled === false
+          ? "game.ruleset.setup.importsOffImport"
+          : "game.ruleset.setup.importPolicyUnknownImport";
       setRulesetImportNotice(
         sharedRuleset && !config.ruleset
           ? !isNewGame
             ? localizeUi("game.ruleset.setup.existingImport")
-            : localizeUi(
-                hiddenByImportPolicy ? "game.ruleset.setup.importsOffImport" : "game.ruleset.setup.unavailableImport",
-                { name: shareFile.setup.labels?.rulesetName ?? sharedRuleset.id },
-              )
+            : localizeUi(droppedRulesetNotice, { name: shareFile.setup.labels?.rulesetName ?? sharedRuleset.id })
           : null,
       );
       const importedExperience = experiences.find((item) => item.id === config.gameExperienceId);

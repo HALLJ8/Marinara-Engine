@@ -10,6 +10,10 @@ import { fileURLToPath } from "node:url";
 
 const script = fileURLToPath(new URL("../generate-ruleset-schema.mjs", import.meta.url));
 const result = spawnSync(process.execPath, [script, "--check"], { encoding: "utf8" });
-assert.equal(result.status, 0, `${result.stdout}${result.stderr}\nRun: pnpm ruleset:schema`);
+assert.equal(
+  result.status,
+  0,
+  `${result.error ?? ""}${result.stdout ?? ""}${result.stderr ?? ""}\nRun: pnpm ruleset:schema`,
+);
 
 console.info("game ruleset JSON Schema regression passed.");
