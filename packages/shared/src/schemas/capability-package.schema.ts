@@ -255,7 +255,7 @@ const capabilityPackageManifestBaseSchema = z
 //        seam, for the same reason as 1.20 through 1.23: an engine that knows only `dice-sum`
 //        refuses the whole ruleset file, so a package whose ruleset declares the kind declares
 //        1.24. No permission.
-// 1.25: ruleset layers — a ruleset may declare variants of itself (Low magic, Hard winter) that a
+// 1.25: ruleset layers. A ruleset may declare variants of itself (Low magic, Hard winter) that a
 //        player turns on when a game is created, each appending Game Master guidance, narrowing an
 //        enum field, swapping the difficulty ladder or hiding catalog entries. The same release
 //        gives the base `gm` block a `worldGuidance` slot, read once by world generation. Not a
