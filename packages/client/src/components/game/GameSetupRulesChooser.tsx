@@ -12,6 +12,7 @@ import {
   type InstalledRuleset,
 } from "@marinara-engine/shared";
 import { useCharacters, usePersonas } from "../../hooks/use-characters";
+import { rulesetRulesSummary } from "../../lib/ruleset-resolution";
 import { rulesetRepositoryLabel } from "../../lib/ruleset-source";
 import { cn } from "../../lib/utils";
 
@@ -159,6 +160,15 @@ export function GameSetupRulesChooser({
 
       {active && (
         <div className="mt-2 space-y-2 rounded-lg border border-[var(--border)] bg-[var(--card)] p-3 text-xs">
+          {/* How the chosen ruleset rolls a check, in its own numbers: the choice is made once and
+              stays with the game, so it is worth reading before the game is created. */}
+          <p className="text-[var(--muted-foreground)]">
+            {rulesetRulesSummary(active.definition, t).map((line) => (
+              <span key={line} className="block">
+                {line}
+              </span>
+            ))}
+          </p>
           <p className="text-[var(--muted-foreground)]">{t("game.ruleset.setup.pinned")}</p>
           {!active.definition.coverage.combat && (
             <p className="text-[var(--muted-foreground)]">

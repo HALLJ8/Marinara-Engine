@@ -30,6 +30,7 @@ import {
   type RulesetSheetOp,
 } from "@marinara-engine/shared";
 import { RulesetSheetEditor } from "../rulesets/RulesetSheetEditor";
+import { rulesetCheckValueText } from "../../lib/ruleset-resolution";
 import { DraftNumberInput } from "../ui/DraftNumberInput";
 import { DraftTextarea } from "../ui/DraftTextarea";
 
@@ -41,10 +42,6 @@ const numberInputClass =
   "w-10 shrink-0 rounded-lg border border-[var(--border)] bg-[var(--card)] px-1 py-0.5 text-center text-xs tabular-nums text-[var(--foreground)]";
 const chipClass =
   "rounded-full border px-2 py-0.5 text-[0.6875rem] transition-colors disabled:cursor-not-allowed disabled:opacity-50";
-
-function signed(value: number): string {
-  return value >= 0 ? `+${value}` : String(value);
-}
 
 /** Plain-language phrases for the reasons the Engine turns a sheet command down. A reason this
  *  Engine does not know (a newer one's, a hand-edited transcript) falls back to a generic line
@@ -423,7 +420,7 @@ export function GameRulesetSheet({
                 >
                   <span className={`${labelClass} max-w-full truncate`}>{ability.short ?? ability.label}</span>
                   <span className="text-xs font-semibold tabular-nums text-[var(--foreground)]">
-                    {signed(evaluated.abilityMods[ability.id] ?? 0)}
+                    {rulesetCheckValueText(definition, evaluated.abilityMods[ability.id] ?? 0, localizeUi)}
                   </span>
                 </div>
               ))}
@@ -439,7 +436,10 @@ export function GameRulesetSheet({
                     key={`${entry.id}-${entry.label}`}
                     className="rounded-lg border border-[var(--border)] px-1.5 py-0.5 text-[0.6875rem] text-[var(--foreground)]"
                   >
-                    {entry.label} <span className="tabular-nums">{signed(entry.modifier)}</span>
+                    {entry.label}{" "}
+                    <span className="tabular-nums">
+                      {rulesetCheckValueText(definition, entry.modifier, localizeUi)}
+                    </span>
                   </span>
                 ))}
               </div>
