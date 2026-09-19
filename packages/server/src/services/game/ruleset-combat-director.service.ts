@@ -707,17 +707,22 @@ export function commandRulesetCombatDirector(
       : // The local picker is the fallback, so a Game Master that answered nothing usable costs the
         // fight nothing but the model call.
         (pickRulesetChoice(definition, state, fight.encounter, actorId)?.choice ?? null);
-    if (choice && choice.optionId !== "end-turn") {
-      const step = applyChoice(definition, state, fight, choice);
-      if (step.refused) {
-        logger.warn(
-          "[game/combat:ruleset] A %s decision for %s was refused by the rules and the turn was ended",
-          source,
-          actorId,
-        );
-        if (currentRulesetActor(fight.encounter)?.id === actorId) advanceTurn(definition, state, fight);
-        return settled(state);
-      }
+    // The menu's own "end turn" IS the end of the turn, exactly as the local picker reads it. Asking
+    // again would reopen the same window with the same list, and the fight would stand on this actor
+    // for as long as the answer stayed the same.
+    if (!choice || choice.optionId === "end-turn") {
+      if (currentRulesetActor(fight.encounter)?.id === actorId) advanceTurn(definition, state, fight);
+      return settled(state);
+    }
+    const step = applyChoice(definition, state, fight, choice);
+    if (step.refused) {
+      logger.warn(
+        "[game/combat:ruleset] A %s decision for %s was refused by the rules and the turn was ended",
+        source,
+        actorId,
+      );
+      if (currentRulesetActor(fight.encounter)?.id === actorId) advanceTurn(definition, state, fight);
+      return settled(state);
     }
     continueBossTurn(definition, state, fight, actorId);
     return settled(state);

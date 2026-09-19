@@ -696,6 +696,36 @@ for (const setup of [
   }
 }
 
+// ── A Game Master that answers "end turn" ends the turn ──
+{
+  const state = started({
+    definition: fiveE,
+    cards: fiveECards,
+    partyCatalogs: spellCatalogs,
+    party: [fiveEParty[0]!],
+    enemies: [{ id: "sentinel", name: "Hollow Sentinel", boss: true }],
+    gm: true,
+    seed: 11,
+  });
+  commandRulesetCombatDirector(fiveE, state, { type: "control", unitId: "brenna", controller: "ai" });
+  // Walk to the boss's turn: its window opens instead of the Engine playing it.
+  for (let guard = 0; guard < 6 && !state.window; guard++) {
+    assert.ok(commandRulesetCombatDirector(fiveE, state, { type: "continue" }).ok);
+  }
+  assert.equal(state.window?.actorId, "sentinel", "the boss's turn is a decision");
+  const rest = state.window!.options.find((option) => option.optionId === "end-turn");
+  assert.ok(rest, "ending the turn is one of the things a Game Master may choose");
+  assert.ok(state.window!.options.length > 1, "beside everything else the boss could do");
+  const round = state.rulesetFight!.encounter.round;
+  assert.ok(commandRulesetCombatDirector(fiveE, state, { type: "choose", candidateId: rest!.id }).ok);
+  const after = state.rulesetFight!.encounter;
+  assert.ok(
+    state.window?.actorId !== "sentinel" || after.round > round,
+    "the same window is not opened again for the same turn",
+  );
+  assert.notEqual(after.order[after.turn], "sentinel", "and the turn has moved on");
+}
+
 // ── A finished fight says so once ──
 {
   const state = started({
