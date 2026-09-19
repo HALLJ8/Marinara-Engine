@@ -294,8 +294,8 @@ export function RulesetSheetEditor({
     // The one change path, so every edit leaves the ruleset's own cells right. The helper hands
     // back the very build it was given when nothing scaled changes, which is what today's editor
     // stored, so an ordinary edit behaves exactly as it always has.
-    const build_ = { ...build, ...patch };
-    onChange({ ...envelope, v: sheet.version, build: recomputeScaledRows(definition, build_, loadedCatalogs) });
+    const patched = { ...build, ...patch };
+    onChange({ ...envelope, v: sheet.version, build: recomputeScaledRows(definition, patched, loadedCatalogs) });
   };
 
   // The catalogs can land after the user has already typed. Such a sheet is brought up to date once,
