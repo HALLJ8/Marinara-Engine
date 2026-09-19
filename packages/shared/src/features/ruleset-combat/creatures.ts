@@ -1,0 +1,402 @@
+// Bestiaries: finding an opponent a ruleset ships, and pulling one nobody wrote onto its scale.
+//
+// A bestiary catalog holds creatures instead of rows. Everything here turns one of those entries
+// into the stat block the resolver already takes, or takes a block somebody proposed and clamps it
+// into the ruleset's own threat scale, so nothing a Game Master invents lands off it.
+//
+// Pure, like the rest of the fight: no I/O, nothing thrown, and a clamp that says in plain words
+// what it changed so a log can print the line.
+
+import type {
+  RulesetCatalogEntriesById,
+  RulesetCatalogEntry,
+  RulesetCombatThreatTier,
+  RulesetCreature,
+  RulesetCreatureAction,
+  RulesetDefinition,
+} from "../../schemas/ruleset.schema.js";
+import { parseRulesetCombatDice, rulesetAverageAmount } from "./dice.js";
+import type { RulesetCombatAmount, RulesetCombatDamage, RulesetStatBlock, RulesetStatBlockAction } from "./types.js";
+
+/** How many actions survive a clamp. A proposal with more than this is a creature nobody could read
+ *  at the table, whatever the numbers say. */
+export const RULESET_CLAMP_MAX_ACTIONS = 6;
+
+/** How far above the tier's own number a clamped block may sit. One rung of a scale is a range, not
+ *  a line, so a creature at the top of its tier is still on it. */
+export const RULESET_CLAMP_HEADROOM = 2;
+
+/** A name matched the way a Game Master writes it: case and punctuation are not the point, the word
+ *  is. "Ash-hound", "ash hound" and "Ash Hound" are one creature. */
+function plainly(text: string): string {
+  return text.toLowerCase().replace(/[^a-z0-9]+/g, "");
+}
+
+/** The entry a `{ catalogId, entryId }` reference names, and nothing else. */
+export function findRulesetCreatureEntry(
+  catalogs: RulesetCatalogEntriesById,
+  ref: { catalogId: string; entryId: string },
+): RulesetCatalogEntry | null {
+  const entry = catalogs[ref.catalogId]?.find((candidate) => candidate.id === ref.entryId);
+  return entry?.creature ? entry : null;
+}
+
+/**
+ * The creature a Game Master named, looked up three ways and no more: the exact
+ * `<catalogId>/<entryId>`, then a label or an id that matches once case and punctuation are set
+ * aside, then nothing. Never fuzzy beyond that, because a fight built on a near miss is worse than
+ * one the Engine says it could not build.
+ */
+export function findRulesetCreature(
+  catalogs: RulesetCatalogEntriesById,
+  query: string,
+): { catalogId: string; entry: RulesetCatalogEntry } | null {
+  const wanted = query.trim();
+  if (!wanted) return null;
+  const slash = wanted.indexOf("/");
+  if (slash > 0) {
+    const catalogId = wanted.slice(0, slash);
+    const entryId = wanted.slice(slash + 1);
+    const exact = findRulesetCreatureEntry(catalogs, { catalogId, entryId });
+    if (exact) return { catalogId, entry: exact };
+  }
+  const plain = plainly(wanted);
+  if (!plain) return null;
+  for (const [catalogId, entries] of Object.entries(catalogs)) {
+    for (const entry of entries) {
+      if (!entry.creature) continue;
+      if (plainly(entry.label) === plain || plainly(entry.id) === plain) return { catalogId, entry };
+    }
+  }
+  return null;
+}
+
+/** A creature's amount as the fight rolls it: the dice text plus whatever flat part sits beside it. */
+function amountOf(input: { dice?: string; flat?: number } | undefined): RulesetCombatAmount | null {
+  if (!input) return null;
+  const dice = input.dice ? parseRulesetCombatDice(input.dice) : null;
+  if (!dice && input.flat === undefined) return null;
+  return { count: dice?.count ?? 0, sides: dice?.sides ?? 0, flat: (dice?.flat ?? 0) + (input.flat ?? 0) };
+}
+
+function creatureAction(action: RulesetCreatureAction): RulesetStatBlockAction {
+  const damage = amountOf(action.damage);
+  return {
+    id: action.id,
+    name: action.name,
+    budget: action.budget,
+    ...(action.toHit !== undefined ? { toHit: action.toHit } : {}),
+    ...(action.autoHit ? { autoHit: true } : {}),
+    ...(damage
+      ? { damage: { ...damage, ...(action.damage?.type ? { type: action.damage.type } : {}) } as RulesetCombatDamage }
+      : {}),
+    ...(action.save ? { save: { ...action.save } } : {}),
+    ...(action.saveDifficulty !== undefined ? { saveDifficulty: action.saveDifficulty } : {}),
+    ...(action.applies?.length ? { applies: action.applies.map((entry) => ({ ...entry })) } : {}),
+    ...(action.targetCount !== undefined ? { targetCount: action.targetCount } : {}),
+    ...(action.reach !== undefined ? { reach: action.reach } : {}),
+    ...(action.range !== undefined ? { range: action.range } : {}),
+    ...(action.uses ? { uses: { ...action.uses } } : {}),
+    ...(action.recharge ? { recharge: { dice: { ...action.recharge.dice }, from: action.recharge.from } } : {}),
+    ...(action.sequence ? { sequence: action.sequence.map((step) => ({ ...step })) } : {}),
+    ...(action.signature ? { signature: { ...action.signature } } : {}),
+  };
+}
+
+/**
+ * The stat block a bestiary entry stands for, ready for `createRulesetEncounter`. Dice health is
+ * carried as both: the average, which is what a forecast reads, and the dice the encounter throws
+ * when it builds the fight.
+ *
+ * Only the actions this ruleset can still price survive, because a catalog checked against one
+ * version of a ruleset may be read by another: an action spending a budget the economy no longer
+ * declares would sit on the menu and never be affordable.
+ */
+export function rulesetCreatureBlock(
+  definition: RulesetDefinition,
+  entry: RulesetCatalogEntry | null | undefined,
+): RulesetStatBlock | null {
+  const creature = entry?.creature;
+  const combat = definition.combat;
+  if (!creature || !combat) return null;
+  return blockFromCreature(creature, new Set(combat.economy.budgets.map((budget) => budget.id)));
+}
+
+function blockFromCreature(creature: RulesetCreature, budgets: ReadonlySet<string>): RulesetStatBlock {
+  const kept = creature.actions.filter((action) => budgets.has(action.budget));
+  const ids = new Set(kept.map((action) => action.id));
+  const actions = kept.map((action) => {
+    const built = creatureAction(action);
+    if (!built.sequence) return built;
+    const steps = built.sequence.filter((step) => ids.has(step.action));
+    // A sequence whose parts are all gone is an action that would spend a budget and do nothing.
+    if (steps.length === 0) return null;
+    return { ...built, sequence: steps };
+  });
+  const health = typeof creature.health === "number" ? null : amountOf(creature.health);
+  return {
+    health: health ? Math.floor(rulesetAverageAmount(health)) : (creature.health as number),
+    ...(health ? { healthDice: health } : {}),
+    defense: creature.defense,
+    initiativeModifier: creature.initiativeModifier,
+    actions: actions.filter((action): action is RulesetStatBlockAction => action !== null),
+    ...(creature.speed !== undefined ? { speed: creature.speed } : {}),
+    ...(creature.abilities ? { abilities: { ...creature.abilities } } : {}),
+    ...(creature.saves ? { saves: { ...creature.saves } } : {}),
+    ...(creature.resist ? { resist: [...creature.resist] } : {}),
+    ...(creature.vulnerable ? { vulnerable: [...creature.vulnerable] } : {}),
+    ...(creature.immune ? { immune: [...creature.immune] } : {}),
+    ...(creature.conditionImmunities ? { conditionImmunities: [...creature.conditionImmunities] } : {}),
+    tier: creature.tier,
+    ...(creature.traits ? { traits: creature.traits.map((trait) => ({ ...trait })) } : {}),
+    ...(creature.signaturePoints !== undefined ? { signaturePoints: creature.signaturePoints } : {}),
+  };
+}
+
+// ── The clamp ──
+
+/** What a proposed block became, and every change in words a log can print. */
+export interface RulesetClampedStatBlock {
+  block: RulesetStatBlock;
+  adjusted: string[];
+}
+
+/** What one action deals on average, per target. */
+function damageAverage(action: RulesetStatBlockAction | undefined): number {
+  return action?.damage ? Math.max(0, rulesetAverageAmount(action.damage)) : 0;
+}
+
+/** The id a block action answers to, with the same fallback the encounter builds its menu with, so
+ *  a hand-written block without ids is read here exactly as it is read there. */
+function actionId(action: RulesetStatBlockAction, index: number): string {
+  return action.id ?? `block:${index}`;
+}
+
+/** The best a block can do in one round: its heaviest sequence, or its heaviest single action.
+ *  Measured against ONE target, because a tier's band is what a creature does to somebody, not the
+ *  sum of everyone it can reach. */
+function bestRound(actions: readonly RulesetStatBlockAction[]): { average: number; parts: string[] } {
+  const byId = new Map(actions.map((action, index) => [actionId(action, index), action]));
+  let best = { average: 0, parts: [] as string[] };
+  actions.forEach((action, index) => {
+    const round = action.sequence
+      ? {
+          average: action.sequence.reduce(
+            (total, step) => total + step.times * damageAverage(byId.get(step.action)),
+            0,
+          ),
+          parts: action.sequence.map((step) => step.action),
+        }
+      : { average: damageAverage(action), parts: [actionId(action, index)] };
+    if (round.average > best.average) best = round;
+  });
+  return best;
+}
+
+function knownTypes(definition: RulesetDefinition): ReadonlySet<string> | null {
+  const types = definition.combat?.damageTypes;
+  return types ? new Set(types.map((type) => type.trim().toLowerCase())) : null;
+}
+
+/** Only the names this ruleset has, in the order they were proposed. */
+function onlyKnown(values: readonly string[] | undefined, known: ReadonlySet<string> | null): string[] | null {
+  if (!values) return null;
+  if (!known) return [...values];
+  return values.filter((value) => known.has(value.trim().toLowerCase()));
+}
+
+/**
+ * A proposed opponent pulled onto the ruleset's own scale: health into the tier's band, defense,
+ * to-hit and save difficulties no more than a little above it, damage scaled down until the best
+ * round fits, and every name the ruleset does not have dropped. A tier the ruleset never declared
+ * falls back to the bottom of the scale and says so.
+ *
+ * A ruleset with no threat scale has nothing to clamp to, so the block comes back as it was with
+ * one line saying why.
+ */
+export function clampRulesetStatBlock(
+  definition: RulesetDefinition,
+  proposed: RulesetStatBlock,
+  tierId: string,
+): RulesetClampedStatBlock {
+  const combat = definition.combat;
+  const tiers = combat?.threat?.tiers ?? [];
+  const block = structuredClone(proposed);
+  const adjusted: string[] = [];
+  if (!combat || tiers.length === 0) {
+    adjusted.push("This ruleset declares no threat scale, so the opponent was used as it was proposed.");
+    return { block, adjusted };
+  }
+  // The first tier declared is the bottom of the scale, which is where an opponent nobody can place
+  // belongs: too weak is a disappointing fight, too strong is a dead party.
+  const tier: RulesetCombatThreatTier = tiers.find((entry) => entry.id === tierId) ?? tiers[0]!;
+  if (tier.id !== tierId) {
+    adjusted.push(`The tier "${tierId}" is not on this ruleset's scale, so ${tier.label} was used instead.`);
+  }
+  block.tier = tier.id;
+
+  // What the ruleset actually has. Anything else is a word the fight could not act on.
+  const types = knownTypes(definition);
+  const conditions = new Set(definition.sheet.live.conditions.map((condition) => condition.id));
+  const saves = new Set(definition.sheet.saves.map((save) => save.id));
+  const abilities = new Set(definition.sheet.abilities.map((ability) => ability.id));
+  const budgets = combat.economy.budgets.map((budget) => budget.id);
+  const mainBudget = budgets[0]!;
+
+  for (const key of ["resist", "vulnerable", "immune"] as const) {
+    const kept = onlyKnown(block[key], types);
+    if (!kept) continue;
+    const dropped = (block[key]?.length ?? 0) - kept.length;
+    if (dropped > 0) adjusted.push(`${dropped} damage type this ruleset does not have was dropped from ${key}.`);
+    if (kept.length > 0) block[key] = kept;
+    else delete block[key];
+  }
+  if (block.conditionImmunities) {
+    const kept = block.conditionImmunities.filter((condition) => conditions.has(condition));
+    if (kept.length < block.conditionImmunities.length) {
+      adjusted.push("A condition this ruleset does not have was dropped from the immunities.");
+    }
+    if (kept.length > 0) block.conditionImmunities = kept;
+    else delete block.conditionImmunities;
+  }
+  if (block.saves) {
+    const kept = Object.fromEntries(Object.entries(block.saves).filter(([id]) => saves.has(id)));
+    if (Object.keys(kept).length < Object.keys(block.saves).length) {
+      adjusted.push("A save this ruleset does not have was dropped.");
+    }
+    if (Object.keys(kept).length > 0) block.saves = kept;
+    else delete block.saves;
+  }
+  if (block.abilities) {
+    const kept = Object.fromEntries(Object.entries(block.abilities).filter(([id]) => abilities.has(id)));
+    if (Object.keys(kept).length < Object.keys(block.abilities).length) {
+      adjusted.push("An ability this ruleset does not have was dropped.");
+    }
+    if (Object.keys(kept).length > 0) block.abilities = kept;
+    else delete block.abilities;
+  }
+
+  const health = block.health;
+  if (health < tier.health[0] || health > tier.health[1]) {
+    block.health = Math.min(tier.health[1], Math.max(tier.health[0], Math.floor(health)));
+    // The band is about the number, so once the number is set the dice have nothing left to decide.
+    if (block.healthDice) delete block.healthDice;
+    adjusted.push(
+      `Health ${health} was pulled into the ${tier.health[0]} to ${tier.health[1]} of ${tier.label}, and is now ${block.health}.`,
+    );
+  }
+  const defenseCap = tier.defense + RULESET_CLAMP_HEADROOM;
+  if (block.defense > defenseCap) {
+    adjusted.push(`Defense ${block.defense} was lowered to ${defenseCap}.`);
+    block.defense = defenseCap;
+  }
+
+  if (block.actions.length > RULESET_CLAMP_MAX_ACTIONS) {
+    adjusted.push(`Only the first ${RULESET_CLAMP_MAX_ACTIONS} of ${block.actions.length} actions were kept.`);
+    block.actions = block.actions.slice(0, RULESET_CLAMP_MAX_ACTIONS);
+  }
+  const ids = new Set(block.actions.map(actionId));
+  const sequences = new Set(
+    block.actions.flatMap((action, index) => (action.sequence ? [actionId(action, index)] : [])),
+  );
+  const toHitCap = tier.toHit + RULESET_CLAMP_HEADROOM;
+  const difficultyCap = tier.saveDifficulty + RULESET_CLAMP_HEADROOM;
+  block.actions = block.actions.flatMap((action) => {
+    if (!budgets.includes(action.budget)) {
+      adjusted.push(`"${action.name}" spent a budget this ruleset does not have, so it spends ${mainBudget}.`);
+      action.budget = mainBudget;
+    }
+    if (action.toHit !== undefined && action.toHit > toHitCap) {
+      adjusted.push(`"${action.name}" now hits at ${toHitCap} instead of ${action.toHit}.`);
+      action.toHit = toHitCap;
+    }
+    if (action.damage?.type && types && !types.has(action.damage.type.trim().toLowerCase())) {
+      adjusted.push(
+        `The damage type "${action.damage.type}" is not one this ruleset has, so "${action.name}" deals untyped damage.`,
+      );
+      delete action.damage.type;
+    }
+    if (action.save && !saves.has(action.save.save)) {
+      adjusted.push(`"${action.name}" asked for a save this ruleset does not have, so it simply lands.`);
+      delete action.save;
+    }
+    if (action.save && action.save.difficulty > difficultyCap) {
+      adjusted.push(`The save against "${action.name}" was lowered to ${difficultyCap}.`);
+      action.save.difficulty = difficultyCap;
+    }
+    if (action.saveDifficulty !== undefined && action.saveDifficulty > difficultyCap) {
+      adjusted.push(`The save against "${action.name}" was lowered to ${difficultyCap}.`);
+      action.saveDifficulty = difficultyCap;
+    }
+    if (action.applies) {
+      const difficulty = action.save?.difficulty ?? action.saveDifficulty;
+      const kept = action.applies.flatMap((applies) => {
+        if (!conditions.has(applies.condition)) {
+          adjusted.push(`"${action.name}" applied a condition this ruleset does not have, so it was dropped.`);
+          return [];
+        }
+        // A save that ends it needs a save the sheet has AND a number to roll against, or the
+        // condition would never come off.
+        if (applies.saveEnds && (!saves.has(applies.saveEnds.save) || difficulty === undefined)) {
+          if (applies.duration === "until-save") {
+            adjusted.push(
+              `"${action.name}" applied ${applies.condition} until a save nothing could roll, so it was dropped.`,
+            );
+            return [];
+          }
+          adjusted.push(`The save that ends ${applies.condition} was dropped, so it runs on its own clock.`);
+          const { saveEnds: _dropped, ...rest } = applies;
+          return [rest];
+        }
+        return [applies];
+      });
+      if (kept.length > 0) action.applies = kept;
+      else delete action.applies;
+    }
+    if (action.sequence) {
+      const steps = action.sequence.filter((step) => ids.has(step.action) && !sequences.has(step.action));
+      if (steps.length === 0) {
+        adjusted.push(`"${action.name}" named nothing this block still has, so it was dropped.`);
+        return [];
+      }
+      if (steps.length < action.sequence.length) {
+        adjusted.push(`"${action.name}" lost a part that is not on this block.`);
+      }
+      action.sequence = steps;
+    }
+    return [action];
+  });
+
+  // Damage last, because dropping a save or an action changes what the best round is.
+  const cap = tier.damagePerRound[1];
+  const byId = new Map(block.actions.map((action, index) => [actionId(action, index), action]));
+  let guard = 0;
+  let scaled = false;
+  while (guard++ < 500) {
+    const round = bestRound(block.actions);
+    if (round.average <= cap) break;
+    // The heaviest part of the heaviest round: shaving that is what brings the round down.
+    const part = round.parts
+      .map((id) => byId.get(id))
+      .filter((action): action is RulesetStatBlockAction => !!action?.damage)
+      .sort((left, right) => damageAverage(right) - damageAverage(left))[0];
+    const damage = part?.damage;
+    if (!damage) break;
+    // Dice first, then the flat part, and never all the way to nothing: an action that deals zero
+    // is not a scaled-down action, it is a missing one.
+    const rolls = damage.count > 0 && damage.sides > 0;
+    if (damage.count > 1 && damage.sides > 0) damage.count -= 1;
+    else if (damage.flat > (rolls ? 0 : 1)) damage.flat -= 1;
+    else break;
+    scaled = true;
+  }
+  if (scaled) {
+    const left = Math.round(bestRound(block.actions).average * 100) / 100;
+    adjusted.push(
+      left <= cap
+        ? `The damage was scaled down until the best round averages ${left}, inside the ${tier.damagePerRound[0]} to ${cap} of ${tier.label}.`
+        : `The damage was scaled down to the smallest dice this block can have, and the best round still averages ${left} against the ${cap} of ${tier.label}.`,
+    );
+  }
+  return { block, adjusted };
+}

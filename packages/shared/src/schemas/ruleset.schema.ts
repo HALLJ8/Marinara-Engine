@@ -801,9 +801,7 @@ export const RULESET_CREATURE_MAX_ACTIONS = 12;
  *  average is what a forecast reads, so a menu never promises a die nobody has thrown. */
 const creatureHealthSchema = z.union([
   z.number().int().min(1).max(100000),
-  z
-    .object({ dice: catalogDice, flat: z.number().int().min(-1000).max(100000).optional() })
-    .strict(),
+  z.object({ dice: catalogDice, flat: z.number().int().min(-1000).max(100000).optional() }).strict(),
 ]);
 
 /** What one action does to what it reaches: the same amount shape a catalog entry uses, plus the
@@ -869,7 +867,10 @@ const creatureActionSchema = z
       .max(6)
       .optional(),
     /** Bought out of the creature's own points instead of a budget. */
-    signature: z.object({ cost: z.number().int().min(1).max(20) }).strict().optional(),
+    signature: z
+      .object({ cost: z.number().int().min(1).max(20) })
+      .strict()
+      .optional(),
   })
   .strict()
   .superRefine((action, ctx) => {

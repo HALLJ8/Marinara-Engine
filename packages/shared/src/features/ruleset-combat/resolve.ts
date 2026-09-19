@@ -8,21 +8,21 @@
 
 import type { RulesetCombat, RulesetDefinition } from "../../schemas/ruleset.schema.js";
 import { readRulesetLive } from "../rulesets/live-state.js";
+import { rollRulesetDice, sumOf } from "./dice.js";
 import {
   currentRulesetActor,
   refreshRulesetBudgets,
-  rollRulesetDice,
   rulesetCombatant,
   rulesetCombatConditions,
   rulesetCombatEffects,
   rulesetCombatFailsSave,
   rulesetCombatHealth,
   rulesetCombatStanding,
-  sumOf,
   writeRulesetSheet,
 } from "./encounter.js";
 import {
   planRulesetCombatCost,
+  rulesetActionAvailable,
   rulesetAttackMode,
   rulesetCombatOptions,
   rulesetCostSteps,
@@ -548,6 +548,53 @@ function refusal(
   return { state, events: [{ type: "refused", actorId, ...(optionId ? { optionId } : {}), reason }] };
 }
 
+/** Who a choice may be pointed at, checked against the side and the count the option declared.
+ *  `null` is a refusal: one target too many, one of the wrong side, or one the fight is over for. */
+function pickTargets(
+  state: RulesetEncounterState,
+  actor: RulesetCombatant,
+  wanted: RulesetCombatAction["targets"],
+  targetIds: readonly string[],
+  optionId: string,
+): RulesetCombatant[] | null {
+  if (wanted.count <= 0) return [];
+  const ids = [...new Set(targetIds)];
+  if (ids.length < 1 || ids.length > wanted.count) return null;
+  const targets: RulesetCombatant[] = [];
+  for (const id of ids) {
+    const target = rulesetCombatant(state, id);
+    // A combatant who is down can still be healed, and can still be hit while they are down. Only
+    // one the fight is over for is off the table.
+    if (!target || target.defeated) return null;
+    const sameSide = target.side === actor.side;
+    if (wanted.side === "self" && target.id !== actor.id) return null;
+    if (wanted.side === "ally" && !sameSide) return null;
+    if (wanted.side === "enemy" && sameSide) return null;
+    // Helping yourself is not help.
+    if (optionId === "standard:help" && target.id === actor.id) return null;
+    targets.push(target);
+  }
+  return targets;
+}
+
+/** What using an action costs the actor in its own bookkeeping: one of its uses, and, for an action
+ *  that recharges, its availability until the dice bring it back. */
+function spendAvailability(ctx: RulesetCombatContext, actor: RulesetCombatant, action: RulesetCombatAction): void {
+  if (action.uses) {
+    const left = Math.max(0, (actor.uses[action.id] ?? 0) - 1);
+    actor.uses[action.id] = left;
+    ctx.events.push({
+      type: "uses",
+      actorId: actor.id,
+      optionId: action.id,
+      label: action.label,
+      left,
+      of: action.uses.count,
+    });
+  }
+  if (action.recharge && !actor.spent.includes(action.id)) actor.spent.push(action.id);
+}
+
 /** Why an option the caller named is not on the menu, as precisely as the rules can say. */
 function whyNotOffered(combat: RulesetCombat, actor: RulesetCombatant, optionId: string): RulesetCombatRefusal {
   const action = actor.actions.find((entry) => entry.id === optionId);
@@ -583,6 +630,10 @@ export function applyRulesetCombatChoice(
   }
   const actor = rulesetCombatant(state, choice.actorId);
   if (!actor) return refusal(state, choice.actorId, "unknown-actor", choice.optionId);
+  // Points, not a budget, and not on this combatant's own turn: a signature action is bought while
+  // somebody else is acting, so it is checked before the turn is.
+  const signature = actor.actions.find((entry) => entry.id === choice.optionId && entry.signature);
+  if (signature) return applySignature(definition, combat, state, actor, signature, choice, roller);
   if (currentRulesetActor(state)?.id !== actor.id)
     return refusal(state, choice.actorId, "not-your-turn", choice.optionId);
   // Ending a turn is always allowed, down or not: a character lying at zero still has a turn, and
@@ -599,28 +650,8 @@ export function applyRulesetCombatChoice(
   }
 
   // Targets, checked against the side and the count the option itself declared.
-  const wanted = option.targets;
-  const ids = [...new Set(choice.targetIds)];
-  const targets: RulesetCombatant[] = [];
-  if (wanted.count > 0) {
-    if (ids.length < 1 || ids.length > wanted.count) return refusal(state, choice.actorId, "bad-target", option.id);
-    for (const id of ids) {
-      const target = rulesetCombatant(state, id);
-      // A combatant who is down can still be healed, and can still be hit while they are down. Only
-      // one the fight is over for is off the table.
-      if (!target || target.defeated) return refusal(state, choice.actorId, "bad-target", option.id);
-      const sameSide = target.side === actor.side;
-      if (wanted.side === "self" && target.id !== actor.id)
-        return refusal(state, choice.actorId, "bad-target", option.id);
-      if (wanted.side === "ally" && !sameSide) return refusal(state, choice.actorId, "bad-target", option.id);
-      if (wanted.side === "enemy" && sameSide) return refusal(state, choice.actorId, "bad-target", option.id);
-      // Helping yourself is not help.
-      if (option.id === "standard:help" && target.id === actor.id) {
-        return refusal(state, choice.actorId, "bad-target", option.id);
-      }
-      targets.push(target);
-    }
-  }
+  const targets = pickTargets(state, actor, option.targets, choice.targetIds, option.id);
+  if (!targets) return refusal(state, choice.actorId, "bad-target", option.id);
   if (choice.payWith !== undefined && !(option.payWith ?? []).includes(choice.payWith)) {
     return refusal(state, choice.actorId, "bad-pool", option.id);
   }
@@ -651,7 +682,52 @@ export function applyRulesetCombatChoice(
   for (const entry of paid.cost) {
     ctx.events.push({ type: "spend", actorId: working.id, pool: entry.pool, label: entry.label, amount: entry.amount });
   }
+  spendAvailability(ctx, working, action);
   resolveAction(ctx, working, action, workingTargets, choice.payWith);
+  const outcome = rulesetEncounterOutcome(ctx.state);
+  if (outcome !== "ongoing") ctx.events.push({ type: "outcome", outcome });
+  return finish();
+}
+
+/**
+ * One signature action, bought with the actor's own points. It spends no budget and takes no turn:
+ * it is what a creature does while somebody else is acting, which is why the actor whose turn it is
+ * has none to spend. The window that offers it is a later slice; the price, the refusals and the
+ * resolution are all here.
+ */
+function applySignature(
+  definition: RulesetDefinition,
+  combat: RulesetCombat,
+  state: RulesetEncounterState,
+  actor: RulesetCombatant,
+  action: RulesetCombatAction,
+  choice: RulesetCombatChoice,
+  roller: RulesetCombatRoller,
+): RulesetCombatStep {
+  const cost = action.signature?.cost ?? 0;
+  const points = actor.signature?.points;
+  if (currentRulesetActor(state)?.id === actor.id) {
+    return refusal(state, choice.actorId, "not-your-turn", action.id);
+  }
+  if (!rulesetCombatStanding(actor)) return refusal(state, choice.actorId, "down", action.id);
+  if (rulesetCombatEffects(definition, combat, actor).has("cannot-act")) {
+    return refusal(state, choice.actorId, "cannot-act", action.id);
+  }
+  if (points === undefined || points < cost || !rulesetActionAvailable(actor, action)) {
+    return refusal(state, choice.actorId, "insufficient", action.id);
+  }
+  const targets = pickTargets(state, actor, action.targets, choice.targetIds, action.id);
+  if (!targets) return refusal(state, choice.actorId, "bad-target", action.id);
+
+  const { ctx, finish } = begin(definition, combat, state, roller);
+  const working = rulesetCombatant(ctx.state, actor.id)!;
+  const workingTargets = targets.map((target) => rulesetCombatant(ctx.state, target.id)!);
+  const left = Math.max(0, (working.signature?.points ?? 0) - cost);
+  if (working.signature) working.signature.points = left;
+  ctx.events.push({ type: "signature", actorId: working.id, optionId: action.id, label: action.label, cost, left });
+  const workingAction = working.actions.find((entry) => entry.id === action.id)!;
+  spendAvailability(ctx, working, workingAction);
+  resolveAction(ctx, working, workingAction, workingTargets);
   const outcome = rulesetEncounterOutcome(ctx.state);
   if (outcome !== "ongoing") ctx.events.push({ type: "outcome", outcome });
   return finish();
@@ -679,6 +755,42 @@ function resolveStandard(
   });
 }
 
+/**
+ * A sequence: the other actions it names, in order, for the one budget that was already spent.
+ *
+ * Targets are handed out in order when there are enough for every part, and otherwise every part
+ * takes the ones at the front of the list, so a single id sends the whole sequence at one opponent.
+ * A part whose target is already down by the time it comes round simply does not land: nothing here
+ * picks a new one, because choosing is the caller's job.
+ */
+function resolveSequence(
+  ctx: RulesetCombatContext,
+  actor: RulesetCombatant,
+  action: RulesetCombatAction,
+  targets: RulesetCombatant[],
+): void {
+  const byId = new Map(actor.actions.map((entry) => [entry.id, entry]));
+  const parts: RulesetCombatAction[] = [];
+  for (const step of action.sequence ?? []) {
+    const named = byId.get(step.actionId);
+    // A part that names another sequence is refused at import, so this is a hand-written block
+    // pointing at nothing, and it costs that part rather than the turn.
+    if (!named || named.sequence) continue;
+    for (let time = 0; time < step.times; time++) parts.push(named);
+  }
+  const wanted = parts.reduce((total, part) => total + part.targets.count, 0);
+  const enough = targets.length >= wanted;
+  let cursor = 0;
+  for (const part of parts) {
+    const count = part.targets.count;
+    const chosen = (enough ? targets.slice(cursor, cursor + count) : targets.slice(0, count)).filter(
+      (target) => !target.defeated,
+    );
+    cursor += count;
+    if (chosen.length > 0) resolveAction(ctx, actor, part, chosen);
+  }
+}
+
 function resolveAction(
   ctx: RulesetCombatContext,
   actor: RulesetCombatant,
@@ -686,6 +798,7 @@ function resolveAction(
   targets: RulesetCombatant[],
   payWith?: string,
 ): void {
+  if (action.sequence) return resolveSequence(ctx, actor, action, targets);
   if (action.concentration) startConcentration(ctx, actor, action);
   const steps = payWith ? rulesetCostSteps(ctx.definition, action, payWith) : 0;
   const extra = action.use?.perCostStep && steps > 0 ? { amount: action.use.perCostStep, times: steps } : undefined;
@@ -801,6 +914,40 @@ function resolveAction(
 
 // ── Between turns ──
 
+/** The points a signature action is bought with, back to full at the start of their own turn: they
+ *  are what this combatant can spend before their next one comes round. */
+function refreshRulesetSignature(actor: RulesetCombatant): void {
+  if (actor.signature) actor.signature.points = actor.signature.max;
+}
+
+/** The roll an action that recharges makes at the start of its owner's turn. `from` or higher on
+ *  its own dice brings it back; anything else leaves it spent and says what it rolled. */
+function rollRulesetRecharges(ctx: RulesetCombatContext, actor: RulesetCombatant): void {
+  for (const id of [...actor.spent]) {
+    const action = actor.actions.find((entry) => entry.id === id);
+    // Nothing on this block recharges it any more, so it is simply available again rather than
+    // spent forever by a block that changed under it.
+    if (!action?.recharge) {
+      actor.spent = actor.spent.filter((entry) => entry !== id);
+      continue;
+    }
+    const rolls = rollRulesetDice(ctx.roll, action.recharge.dice.count, action.recharge.dice.sides);
+    const kept = sumOf(rolls);
+    const back = kept >= action.recharge.from;
+    if (back) actor.spent = actor.spent.filter((entry) => entry !== id);
+    ctx.events.push({
+      type: "recharge",
+      actorId: actor.id,
+      optionId: id,
+      label: action.label,
+      rolls,
+      kept,
+      from: action.recharge.from,
+      back,
+    });
+  }
+}
+
 /** Who is next to act: anybody the fight is not over for. A member who is down with nothing left to
  *  roll is stepped over until somebody brings them back. */
 function canTakeTurn(combatant: RulesetCombatant): boolean {
@@ -854,6 +1001,8 @@ export function advanceRulesetTurn(
     // else and is spent by their own next attack, so it survives this.
     actor.flags = actor.flags.helped ? { helped: true } : {};
     ctx.events.push({ type: "turn", actorId: actor.id, round });
+    refreshRulesetSignature(actor);
+    rollRulesetRecharges(ctx, actor);
     tickConditions(ctx, actor, "turn-start");
     if (actor.dying && !actor.stable && !actor.defeated) deathSave(ctx, actor);
   }
