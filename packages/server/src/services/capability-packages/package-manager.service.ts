@@ -527,13 +527,15 @@ export function getCapabilityPackageInstallIssue(
   if (declaresRuleset && !manifest.kind.includes("ruleset")) {
     return `Packages that list ${RULESET_ASSET_PATH} must declare the "ruleset" kind`;
   }
-  const catalogs =
+  const ruleset =
     rulesetDocument && typeof rulesetDocument === "object"
-      ? (rulesetDocument as { catalogs?: unknown }).catalogs
+      ? (rulesetDocument as { catalogs?: unknown; battle?: unknown })
       : undefined;
+  const api = manifest.schemaVersion === 2 ? manifest.capabilityApi : null;
+  const declaresApi = (minor: number) => !!api && (api.major > 1 || (api.major === 1 && api.minor >= minor));
+  const catalogs = ruleset?.catalogs;
   if (Array.isArray(catalogs) && catalogs.length > 0) {
-    const api = manifest.schemaVersion === 2 ? manifest.capabilityApi : null;
-    if (!api || api.major < 1 || (api.major === 1 && api.minor < 21)) {
+    if (!declaresApi(21)) {
       return "A ruleset with catalogs requires schemaVersion 2 and capabilityApi 1.21 or newer";
     }
     // A catalog file the ruleset names but the package never declared would install fine and then
@@ -550,6 +552,12 @@ export function getCapabilityPackageInstallIssue(
         return `The ruleset names the catalog file ${asset}, which is not listed in contributions.assets.paths`;
       }
     }
+  }
+  // The battle block lives inside the ruleset file too, so it is read the same way and for the same
+  // reason: an Engine that does not know the key refuses the whole file, and the package would be
+  // installed with no rules at all.
+  if (ruleset?.battle && typeof ruleset.battle === "object" && !declaresApi(22)) {
+    return "A ruleset with a battle block requires schemaVersion 2 and capabilityApi 1.22 or newer";
   }
   return null;
 }

@@ -659,6 +659,40 @@ const catalogSchema = z
     }
   });
 
+// ── Battles: what a fight may read from the sheet ──
+
+/** One live pool, named. Its own object so the block reads the same wherever a pool is wanted. */
+const battlePoolSchema = z.object({ pool: sheetId }).strict();
+
+/** A sheet list that contributes combat skills. Only rows carrying the `_catalog` mark count, and
+ *  only when the entry they came from has `mechanics`: a hand-typed row says nothing in numbers.
+ *  `onlyWhen` is the boolean column a row must have set (5e's "prepared"); `alwaysWhen` lets a row
+ *  through whatever that boolean says (5e's cantrips, which are never prepared). */
+const battleSkillsSchema = z
+  .object({
+    list: sheetId,
+    onlyWhen: sheetId.optional(),
+    alwaysWhen: z.object({ column: sheetId, equals: sheetScalar }).strict().optional(),
+  })
+  .strict();
+
+/** Optional, and absent rather than empty when a ruleset does not opt in: with no `battle` block a
+ *  battle behaves exactly as it did before the block existed. It does NOT make combat follow the
+ *  ruleset. It lends the Engine's own combat model the sheet's numbers: hit points, an energy pool,
+ *  slots, and the catalog-marked rows that become skills. The damage math stays the Engine's, which
+ *  is why `coverage.combat` keeps its own meaning and nothing here reads it. */
+const battleSchema = z
+  .object({
+    health: battlePoolSchema,
+    energy: battlePoolSchema.optional(),
+    slots: z
+      .array(z.object({ pool: sheetId, level: z.number().int().min(1).max(9) }).strict())
+      .max(12)
+      .optional(),
+    skills: z.array(battleSkillsSchema).max(8).optional(),
+  })
+  .strict();
+
 const rulesetDefinitionBaseSchema = z
   .object({
     schemaVersion: z.literal(1),
@@ -678,6 +712,8 @@ const rulesetDefinitionBaseSchema = z
     /** Optional, and absent rather than empty when the ruleset ships none, so a file that predates
      *  catalogs still parses to exactly the bytes it did before. */
     catalogs: z.array(catalogSchema).max(12).optional(),
+    /** Optional, and absent rather than empty, for the same reason as `catalogs`. */
+    battle: battleSchema.optional(),
   })
   .strict();
 
@@ -996,6 +1032,55 @@ function refineRulesetDefinition(def: RulesetDefinitionBase, ctx: z.RefinementCt
       issue([...path, "entries", ...entryIssue.path], entryIssue.message);
     }
   });
+
+  if (def.battle) {
+    const battle = def.battle;
+    // A row pool belongs to a list row and is keyed by that row's name, so it can appear and vanish
+    // as the player edits the sheet. Battle pools are the declared ones only.
+    const battlePool = (pool: string, path: (string | number)[]): void => {
+      if (pools.has(pool)) return;
+      issue(
+        path,
+        listById.get(pool)?.pools
+          ? `"${pool}" is a list whose rows are pools, not a live pool`
+          : `Unknown live pool "${pool}"`,
+      );
+    };
+    battlePool(battle.health.pool, ["battle", "health", "pool"]);
+    if (battle.energy) {
+      battlePool(battle.energy.pool, ["battle", "energy", "pool"]);
+      // Health is not spendable as energy: the Engine drains hit points as damage and spends the
+      // energy pool as a cost, and one pool cannot be both.
+      if (battle.energy.pool === battle.health.pool) {
+        issue(["battle", "energy", "pool"], "The energy pool cannot also be the health pool");
+      }
+    }
+    const slotLevels = new Set<number>();
+    const slotPools = new Set<string>();
+    battle.slots?.forEach((slot, index) => {
+      const path = ["battle", "slots", index];
+      battlePool(slot.pool, [...path, "pool"]);
+      if (slot.pool === battle.health.pool || slot.pool === battle.energy?.pool) {
+        issue([...path, "pool"], `"${slot.pool}" is already the health or energy pool`);
+      }
+      if (slotPools.has(slot.pool)) issue([...path, "pool"], `Duplicate slot pool "${slot.pool}"`);
+      slotPools.add(slot.pool);
+      if (slotLevels.has(slot.level)) issue([...path, "level"], `Duplicate slot level ${slot.level}`);
+      slotLevels.add(slot.level);
+    });
+    battle.skills?.forEach((source, index) => {
+      const path = ["battle", "skills", index];
+      const list = listById.get(source.list);
+      if (!list) return issue([...path, "list"], `Unknown list "${source.list}"`);
+      const typeOf = (id: string) => list.columns.find((column) => column.id === id)?.type;
+      if (source.onlyWhen && typeOf(source.onlyWhen) !== "boolean") {
+        issue([...path, "onlyWhen"], "Must name a boolean column");
+      }
+      if (source.alwaysWhen && typeOf(source.alwaysWhen.column) === undefined) {
+        issue([...path, "alwaysWhen", "column"], `Unknown column "${source.alwaysWhen.column}"`);
+      }
+    });
+  }
   void lists;
 }
 
@@ -1010,6 +1095,10 @@ export type RulesetField = z.infer<typeof rulesetFieldSchema>;
 export type RulesetListColumn = z.infer<typeof rulesetListColumnSchema>;
 export type RulesetDerived = z.infer<typeof rulesetDerivedSchema>;
 export type RulesetRest = RulesetDefinition["rests"][number];
+/** The opt-in battle block. Absent on a ruleset that does not lend its sheet to battles. */
+export type RulesetBattle = NonNullable<RulesetDefinition["battle"]>;
+export type RulesetBattleSlot = NonNullable<RulesetBattle["slots"]>[number];
+export type RulesetBattleSkills = NonNullable<RulesetBattle["skills"]>[number];
 /** Where a community ruleset was imported from. `url` is null for a file the user picked. */
 export type CommunityRulesetSource = { kind: "repository" | "local"; url: string | null };
 

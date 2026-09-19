@@ -263,13 +263,25 @@
               "list": "knacks",
               "values": {
                 "name": "Hold the Line",
-                "notes": "Sway to steady the party. Clear Shaken from one ally who can hear you."
+                "notes": "Spend 1 Luck to steady the party. Clear Shaken from one ally who can hear you."
               }
             }
           ],
-          "mechanics": { "kind": "buff", "range": 4, "targets": "ally" }
+          "mechanics": {
+            "$comment": "This one costs Luck, which the battle block names as the energy pool, so a battle offers it and spends it. Last Ember costs Grit, which is the health pool, and a battle cannot spend hit points as energy: that knack is left out of the fight instead.",
+            "kind": "buff",
+            "range": 4,
+            "targets": "ally",
+            "cost": [{ "pool": "luck", "amount": 1 }]
+          }
         }
       ]
     }
-  ]
+  ],
+  "battle": {
+    "$comment": "Optional. It does not make battles follow these rules: it lends Marinara's own combat the numbers on the sheet. Grit is what a fight damages, Luck is what a knack spends, there are no slots here, and the knacks a player picked from the catalog become the skills they can use.",
+    "health": { "pool": "grit" },
+    "energy": { "pool": "luck" },
+    "skills": [{ "list": "knacks" }]
+  }
 }

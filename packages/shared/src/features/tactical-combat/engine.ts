@@ -989,6 +989,11 @@ export function buildTacticalSummary(state: TacticalCombatState): CombatSummary 
         hp: u.hp,
         maxHp: u.maxHp,
         ko: u.hp <= 0,
+        // Carried like the director's summary does: what a battle spent is what the ruleset sheet
+        // has to be told about afterwards.
+        mp: u.mp,
+        maxMp: u.maxMp,
+        spellSlots: u.spellSlots,
         statusEffects: (u.statusEffects ?? []).map((e) => e.name),
       })),
     enemies: state.units

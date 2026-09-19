@@ -239,7 +239,12 @@ const capabilityPackageManifestBaseSchema = z
 //        assets beside it. Not a soft seam either, for the same reason as 1.20: an engine that
 //        cannot read `catalogs` refuses the whole ruleset file, so a package that ships them
 //        declares 1.21 and an older engine refuses the install cleanly. No permission.
-export const supportedCapabilityApi = Object.freeze({ major: 1, minor: 21 } as const);
+// 1.22: the ruleset combat bridge — a ruleset may carry an optional `battle` block naming the live
+//        pools a fight reads as hit points, energy and slots, and the sheet lists whose
+//        catalog-marked rows become the Engine's own combat skills. Not a soft seam, for the same
+//        reason as 1.20 and 1.21: an engine that cannot read `battle` refuses the whole ruleset
+//        file, so a package that ships one declares 1.22. No permission.
+export const supportedCapabilityApi = Object.freeze({ major: 1, minor: 22 } as const);
 
 const capabilityApiVersionSchema = z
   .object({

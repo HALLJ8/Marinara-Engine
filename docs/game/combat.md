@@ -39,6 +39,10 @@ You do not start combat yourself. The GM starts a fight when the story calls for
 
 The battle screen shows your party on one side and the enemies on the other. Each fighter has a health bar (HP, hit points) and, if they use skills, a magic bar (MP, magic points). The turn order is shown at the top as **Next:** followed by the name of whoever acts next. A round counter shows **Round** and the current round number.
 
+### Games that use a ruleset
+
+If your game uses a ruleset (see [The ruleset sheet](party-and-npcs.md#the-ruleset-sheet)) and that ruleset says battles may read the sheet, each party member starts the fight with the hit points, the resource pool and the spell slots their sheet has right now, and with the abilities they picked from the ruleset's catalogs as skills. When the fight ends, the damage they took, the healing they got and the slots they spent are written back to the sheet. The rest of the battle is unchanged: the dice math on this page is still Marinara's, and attack rolls, saving throws and concentration from the tabletop system are not applied. A fight you leave by deleting the message it started in writes nothing back, because it did not happen. A ruleset that says nothing about battles leaves combat exactly as it is described here.
+
 ## The action menu
 
 On your turn, you pick one action from the menu. The six actions are:
