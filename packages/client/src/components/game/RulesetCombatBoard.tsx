@@ -90,6 +90,8 @@ export function RulesetCombatBoard({
   // The keyboard starts on whoever is up, so a player who never touches the pointer is already
   // where the turn is. It follows the turn, and nothing else moves it.
   const [cursor, setCursor] = useState<RulesetCombatCell>({ x: 0, y: 0 });
+  const cursorRef = useRef(cursor);
+  cursorRef.current = cursor;
   useEffect(() => {
     if (typeof actor?.x === "number" && typeof actor?.y === "number") setCursor({ x: actor.x, y: actor.y });
   }, [actor?.x, actor?.y]);
@@ -112,6 +114,17 @@ export function RulesetCombatBoard({
     returnFocus.current = false;
     menuRoot.current?.focus();
   }, [step]);
+
+  // Opening a step that is finished ON THE BOARD (walking, aiming) takes the keyboard to the board,
+  // onto the square of whoever is up. The button that opened the step has just been unmounted, so
+  // without this the focus falls to the page and neither the arrows nor Escape reach anything,
+  // which is exactly what a player who clicked the option with a mouse and then pressed Escape got.
+  const boardStage = step?.stage === "move" || step?.stage === "aim" ? step.stage : null;
+  const boardStepOption = boardStage ? step?.option.id : undefined;
+  useEffect(() => {
+    if (!boardStage) return;
+    tiles.current.get(rulesetCellKey(cursorRef.current))?.focus();
+  }, [boardStage, boardStepOption]);
 
   const focusCell = (x: number, y: number) => {
     const clampedX = Math.max(0, Math.min(grid.width - 1, x));
@@ -221,16 +234,20 @@ export function RulesetCombatBoard({
 
       {/* The board keeps a floor of its own height: the menu and the hint below both bound
           themselves, so a long menu or a long sentence can never squeeze the squares away. */}
-      <div className="relative z-10 flex min-h-[9rem] flex-1 items-center justify-center overflow-auto p-1.5 sm:min-h-[12rem] sm:p-3">
+      <div className="relative z-10 flex min-h-[9rem] flex-1 items-center justify-center overflow-auto p-1.5 [container-type:size] sm:min-h-[12rem] sm:p-3">
         <div
           role="group"
           aria-label={t("game.combat.ruleset.board.title")}
-          // Whole and square, whichever way the room runs out. The width is the box's, the height
-          // follows the board's own shape, and the ceiling on the height is carried back through
-          // that shape to the width: a short box gives a smaller board, never a stretched one. A
-          // board with no room left scrolls inside THIS box, so the page never scrolls sideways.
-          className="relative m-auto max-h-full max-w-full shrink-0"
-          style={{ aspectRatio: `${grid.width} / ${grid.height}`, width: "100%", height: "auto" }}
+          // Whole and square, whichever way the room runs out. The box above is a size container, so
+          // the board can ask how wide AND how tall its room is: it takes the full width, or the
+          // width its own shape allows at the full height, whichever is smaller. (A width of 100%
+          // with a ceiling on the height does NOT do this: the ceiling clamps the height and the
+          // width stays, which stretched every square sideways on a wide screen.)
+          className="relative m-auto shrink-0"
+          style={{
+            aspectRatio: `${grid.width} / ${grid.height}`,
+            width: `min(100cqw, calc(100cqh * ${grid.width} / ${grid.height}))`,
+          }}
         >
           <div
             className="absolute inset-0 grid gap-[2px]"
