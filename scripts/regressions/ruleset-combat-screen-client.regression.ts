@@ -250,7 +250,7 @@ const menuOf = (definition: RulesetDefinition, state: RulesetEncounterState, act
   })) satisfies DirectedRulesetOption[];
 
 const line = (definition: RulesetDefinition, state: RulesetEncounterState, event: DirectedRulesetEvent) =>
-  rulesetCombatEventLine(event, rulesetCombatNames(definition, viewOf(state)), t);
+  rulesetCombatEventLine(event, rulesetCombatNames(definition, viewOf(state), t), t);
 
 // ── A real 5e fight: a d20 against AC, and the arithmetic printed ──
 
@@ -282,7 +282,7 @@ const line = (definition: RulesetDefinition, state: RulesetEncounterState, event
     { actorId: "brenna", optionId: sword.id, targetIds: ["lurker"] },
     dice(17, 5),
   );
-  const names = rulesetCombatNames(fiveE, viewOf(swing.state));
+  const names = rulesetCombatNames(fiveE, viewOf(swing.state), t);
   const printed = rulesetCombatLogLines(
     swing.events.map((event, index) => ({ seq: index + 1, event: event as DirectedRulesetEvent })),
     names,
@@ -353,7 +353,7 @@ const line = (definition: RulesetDefinition, state: RulesetEncounterState, event
     { actorId: "juno", optionId: axe.id, targetIds: ["ash"] },
     dice(4, 3, 5),
   );
-  const names = rulesetCombatNames(ember, viewOf(swing.state));
+  const names = rulesetCombatNames(ember, viewOf(swing.state), t);
   const printed = swing.events.flatMap((event) => {
     const text = rulesetCombatEventLine(event as DirectedRulesetEvent, names, t);
     return text ? [text] : [];
