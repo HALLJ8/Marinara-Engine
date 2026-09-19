@@ -373,8 +373,10 @@ export function parseSkillCheckTagBody(body: string): SkillCheckTag | null {
     values.has("rolls") &&
     (rollsValue ?? "").trim() === "" &&
     resolution === "successes" &&
-    total === 0 &&
-    modifier === 0 &&
+    // The written strings, not the parsed numbers: `parseInt` reads "0 or so" as 0, and only the
+    // Engine's own exact record may be read back this way.
+    values.get("total")?.trim() === "0" &&
+    values.get("modifier")?.trim() === "0" &&
     /^0d[1-9]\d{0,3}$/.test(declaredDice ?? "") &&
     (resultValue === "failure" || resultValue === "critical_failure" || resultValue === "critical failure");
   if (emptyPool) {

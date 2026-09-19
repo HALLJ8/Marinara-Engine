@@ -291,6 +291,8 @@ try {
       ` skill="Ward" dc="1" rolls="" used="0" modifier="0" total="0" result="success" resolution="successes" dice="0d10"`,
       ` skill="Ward" dc="1" rolls="" used="0" modifier="0" total="0" result="failure" resolution="successes" dice="3d10"`,
       ` skill="Ward" dc="1" rolls="" used="0" modifier="0" total="2" result="failure" resolution="successes" dice="0d10"`,
+      ` skill="Ward" dc="1" rolls="" used="0" modifier="0" total="0 or so" result="failure" resolution="successes" dice="0d10"`,
+      ` skill="Ward" dc="1" rolls="" used="0" modifier="0x1" total="0" result="failure" resolution="successes" dice="0d10"`,
     ]) {
       assert.equal(parseSkillCheckTagBody(forged)?.resolvedResult, undefined, forged);
     }
