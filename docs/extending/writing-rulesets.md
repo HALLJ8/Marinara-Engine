@@ -263,7 +263,8 @@ What it spends:
   naming a pool GROUP pays from the first pool of that group, in declaration order, that can afford
   it. There is no automatic climb to a higher pool, because a group is not always a ladder.
 - plus one from every list-row pool the same entry wrote, such as the counter that tracks a feature's
-  uses. That is the second row of the `Last Ember` entry above.
+  uses. That is the second row of the `Last Ember` entry above. A counter whose maximum is 0 has no
+  uses to give, so the command is refused instead of going through for free.
 
 `pool=` is the upcast: the same single price, paid from another pool of the same group. It is only
 accepted when the cost has exactly one term and the named pool shares that term's group. Anything

@@ -688,6 +688,11 @@ export function planRulesetUse(
       if (typeof name !== "string") continue;
       const key = `${list.id}${LIST_POOL_SEPARATOR}${name.trim().toLowerCase()}`;
       const pool = resolved.pools.find((candidate) => candidate.key === key);
+      // A counter whose maximum is 0 is not a pool at all (a scaled trick on a Heart of 0), so
+      // there is nothing left to use. Saying "ok, no cost" would hand out a free use.
+      if (!pool && name.trim() && !isRulesetItemHidden(list, build, definition)) {
+        return { ok: false, reason: "insufficient" };
+      }
       if (pool && !running.has(pool.key)) spend(pool, 1);
     }
   }

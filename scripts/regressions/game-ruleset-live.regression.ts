@@ -892,6 +892,16 @@ const fighter = buildFor({ level: 1, hp_max: 12 });
   assert.match(lastEmber.content, /op="use" name="Last Ember" result="ok" now="Grit 5\/6, Last Ember 1\/2"/);
   assert.deepEqual(lastEmber.live.vex, { pools: { grit: { value: 5 }, "tricks:last ember": { value: 1 } } });
 
+  // A Heart of 0 scales the trick to no uses at all, so its counter is not a pool. Using it is
+  // refused and the Grit it would also have cost stays where it was: never a free use.
+  const heartless = recomputeScaledRows(ember, { ...vex, abilities: { ...vex.abilities, heart: 0 } }, emberCatalogs);
+  const noUses = applySheetCommandTags(`[sheet: op="use" name="Last Ember"]`, {
+    ...emberContext,
+    cards: [{ name: "Vex", build: heartless }],
+  });
+  assert.match(noUses.content, /op="use" name="Last Ember" result="refused" reason="insufficient"/);
+  assert.deepEqual(noUses.live, {});
+
   // The entry's own label answers too, so a player who renamed their row on the sheet still has it.
   const renamed = {
     ...emberContext,
