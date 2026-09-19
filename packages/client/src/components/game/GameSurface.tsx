@@ -5145,7 +5145,8 @@ function GameSurfaceComponent({
                       Number.isInteger(sc.threshold) && sc.threshold! >= 1 && sc.threshold! <= 1000
                         ? sc.threshold
                         : undefined,
-                    bonusDice: sc.bonusDice !== undefined && Math.abs(sc.bonusDice) <= 20 ? sc.bonusDice : undefined,
+                    bonusDice:
+                      Number.isInteger(sc.bonusDice) && Math.abs(sc.bonusDice!) <= 20 ? sc.bonusDice : undefined,
                     messageId: msg.id,
                   })
                 ).result

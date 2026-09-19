@@ -143,7 +143,7 @@ A pool ruleset is Capability API 1.24 for a packaged ruleset. A community rulese
 - `bonus=` adds or takes dice, and is only offered while `situationalDice` is declared.
 - `with=` rolls a skill or save with another ability than its own. It works on both kinds, so a 5e ruleset gets "Strength (Intimidation)" from the same attribute.
 
-Each one is held to what your file declares: a value outside the range is pulled back to the nearest end, and an attribute your ruleset does not offer is ignored rather than refusing the check. The Engine always throws the dice itself. A pool result the model wrote is replaced, `mode="advantage"` is ignored because the kind has no advantage, and a die the player rolled before the turn does not apply.
+Each one is held to what your file declares: a value outside the range is pulled back to the nearest end, and an attribute your ruleset does not offer is ignored rather than refusing the check. The saved record then shows what the roll really used: the threshold and the bonus dice after your limits, and `with=` only when that ability was swapped in. The Engine always throws the dice itself. A pool result the model wrote is replaced, `mode="advantage"` is ignored because the kind has no advantage, and a die the player rolled before the turn does not apply.
 
 #### What is out of scope, and why
 

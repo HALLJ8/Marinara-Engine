@@ -131,7 +131,10 @@ export function serializeResolvedSkillCheckTag(result: SkillCheckResult, extras?
   const merged: SkillCheckTagExtras = {
     ...(result.threshold != null ? { threshold: result.threshold } : {}),
     ...(result.who ? { who: result.who } : {}),
-    ...extras,
+    ...(result.withAbility ? { with: result.withAbility } : {}),
+    ...(result.bonusDice ? { bonus: result.bonusDice } : {}),
+    // An extra a caller left undefined is absent, not an instruction to erase what the result says.
+    ...Object.fromEntries(Object.entries(extras ?? {}).filter(([, value]) => value !== undefined)),
   };
   return `${[
     `[skill_check: skill="${serializeSkillCheckAttribute(result.skill)}"`,

@@ -323,6 +323,13 @@ function resolveRulesetSkillCheck(
     );
   }
   const modifier = rulesetCheckModifierFor(ruleset, request.skill, request.who, request.withAbility);
+  // What the record may say about `with=`: the ability's own label, and only when the swap
+  // happened. An ability check has no other ability to swap in, and an unknown name was ignored.
+  const swapped =
+    target && target.type !== "ability" && target.withAbility
+      ? definition.sheet.abilities.find((ability) => ability.id === target.withAbility)?.label
+      : undefined;
+  const applied = swapped ? { withAbility: swapped } : {};
   // The injected d20 (tests, the sighted pool) stands in only where a d20 is what is rolled.
   const rollDie = (sides: number) => (sides === 20 && rollD20 ? rollD20() : rollDieSecurely(sides));
   const isSave = target?.type === "save";
@@ -344,6 +351,9 @@ function resolveRulesetSkillCheck(
       modifier: 0,
       resolution: "successes",
       ...rolled,
+      // The roller reports 0 where nothing was added; a record says nothing about that.
+      bonusDice: rolled.bonusDice || undefined,
+      ...applied,
       ...(request.who ? { who: request.who } : {}),
     };
   }
@@ -367,6 +377,7 @@ function resolveRulesetSkillCheck(
     modifier,
     resolution: "sum",
     ...rolled,
+    ...applied,
     ...(request.who ? { who: request.who } : {}),
   };
 }
@@ -552,7 +563,9 @@ export interface SkillCheckTagResolution {
  * the next turn read back the invention as fact.
  *
  * Idempotent: what it writes parses back as an audited result, so a second pass
- * over the same content rewrites nothing and rolls no dice. Pool systems
+ * over the same content rewrites nothing and rolls no dice. The one exception is a
+ * `dice-pool` RULESET's check, whose numbers are never vouched for and would be rolled
+ * again; generation only ever hands this function a freshly written segment. Pool systems
  * (`resolution="successes"`, non-d20 `dice=`) are never audited and never
  * rewritten — the engine does not implement those rules and will not pretend to.
  * That holds for a malformed pool tag as much as a tidy one: the shared reader
@@ -594,13 +607,14 @@ export async function resolveSkillCheckTagsInContent(
   let keepWho = options.rulesetPinned === true;
   // The ask a rewrite keeps when the numbers go: who it was for, and the two per-check freedoms a
   // ruleset may grant. All three are only ever written by a ruleset game, so nothing else changes.
-  const askExtras = (tag: SkillCheckTag, sparse = false) => {
+  // Only a SPARSE rewrite uses this: nothing was rolled, so the ask is all there is, and whoever
+  // rolls it later should roll it as the Game Master set it. A resolved record is written from the
+  // result instead, which holds what the roll actually applied: the ruleset's clamp of the
+  // threshold and of the bonus dice, and the other ability only when the swap happened.
+  const askExtras = (tag: SkillCheckTag) => {
     if (!keepWho) return undefined;
     const extras = {
-      // Only a SPARSE rewrite keeps the declared threshold: nothing was rolled, so the ask is all
-      // there is, and whoever rolls it later should count with it. A resolved record writes the
-      // threshold the roll actually used, off the result, which may be the ruleset's clamp of it.
-      ...(sparse && tag.threshold != null && Number.isFinite(tag.threshold) ? { threshold: tag.threshold } : {}),
+      ...(tag.threshold != null && Number.isFinite(tag.threshold) ? { threshold: tag.threshold } : {}),
       ...(tag.who ? { who: tag.who } : {}),
       ...(tag.withAbility ? { with: tag.withAbility } : {}),
       ...(tag.bonusDice != null ? { bonus: tag.bonusDice } : {}),
@@ -762,7 +776,7 @@ export async function resolveSkillCheckTagsInContent(
                 disadvantage: tag.disadvantage,
                 declaredDice: tag.declaredDice,
               },
-              askExtras(tag, true),
+              askExtras(tag),
             ),
           });
           left += 1;
@@ -822,14 +836,14 @@ export async function resolveSkillCheckTagsInContent(
             disadvantage: entry.request.disadvantage,
             declaredDice: entry.tag.declaredDice,
           },
-          askExtras(entry.tag, true),
+          askExtras(entry.tag),
         );
       }
       const result = resolveSkillCheckWithContext(context, entry.request, options.rollD20);
       results.push(result);
-      // The ask rides along on the record, so a saved turn still says which ability the check was
-      // rolled with and how many dice were added. Empty outside a ruleset game, byte for byte.
-      return serializeResolvedSkillCheckTag(result, askExtras(entry.tag));
+      // The result carries what the roll applied (who, the other ability, the dice added), so a
+      // saved turn says exactly that. None of it is set outside a ruleset game, byte for byte.
+      return serializeResolvedSkillCheckTag(result);
     });
     return {
       content: rolled,
@@ -875,7 +889,7 @@ export async function resolveSkillCheckTagsInContent(
           preRolledD20: entry.request.preRolledD20,
           declaredDice: entry.tag.declaredDice,
         },
-        askExtras(entry.tag, true),
+        askExtras(entry.tag),
       ),
     );
     return {
@@ -991,9 +1005,6 @@ export function resolvePoolCheckTag(
         "d20",
         spent.map((entry) => entry.slot),
       ),
-      // Only a ruleset game reads `with=`, so only a ruleset game writes it back; the Engine's own
-      // rules record the same bytes they always have.
-      ...(context.ruleset && tag.withAbility ? { with: tag.withAbility } : {}),
     }),
   };
 }

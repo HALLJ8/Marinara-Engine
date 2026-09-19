@@ -455,6 +455,10 @@ export interface RulesetPoolRoll extends RulesetCheckRoll {
   /** The per-die target the successes were counted with, so a reader can mark the dice that
    *  counted. It is the ruleset's default unless the request moved it inside the declared range. */
   threshold: number;
+  /** The situational dice the roll actually added or took: the request's `bonus=` clamped into the
+   *  ruleset's range, and 0 where the ruleset declares none. A record is written from this, never
+   *  from what the tag asked for. */
+  bonusDice: number;
 }
 
 function clampInteger(value: number, min: number, max: number): number {
@@ -486,7 +490,7 @@ export function rollDicePoolCheck(
   rollDie: (sides: number) => number,
 ): RulesetPoolRoll {
   const resolution = definition.resolution;
-  if (resolution.kind !== "dice-pool") return { ...noRoll(), threshold: 0 };
+  if (resolution.kind !== "dice-pool") return { ...noRoll(), threshold: 0, bonusDice: 0 };
   const { die, pool, target, double, explode, cancel, botch, exceptional, situationalDice } = resolution;
 
   const threshold =
@@ -535,5 +539,6 @@ export function rollDicePoolCheck(
     rollMode: "normal",
     dice: `${rolls.length}d${die.sides}`,
     threshold,
+    bonusDice,
   };
 }

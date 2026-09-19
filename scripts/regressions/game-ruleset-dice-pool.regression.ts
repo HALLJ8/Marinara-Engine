@@ -483,6 +483,18 @@ try {
     const rewritten = resolvedTag(swapped.content);
     assert.deepEqual([rewritten.withAbility, rewritten.bonusDice], ["Sinew", -2]);
 
+    // The record says what the roll APPLIED, not what the tag asked for: nine bonus dice are the
+    // ruleset's three, and an ability nobody answers to was never swapped in.
+    const greedy = await resolveSkillCheckTagsInContent(
+      `[skill_check: skill="Ward" dc="2" who="Bram the Quiet" with="Moonlight" bonus="+9"]`,
+      { loadContext: async () => context, rulesetPinned: true },
+    );
+    const greedyResult = poolFaces(greedy.results![0]!);
+    assert.equal(greedyResult.rolls.length, 8 + 3 + greedyResult.rolls.filter((face) => face >= 10).length);
+    const greedyRecord = resolvedTag(greedy.content);
+    assert.deepEqual([greedyRecord.withAbility, greedyRecord.bonusDice], [undefined, 3]);
+    assert.doesNotMatch(greedy.content, /Moonlight|bonus="\+9"/);
+
     // `threshold=` moves the per-die target inside the range, and is clamped rather than refused.
     const hard = await resolveSkillCheckTagsInContent(`[skill_check: skill="Ward" dc="1" threshold="9"]`, {
       loadContext: async () => context,

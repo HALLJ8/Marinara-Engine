@@ -4920,8 +4920,6 @@ function replaceFirstUnresolvedSkillCheckTag(
   content: string,
   request: { skill: string; dc: number },
   result: SkillCheckResult,
-  /** A ruleset game keeps the tag's own `with=` and `bonus=` on the record, as generation does. */
-  rulesetPinned = false,
 ): string {
   let replaced = false;
   return content.replace(createSkillCheckTagRegex(), (fullTag, body: string) => {
@@ -4936,13 +4934,9 @@ function replaceFirstUnresolvedSkillCheckTag(
     if (result.who && (tag.who ?? "").trim().toLowerCase() !== result.who.trim().toLowerCase()) return fullTag;
 
     replaced = true;
-    const ask = rulesetPinned
-      ? {
-          ...(tag.withAbility ? { with: tag.withAbility } : {}),
-          ...(tag.bonusDice != null ? { bonus: tag.bonusDice } : {}),
-        }
-      : undefined;
-    return serializeResolvedSkillCheckTag(result, ask);
+    // The result holds what the roll applied of `with=` and `bonus=`, so the record needs nothing
+    // from the tag.
+    return serializeResolvedSkillCheckTag(result);
   });
 }
 
@@ -9371,12 +9365,10 @@ export async function gameRoutes(app: FastifyInstance) {
       const chats = createChatsStorage(app.db);
       const message = await chats.getMessage(input.messageId);
       if (message?.chatId === input.chatId && (message.role === "assistant" || message.role === "narrator")) {
-        const chat = await chats.getById(input.chatId);
         const nextContent = replaceFirstUnresolvedSkillCheckTag(
           message.content,
           { skill: input.skill, dc: input.dc },
           result,
-          parseMeta(chat?.metadata).gameRuleset != null,
         );
         if (nextContent !== message.content) {
           await chats.updateMessageContent(input.messageId, nextContent);
