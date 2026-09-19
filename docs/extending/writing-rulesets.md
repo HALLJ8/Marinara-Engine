@@ -501,8 +501,8 @@ players today.
 }
 ```
 
-That is the whole Ember Roads block, and a fight on it works. The 5e draft uses the same keys for a
-d20 system:
+That is the whole Ember Roads block. The resolver can run a whole fight on it, which is what the
+regression does, and no player sees one yet. The 5e draft uses the same keys for a d20 system:
 
 ```json
 "combat": {
