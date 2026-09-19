@@ -1420,7 +1420,6 @@ const labels = (definition: RulesetDefinition, state: RulesetEncounterState, id:
   );
   const assetOnly = variant(emberText, (doc) => {
     delete doc.combat;
-    doc.catalogs[0].entries = undefined;
     delete doc.catalogs[0].entries;
     doc.catalogs[0].asset = "catalogs/knacks.json";
   });
