@@ -5781,26 +5781,25 @@ function AppearanceSettings({ group = "app" }: { group?: AppearanceGroup }) {
                 checked={roleplayVnAutoPlay}
                 onChange={setRoleplayVnAutoPlay}
               />
-              {roleplayVnAutoPlay && (
-                <label
-                  id={getSettingsControlAnchorId("roleplay-vn-autoplay-delay")}
-                  className="flex scroll-mt-3 flex-col gap-2 text-xs"
-                >
-                  <span>
-                    {localizeUi("settings.roleplayVn.autoPlayDelay")}{" "}
-                    {localizeUi("settings.units.secondsShort", { value: roleplayVnAutoPlayDelay / 1000 })}
-                  </span>
-                  <input
-                    type="range"
-                    min={200}
-                    max={10000}
-                    step={100}
-                    value={roleplayVnAutoPlayDelay}
-                    onChange={(event) => setRoleplayVnAutoPlayDelay(Number(event.target.value))}
-                    className="w-full accent-[var(--primary)]"
-                  />
-                </label>
-              )}
+              <label
+                id={getSettingsControlAnchorId("roleplay-vn-autoplay-delay")}
+                className="flex scroll-mt-3 flex-col gap-2 text-xs"
+              >
+                <span>
+                  {localizeUi("settings.roleplayVn.autoPlayDelay")}{" "}
+                  {localizeUi("settings.units.secondsShort", { value: roleplayVnAutoPlayDelay / 1000 })}
+                </span>
+                <input
+                  type="range"
+                  min={200}
+                  max={10000}
+                  step={100}
+                  value={roleplayVnAutoPlayDelay}
+                  disabled={!roleplayVnAutoPlay}
+                  onChange={(event) => setRoleplayVnAutoPlayDelay(Number(event.target.value))}
+                  className="w-full accent-[var(--primary)] disabled:cursor-not-allowed disabled:opacity-50"
+                />
+              </label>
               <div className="grid gap-3 rounded-lg border border-[var(--border)] p-3 sm:grid-cols-2">
                 <label
                   id={getSettingsControlAnchorId("roleplay-vn-portrait-scale")}

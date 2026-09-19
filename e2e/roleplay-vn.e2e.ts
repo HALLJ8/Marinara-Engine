@@ -498,8 +498,14 @@ test("Roleplay wizard and Appearance persist the VN choice and art scales", asyn
     }
     const autoplay = page.getByRole("checkbox", { name: "Auto-play VN paragraphs", exact: true });
     await expect(autoplay).not.toBeChecked();
-    await page.locator(`label[for="${await autoplay.getAttribute("id")}"]`).first().click();
     const delay = page.locator("#settings-control-roleplay-vn-autoplay-delay input");
+    await expect(delay).toBeVisible();
+    await expect(delay).toBeDisabled();
+    await page
+      .locator(`label[for="${await autoplay.getAttribute("id")}"]`)
+      .first()
+      .click();
+    await expect(delay).toBeEnabled();
     await delay.focus();
     await delay.press("Home");
     await delay.press("ArrowRight");
@@ -511,7 +517,12 @@ test("Roleplay wizard and Appearance persist the VN choice and art scales", asyn
       await page.evaluate(async () => {
         const { useUIStore } = (await import("/src/stores/ui.store.ts" as string)) as PageUiStoreModule;
         const state = useUIStore.getState();
-        return [state.roleplayVnPortraitScale, state.roleplayVnSpriteScale, state.roleplayVnAutoPlay, state.roleplayVnAutoPlayDelay];
+        return [
+          state.roleplayVnPortraitScale,
+          state.roleplayVnSpriteScale,
+          state.roleplayVnAutoPlay,
+          state.roleplayVnAutoPlayDelay,
+        ];
       }),
     ).toEqual([1.5, 2, true, 300]);
   } finally {
