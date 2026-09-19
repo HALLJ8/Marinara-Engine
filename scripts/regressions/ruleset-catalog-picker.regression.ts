@@ -209,7 +209,7 @@ assert.deepEqual(
 // The rows are copies carrying only the mark that says where they came from.
 assert.deepEqual(twoLists.lists.knacks?.[0], {
   name: "Last Ember",
-  notes: "Spend 1 Grit to give a downed friend 3 Grit back. Once between camps.",
+  notes: "Spend 1 Grit to give a downed friend 3 Grit back. Once between camps for each point of Heart.",
   [RULESET_CATALOG_ROW_KEY]: "knacks/last-ember",
 });
 

@@ -209,14 +209,14 @@
           "$comment": "One entry, two rows: the knack itself and the limited use that tracks it.",
           "id": "last-ember",
           "label": "Last Ember",
-          "summary": "Once between camps you can call a friend back from the edge.",
+          "summary": "Between camps you can call a friend back from the edge, once for each point of Heart.",
           "filters": { "grit": 1, "road": "Every road", "callings": ["Ember-tender"] },
           "rows": [
             {
               "list": "knacks",
               "values": {
                 "name": "Last Ember",
-                "notes": "Spend 1 Grit to give a downed friend 3 Grit back. Once between camps."
+                "notes": "Spend 1 Grit to give a downed friend 3 Grit back. Once between camps for each point of Heart."
               }
             },
             {
