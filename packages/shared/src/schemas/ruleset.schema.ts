@@ -1822,6 +1822,10 @@ function refineRulesetDefinition(def: RulesetDefinitionBase, ctx: z.RefinementCt
       if (dying.condition !== undefined && !conditions.has(dying.condition)) {
         issue(at("dying", "condition"), `Unknown condition "${dying.condition}"`);
       }
+      // The same rule the attack roll has: a natural result is one face of one die.
+      if (dying.dice.count !== 1 && (dying.naturals.max !== "none" || dying.naturals.min !== "none")) {
+        issue(at("dying", "naturals"), "Natural results need a single die; with several dice use none");
+      }
     }
 
     const damageTypes = new Set<string>();

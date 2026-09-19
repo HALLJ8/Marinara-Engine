@@ -741,6 +741,46 @@ const labels = (definition: RulesetDefinition, state: RulesetEncounterState, id:
   assert.deepEqual([plain.mode, plain.rolls, plain.kept], ["normal", [11], 11]);
 }
 
+// ── Two attack rolls are two attacks: each hit rolls its own damage ──
+{
+  const volley = foe("volley", "Volley", {
+    health: 20,
+    defense: 12,
+    initiativeModifier: 5,
+    actions: [
+      {
+        id: "twin-shot",
+        name: "Twin Shot",
+        budget: "action",
+        toHit: 10,
+        damage: { count: 1, sides: 6, flat: 0, type: "piercing" },
+        targetCount: 2,
+      },
+    ],
+  });
+  const state = fight(fiveE, [fighter(), wizard(), volley], 1, 1, 20);
+  assert.equal(state.order[0], "volley");
+  const shot = rulesetCombatOptions(fiveE, state, "volley").find((option) => option.label === "Twin Shot")!;
+  // The dice as they fall: an attack roll and its damage for the first target, then the same again.
+  const loosed = act(
+    fiveE,
+    state,
+    { actorId: "volley", optionId: shot.id, targetIds: ["brenna", "corwin"] },
+    15,
+    2,
+    15,
+    5,
+  );
+  assert.deepEqual(
+    eventsOf(loosed.events, "damage").map((event) => [event.targetId, event.rolls]),
+    [
+      ["brenna", [2]],
+      ["corwin", [5]],
+    ],
+    "an ability that rolls to hit each target rolls its damage for each hit",
+  );
+}
+
 // ── An area, one damage roll, a save each, and what each hide is made of ──
 {
   let state = fight(fiveE, [wizard(), snag(), rot(), husk()], 20, 5, 3, 2);

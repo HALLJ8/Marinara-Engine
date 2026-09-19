@@ -596,7 +596,9 @@ d20 system:
 `reaction` are left off the menu. `attackRoll` makes it roll against the target's defense with the
 list's `toHit`; `autoHit` skips that entirely. `save` rolls the target's own save against the list's
 `saveDifficulty`, and `onSuccess` decides whether a success takes half or nothing. `targetCount` is
-how many it may be pointed at, and they share ONE damage roll. `applies` puts conditions on what it
+how many it may be pointed at. An ability that rolls no attack (an area everyone saves against,
+something that simply hits) rolls its dice ONCE for all of them, and one that rolls to hit each
+target rolls its dice again for each hit. `applies` puts conditions on what it
 affects, each with a `duration` of `instant` (no clock of its own: it stays until something takes it
 off), `until-save` (which needs `saveEnds` beside it) or `{ "rounds": n }`, and an optional
 `saveEnds` naming the save and whether it is repeated at `turn-end` or `turn-start`. `temporary`

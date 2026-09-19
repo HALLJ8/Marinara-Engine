@@ -676,13 +676,16 @@ function resolveAction(
   const steps = payWith ? rulesetCostSteps(ctx.definition, action, payWith) : 0;
   const extra = action.use?.perCostStep && steps > 0 ? { amount: action.use.perCostStep, times: steps } : undefined;
 
-  // One roll for the whole use: an area or a volley of beams shares its dice, and only a critical
-  // hit adds anything of its own, for the one target that took it. Rolled on the first target that
-  // needs it, so a use that misses everything costs no dice at all.
+  // An ability that asks for no attack roll (an area everyone saves against, darts that simply hit)
+  // rolls its dice ONCE and every target takes that number. One that rolls to hit each target rolls
+  // its dice again for each hit, because each of those is its own attack. Either way nothing is
+  // rolled until a target actually needs it, so a use that misses everything costs no dice at all.
   type Rolled = { rolls: number[]; flat: number; total: number };
+  const perTarget = action.toHit !== undefined && !action.autoHit;
   const once = (amount: RulesetCombatAmount | undefined) => {
     let rolled: Rolled | null = null;
-    return amount ? () => (rolled ??= rollAmount(ctx, amount, extra)) : null;
+    if (!amount) return null;
+    return perTarget ? () => rollAmount(ctx, amount, extra) : () => (rolled ??= rollAmount(ctx, amount, extra));
   };
   const damage = once(action.damage);
   const heal = once(action.heal);
