@@ -257,7 +257,15 @@ export function RulesetCatalogPicker({
         )}
 
         {showsMechanics && (
-          <p className="text-[0.6875rem] text-[var(--muted-foreground)]">{t("game.ruleset.catalog.mechanicsNote")}</p>
+          <p className="text-[0.6875rem] text-[var(--muted-foreground)]">
+            {/* A ruleset whose battle block reads one of the lists this catalog fills does lend these
+                numbers to battles, so the note must not say otherwise. */}
+            {t(
+              definition.battle?.skills?.some((source) => catalog.feeds.includes(source.list))
+                ? "game.ruleset.catalog.mechanicsNoteBattle"
+                : "game.ruleset.catalog.mechanicsNote",
+            )}
+          </p>
         )}
 
         <div className="shrink-0 space-y-1.5 border-t border-[var(--border)] pt-2">
