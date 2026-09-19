@@ -42,6 +42,7 @@ export function RulesetCombatMenu({ view, budgetLabel, busy, onChoose, onFlee }:
   const { t } = useTranslation();
   const [step, setStep] = useState<Step | null>(null);
   const first = useRef<HTMLButtonElement>(null);
+  const root = useRef<HTMLDivElement>(null);
   const actorName = view.combatants.find((combatant) => combatant.id === view.actorId)?.name ?? "";
   const groups = useMemo(() => rulesetMenuGroups(view.options), [view.options]);
   // A fresh menu is a fresh choice: the turn moved on, so a half-finished pick from the last one
@@ -54,8 +55,14 @@ export function RulesetCombatMenu({ view, budgetLabel, busy, onChoose, onFlee }:
   // keyboard away from somebody working down the list.
   const stepStage = step?.stage;
   const stepOption = step?.option.id;
+  const leftStep = useRef(false);
   useEffect(() => {
     if (stepStage) first.current?.focus();
+    // Going BACK unmounts the step, and the browser would drop focus on the body, leaving a keyboard
+    // player to Tab down from the top of the page. The menu takes it instead, and only then: a
+    // menu that merely appears (a new turn) must not steal focus from wherever the player is.
+    else if (leftStep.current) root.current?.focus();
+    leftStep.current = !!stepStage;
   }, [stepStage, stepOption]);
 
   if (!view.options) {
@@ -206,7 +213,11 @@ export function RulesetCombatMenu({ view, budgetLabel, busy, onChoose, onFlee }:
   // a phone, leave no stage at all). The groups sit side by side, and a long list (a caster's)
   // scrolls inside its own bound.
   return (
-    <div className="flex max-h-[24svh] flex-col gap-2 overflow-y-auto px-3 py-2 sm:max-h-[34svh] sm:p-3">
+    <div
+      ref={root}
+      tabIndex={-1}
+      className="flex max-h-[24svh] flex-col gap-2 overflow-y-auto px-3 py-2 outline-none sm:max-h-[34svh] sm:p-3"
+    >
       {/* A phone's shell already says whose turn it is right above this, and has no height to say
           it twice; the group names go the same way there and the buttons wrap as one run. */}
       <p className="hidden text-[0.65rem] uppercase tracking-wide text-white/45 sm:block">

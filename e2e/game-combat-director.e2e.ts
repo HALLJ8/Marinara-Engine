@@ -232,16 +232,23 @@ test("Combat director ruleset: the ruleset's own menu resolves the fight and wri
   // Ember Roads, imported through the real route: 2d6 plus a stat against a Guard, Grit for health,
   // one action a turn, and a bestiary of its own. Nothing about this fight is 5e shaped.
   const emberRoads = readFileSync(new URL("../docs/examples/rulesets/ember-roads.json", import.meta.url), "utf8");
-  const policy = await request.patch("/api/agents/import-policy", { data: { enabled: true } });
-  expect(policy.ok(), await policy.text()).toBeTruthy();
-  const imported = await request.post("/api/game-rulesets/import", { data: { definition: emberRoads } });
-  expect(imported.ok(), await imported.text()).toBeTruthy();
-  const rulesetId = (await imported.json()).rulesetId as string;
+  // The import policy lives in the server's shared settings, so it is read first and put back
+  // afterwards, whatever happens in between: another spec on this server must find it as it was.
+  const policyBefore = await request.get("/api/agents/import-policy");
+  expect(policyBefore.ok(), await policyBefore.text()).toBeTruthy();
+  const importsWereEnabled = (await policyBefore.json()).enabled === true;
 
-  // Set once the game exists, so a failure anywhere after the import still reaches the cleanup
-  // below and the imported ruleset never outlives the test.
+  // Each is set once the thing exists, so a failure anywhere still reaches the cleanup below and
+  // neither the game nor the imported ruleset outlives the test.
   let createdChatId: string | undefined;
+  let importedRulesetId: string | undefined;
   try {
+    const policy = await request.patch("/api/agents/import-policy", { data: { enabled: true } });
+    expect(policy.ok(), await policy.text()).toBeTruthy();
+    const imported = await request.post("/api/game-rulesets/import", { data: { definition: emberRoads } });
+    expect(imported.ok(), await imported.text()).toBeTruthy();
+    const rulesetId = (await imported.json()).rulesetId as string;
+    importedRulesetId = rulesetId;
     const created = await request.post("/api/game/create", {
       data: {
         name: "Director ruleset",
@@ -293,6 +300,7 @@ test("Combat director ruleset: the ruleset's own menu resolves the fight and wri
     const message = await request.post(`/api/chats/${chatId}/messages`, {
       data: { role: "assistant", content: "Something is on the road ahead. [state: combat]" },
     });
+    expect(message.ok(), await message.text()).toBeTruthy();
     const anchor = (await message.json()).id;
     const juno = {
       id: "juno",
@@ -406,6 +414,7 @@ test("Combat director ruleset: the ruleset's own menu resolves the fight and wri
 
     // Played to the end with nobody at the wheel, one turn per call.
     const state = await request.get(`/api/game/combat/director/state?chatId=${chatId}&anchor=${anchor}`);
+    expect(state.ok(), await state.text()).toBeTruthy();
     s = (await state.json()).session;
     if (!s.outcome) await command({ type: "control", unitId: "juno", controller: "ai" });
     for (let guard = 0; guard < 40 && !s.outcome; guard++) await command({ type: "continue" });
@@ -422,6 +431,9 @@ test("Combat director ruleset: the ruleset's own menu resolves the fight and wri
     expect(live?.juno?.pools?.grit?.value).toBe(survivor.health);
   } finally {
     if (createdChatId) await request.delete(`/api/chats/${createdChatId}`);
-    await request.delete(`/api/game-rulesets?rulesetId=${encodeURIComponent(rulesetId)}&force=true`);
+    if (importedRulesetId) {
+      await request.delete(`/api/game-rulesets?rulesetId=${encodeURIComponent(importedRulesetId)}&force=true`);
+    }
+    await request.patch("/api/agents/import-policy", { data: { enabled: importsWereEnabled } });
   }
 });
