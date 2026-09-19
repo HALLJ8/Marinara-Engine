@@ -1285,6 +1285,11 @@ export function GameCombatUI({
           hp: c.hp,
           maxHp: c.maxHp,
           ko: c.hp <= 0,
+          // Carried like the director's and the tactical summary do: what a battle spent is what a
+          // ruleset sheet has to be told about afterwards.
+          mp: c.mp,
+          maxMp: c.maxMp,
+          spellSlots: c.spellSlots,
           statusEffects: (c.statusEffects ?? []).map((e) => e.name),
         })),
         enemies: enemies.map((c) => ({

@@ -824,6 +824,7 @@
   "game.input.sendTurn": "Send game turn",
   "game.input.sessionConcluded": "Session concluded. Start a new session to keep playing.",
   "game.input.startNewSession": "New Session",
+  "game.ruleset.battle.sheetNotice": "Hit points and resources come from the {{ruleset}} sheet. Damage is Marinara's combat math.",
   "game.ruleset.catalog.added": "Added",
   "game.ruleset.catalog.addedHint": "This entry is already on the sheet. Picking it again adds another copy.",
   "game.ruleset.catalog.addFrom": "Add from catalog",
