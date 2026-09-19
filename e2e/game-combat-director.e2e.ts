@@ -223,3 +223,220 @@ for (const mode of ["classic", "tactical"] as const) {
     }
   });
 }
+
+test("Combat director ruleset: the ruleset's own menu resolves the fight and writes the sheet", async ({
+  page,
+  request,
+}, testInfo) => {
+  test.setTimeout(120000);
+  // Ember Roads, imported through the real route: 2d6 plus a stat against a Guard, Grit for health,
+  // one action a turn, and a bestiary of its own. Nothing about this fight is 5e shaped.
+  const emberRoads = readFileSync(new URL("../docs/examples/rulesets/ember-roads.json", import.meta.url), "utf8");
+  // The import policy lives in the server's shared settings, so it is read first and put back
+  // afterwards, whatever happens in between: another spec on this server must find it as it was.
+  const policyBefore = await request.get("/api/agents/import-policy");
+  expect(policyBefore.ok(), await policyBefore.text()).toBeTruthy();
+  const importsWereEnabled = (await policyBefore.json()).enabled === true;
+
+  // Each is set once the thing exists, so a failure anywhere still reaches the cleanup below and
+  // neither the game nor the imported ruleset outlives the test.
+  let createdChatId: string | undefined;
+  let importedRulesetId: string | undefined;
+  try {
+    const policy = await request.patch("/api/agents/import-policy", { data: { enabled: true } });
+    expect(policy.ok(), await policy.text()).toBeTruthy();
+    const imported = await request.post("/api/game-rulesets/import", { data: { definition: emberRoads } });
+    expect(imported.ok(), await imported.text()).toBeTruthy();
+    const rulesetId = (await imported.json()).rulesetId as string;
+    importedRulesetId = rulesetId;
+    const created = await request.post("/api/game/create", {
+      data: {
+        name: "Director ruleset",
+        setupConfig: {
+          genre: "Fantasy",
+          setting: "The road",
+          tone: "Adventure",
+          difficulty: "normal",
+          playerGoals: "Get through",
+          gmMode: "standalone",
+          rating: "sfw",
+          partyCharacterIds: [],
+          combatStyle: "classic",
+          combatDirector: true,
+          gmBossControl: false,
+          ruleset: { id: rulesetId, version: 1, packageId: null, options: {} },
+        },
+      },
+    });
+    expect(created.ok(), await created.text()).toBeTruthy();
+    const chatId = (await created.json()).sessionChat.id;
+    createdChatId = chatId;
+    // A traveller at the top of the scale: three Brawn and six Toughness make thirteen Grit, which
+    // is more than a cinder-moth can take off her before she puts it down.
+    const sheets = await request.patch(`/api/chats/${chatId}/metadata`, {
+      data: {
+        gameCharacterCards: [
+          {
+            name: "Juno",
+            rulesetSheet: {
+              v: 1,
+              build: {
+                abilities: { brawn: 3, wits: 0, heart: 0 },
+                fields: { toughness: 6 },
+                lists: { gear: [{ name: "Road axe", swing: "brawn", damage: "1d6", harm: "cut" }] },
+              },
+            },
+          },
+        ],
+      },
+    });
+    expect(sheets.ok(), await sheets.text()).toBeTruthy();
+    // The row the in-game sheet reads, seeded at full Grit so the fight has somewhere to write.
+    const seeded = await request.patch(`/api/chats/${chatId}/game-state`, {
+      data: { manual: true, location: "The road", rulesetLive: { juno: { pools: { grit: { value: 13 } } } } },
+    });
+    expect(seeded.ok(), await seeded.text()).toBeTruthy();
+
+    const message = await request.post(`/api/chats/${chatId}/messages`, {
+      data: { role: "assistant", content: "Something is on the road ahead. [state: combat]" },
+    });
+    expect(message.ok(), await message.text()).toBeTruthy();
+    const anchor = (await message.json()).id;
+    const juno = {
+      id: "juno",
+      name: "Juno",
+      side: "player",
+      hp: 40,
+      maxHp: 40,
+      attack: 8,
+      defense: 4,
+      speed: 5,
+      level: 2,
+    };
+    // Named out of the ruleset's own bestiary, so the fight reads its numbers rather than inventing
+    // any: this is the `creature` key the blueprint now carries through to the fight.
+    const moth = {
+      id: "moth",
+      name: "Cinder-moth",
+      side: "enemy",
+      hp: 12,
+      maxHp: 12,
+      attack: 5,
+      defense: 4,
+      speed: 6,
+      level: 1,
+      creature: "road_trouble/cinder-moth",
+    };
+    const combat = { chatId, anchor, style: "ruleset", party: [juno], enemies: [moth] };
+    const start = await request.post("/api/game/combat/director/start", { data: combat });
+    expect(start.ok(), await start.text()).toBeTruthy();
+    let s: DirectedCombatView = (await start.json()).session;
+    expect(s.style).toBe("ruleset");
+    expect(s.ruleset?.ruleset.id).toBe(rulesetId);
+    expect(s.ruleset?.combatants.map((combatant) => combatant.name).sort()).toEqual(["Cinder-moth", "Juno"]);
+    expect(s.ruleset?.adjustments).toEqual([]);
+    expect(s.log).toEqual([]);
+    const command = async (next: DirectedCommand) => {
+      const result = await request.post("/api/game/combat/director/command", {
+        data: {
+          chatId,
+          anchor,
+          id: s.id,
+          instanceId: s.instanceId,
+          revision: s.revision,
+          requestId: crypto.randomUUID(),
+          command: next,
+        },
+      });
+      expect(result.ok(), await result.text()).toBeTruthy();
+      s = (await result.json()).session;
+    };
+
+    const patch = await request.patch(`/api/chats/${chatId}/metadata`, {
+      data: {
+        gameSessionStatus: "active",
+        gameIntroPresented: true,
+        gameActiveState: "combat",
+        gameImageAutoGenerationEnabled: false,
+        gameStoryboardAutoIllustrationsEnabled: false,
+        gameCombatState: {
+          party: [juno],
+          enemies: [moth],
+          itemEffects: [],
+          mechanics: [],
+          dialogueCues: [],
+          startMessageId: anchor,
+          combatStyle: "classic",
+        },
+      },
+    });
+    expect(patch.ok(), await patch.text()).toBeTruthy();
+    await page.route("**/api/app-settings/ui", (route) => route.fulfill({ json: { value: "" } }));
+    await seedUIState(page, {
+      hasCompletedOnboarding: true,
+      sidebarOpen: false,
+      rightPanelOpen: false,
+      chatHelpSeenModes: ["game"],
+      gameInstantTextReveal: true,
+      weatherEffects: false,
+      theme: testInfo.project.name.includes("desktop") ? "light" : "dark",
+    });
+    await page.addInitScript(
+      ({ id, version }) => {
+        localStorage.setItem("marinara-active-chat-id", id);
+        localStorage.setItem("marinara:whats-new:seen-version", version);
+      },
+      { id: chatId, version },
+    );
+    await page.goto("/");
+
+    // The screen plays every turn nobody holds on its own, so the menu arrives when it is Juno's.
+    const axe = page.getByRole("button", { name: /Road axe/ });
+    await expect(axe).toBeVisible({ timeout: 60000 });
+    await axe.click();
+    const target = page.getByRole("button", { name: /Cinder-moth/ });
+    await expect(target).toBeVisible();
+    const response = page.waitForResponse(
+      (r) =>
+        r.url().endsWith("/api/game/combat/director/command") && r.request().postDataJSON().command.type === "ruleset",
+    );
+    await target.click();
+    const swung = await response;
+    expect(swung.ok(), await swung.text()).toBeTruthy();
+
+    // The log prints the real arithmetic, in Ember Roads' own words: two six-sided dice plus the
+    // stat the axe swings with, against a Guard.
+    const fight = page.getByRole("region", { name: "Combat decisions" });
+    await expect(
+      fight.getByText(/^Juno attacks Cinder-moth with Road axe: \d+ \(\d+ \+ \d+\) \+ 3 = \d+ against Guard 5, a/u),
+    ).toBeVisible();
+    await page.screenshot({ path: testInfo.outputPath("ruleset-fight.png"), fullPage: true });
+
+    // Played to the end with nobody at the wheel, one turn per call.
+    const state = await request.get(`/api/game/combat/director/state?chatId=${chatId}&anchor=${anchor}`);
+    expect(state.ok(), await state.text()).toBeTruthy();
+    s = (await state.json()).session;
+    if (!s.outcome) await command({ type: "control", unitId: "juno", controller: "ai" });
+    for (let guard = 0; guard < 40 && !s.outcome; guard++) await command({ type: "continue" });
+    expect(s.outcome).toBe("victory");
+    expect(s.ruleset?.summary?.outcome).toBe("victory");
+    const survivor = s.ruleset!.summary!.party.find((member) => member.name === "Juno")!;
+    expect(survivor.down).toBe(false);
+
+    // Every accepted step was written to the sheet as it happened, so the in-game sheet agrees with
+    // the recap without anything being written back at the end.
+    const sheet = await request.get(`/api/chats/${chatId}/game-state`);
+    expect(sheet.ok(), await sheet.text()).toBeTruthy();
+    const live = (await sheet.json()).rulesetLive as Record<string, any>;
+    expect(live?.juno?.pools?.grit?.value).toBe(survivor.health);
+  } finally {
+    if (createdChatId) await request.delete(`/api/chats/${createdChatId}`);
+    if (importedRulesetId) {
+      await request.delete(`/api/game-rulesets?rulesetId=${encodeURIComponent(importedRulesetId)}&force=true`);
+    }
+    // Checked, because a restore that quietly failed would leave the policy on for every spec that
+    // runs on this server afterwards.
+    const restored = await request.patch("/api/agents/import-policy", { data: { enabled: importsWereEnabled } });
+    expect(restored.ok(), await restored.text()).toBeTruthy();
+  }
+});

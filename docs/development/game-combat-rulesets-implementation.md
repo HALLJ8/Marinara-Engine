@@ -11,8 +11,11 @@
 > director's single server-owned ledger, the reaction and legendary windows, and the save, UI and
 > rollout contract. As of slice C3a the kind is WIRED: a fight
 > is resolved on the director's existing ledger as a third `style` beside `classic` and `tactical`,
-> with the same revision, idempotency, mutex and single "pick a candidate id" model call. There is
-> still no screen on it, so a game shows Marinara's own battle until slice C3b.
+> with the same revision, idempotency, mutex and single "pick a candidate id" model call. As of
+> slice C3b it is ON SCREEN: a game whose ruleset declares `combat` plays the fight on the Classic
+> shell with the ruleset's own menu, its own words and the real arithmetic in the log, and the
+> sheets are written as the fight runs rather than afterwards. Positions, reactions and the windows
+> signature actions are used in are still to come, in C4 and C5.
 
 Status: implementation proposal, September 17, 2026. The AI overhaul does not implement these rulesets. Traditional's speed-follow-up requirement is accepted product direction; thresholds and other defaults below are proposals for tuning. Implement against current `staging`, after checking related work.
 

@@ -128,7 +128,18 @@ export interface CombatPartyMember {
 }
 
 /** An enemy in the encounter. */
-export interface CombatEnemy {
+/** An opponent in the ruleset's own terms, for a fight the game's ruleset resolves: a bestiary
+ *  reference, the rung of the threat scale it belongs on, and a stat block written for it. The
+ *  encounter blueprint carries them to the fight, where the SERVER reads them; `proposed` stays
+ *  `unknown` on purpose, because it is a model's text until the server has validated and clamped
+ *  it. Every other fight ignores all three. */
+export interface RulesetEncounterBlueprint {
+  creature?: string;
+  tier?: string;
+  proposed?: unknown;
+}
+
+export interface CombatEnemy extends RulesetEncounterBlueprint {
   projectile?: boolean;
   requiresSight?: boolean;
   boss?: import("../features/combat-director.js").CombatBoss;

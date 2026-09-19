@@ -76,8 +76,10 @@ const ENGINE_MAX_HP = 60;
     { list: "spells", onlyWhen: "prepared", alwaysWhen: { column: "level", equals: 0 } },
     { list: "attacks" },
   ]);
-  assert.equal(ember.coverage.combat, false, "the bridge is not a combat adapter, and says so");
-  assert.equal(fiveE.coverage.combat, false);
+  // Both examples now resolve their own fights, so their coverage says so. The bridge is still
+  // not what does it: it never reads the flag, and it stands aside for a `combat` block instead.
+  assert.equal(ember.coverage.combat, true);
+  assert.equal(fiveE.coverage.combat, true);
 }
 
 // ── Cross-reference refusals ──

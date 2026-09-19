@@ -179,15 +179,27 @@ export function GameSetupRulesChooser({
             ))}
           </p>
           <p className="text-[var(--muted-foreground)]">{t("game.ruleset.setup.pinned")}</p>
-          {!active.definition.coverage.combat && (
-            <p className="text-[var(--muted-foreground)]">
-              {t("game.ruleset.setup.combatFromPreference", {
-                style: t(
-                  combatStyle === "tactical" ? "ui.game.gamesetupwizard.tactical" : "ui.game.gamesetupwizard.classic",
-                ),
-              })}
-            </p>
-          )}
+          {/* What battles will do is read from the BLOCKS this file declares, never from the
+              `coverage.combat` flag beside them: the flag is what an author says the ruleset
+              covers, and what resolves a fight has to be what the file really carries. A `combat`
+              block resolves the fight itself, a `battle` block only lends the sheet to Marinara's
+              own combat, and a ruleset with neither leaves battles exactly as they were. */}
+          <p className="text-[var(--muted-foreground)]">
+            {active.definition.combat
+              ? t("game.ruleset.setup.combatOwnRules")
+              : t(
+                  active.definition.battle
+                    ? "game.ruleset.setup.combatFromSheets"
+                    : "game.ruleset.setup.combatFromPreference",
+                  {
+                    style: t(
+                      combatStyle === "tactical"
+                        ? "ui.game.gamesetupwizard.tactical"
+                        : "ui.game.gamesetupwizard.classic",
+                    ),
+                  },
+                )}
+          </p>
         </div>
       )}
 

@@ -114,7 +114,7 @@ function firstOf<T extends RulesetCombatEvent["type"]>(events: RulesetCombatEven
     ],
   );
   assert.equal(combat.threat!.tiers.length, 9, "the scale an opponent is picked from, CR 0 to CR 5");
-  assert.equal(fiveE.coverage.combat, false, "coverage stays honest until a fight really runs on it");
+  assert.equal(fiveE.coverage.combat, true, "a fight really runs on it now, and coverage says so");
 
   // Nothing about the other example is shaped like this one.
   const rough = ember.combat!;
@@ -725,7 +725,17 @@ const labels = (definition: RulesetDefinition, state: RulesetEncounterState, id:
   assert.equal(summary.outcome, "victory");
   assert.deepEqual(summary.enemies, [{ id: "mote", name: "Mote", health: 0, maxHealth: 4, defeated: true }]);
   assert.deepEqual(summary.party, [
-    { id: "brenna", name: "Brenna", health: 60, maxHealth: 60, temp: 0, down: false, dying: false, conditions: [] },
+    {
+      id: "brenna",
+      name: "Brenna",
+      health: 60,
+      maxHealth: 60,
+      temp: 0,
+      down: false,
+      dying: false,
+      stable: false,
+      conditions: [],
+    },
   ]);
 
   // A natural 1 misses something it would otherwise have hit, and no damage die is thrown for it.
@@ -1162,6 +1172,7 @@ const labels = (definition: RulesetDefinition, state: RulesetEncounterState, id:
         temp: 0,
         down: true,
         dying: true,
+        stable: false,
         conditions: ["unconscious"],
       },
     ],
@@ -1464,7 +1475,19 @@ const labels = (definition: RulesetDefinition, state: RulesetEncounterState, id:
   assert.deepEqual(summary, {
     outcome: "victory",
     rounds: 1,
-    party: [{ id: "juno", name: "Juno", health: 8, maxHealth: 8, temp: 0, down: false, dying: false, conditions: [] }],
+    party: [
+      {
+        id: "juno",
+        name: "Juno",
+        health: 8,
+        maxHealth: 8,
+        temp: 0,
+        down: false,
+        dying: false,
+        stable: false,
+        conditions: [],
+      },
+    ],
     enemies: [{ id: "ash", name: "Ash-hound", health: 0, maxHealth: 6, defeated: true }],
   });
 }

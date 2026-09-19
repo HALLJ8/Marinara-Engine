@@ -7,10 +7,19 @@ import { useTranslation as useUiTranslation } from "react-i18next";
 interface CombatStyleSectionProps {
   style?: CSSProperties;
   combatStyle: GameCombatStyle;
+  /** Whether this game's own ruleset resolves its battles. The choice below is kept either way: a
+   *  later slice gives Tactical a meaning for such a fight, and a game that changes ruleset, or
+   *  turns the director off, is back on whichever presentation is picked here. */
+  rulesetResolvesFights?: boolean;
   onCombatStyleChange: (style: GameCombatStyle) => void;
 }
 
-export function CombatStyleSection({ style, combatStyle, onCombatStyleChange }: CombatStyleSectionProps) {
+export function CombatStyleSection({
+  style,
+  combatStyle,
+  rulesetResolvesFights,
+  onCombatStyleChange,
+}: CombatStyleSectionProps) {
   const { t: localizeUi } = useUiTranslation();
   return (
     <ChatSettingsSection
@@ -36,6 +45,11 @@ export function CombatStyleSection({ style, combatStyle, onCombatStyleChange }: 
             <option value="tactical">{localizeUi("game.combat.preference.tacticalLabel")}</option>
           </select>
         </label>
+        {rulesetResolvesFights && (
+          <p className="text-[0.575rem] leading-relaxed text-[var(--muted-foreground)]">
+            {localizeUi("game.combat.ruleset.preferenceIgnored")}
+          </p>
+        )}
         <p className="text-[0.575rem] leading-relaxed text-[var(--muted-foreground)]">
           {localizeUi("ui.chatSettings.combatstylesection.takesEffectAtTheNextBattleBattlesAlreadyIn")}
         </p>

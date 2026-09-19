@@ -1050,6 +1050,7 @@ export function rulesetEncounterSummary(
           temp: now.temp,
           down: combatant.down,
           dying: combatant.dying,
+          stable: combatant.stable,
           conditions: rulesetCombatConditions(definition, combatant),
         };
       }),

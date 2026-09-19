@@ -51,7 +51,7 @@ You may add a `"$comment": "..."` line to any object in the file to leave yourse
 | `gm`            | The text the Game Master model is given, and which sheet values it sees for each character.       |
 | `catalogs`      | Optional. Ready-made entries the sheet editor offers, so players do not type long lists by hand.  |
 | `battle`        | Optional. What a battle may read from the sheet, and what it writes back afterwards.              |
-| `combat`        | Optional. How a fight is resolved by your own rules. Written and checked today; not playable yet. |
+| `combat`        | Optional. How a fight is resolved by your own rules, and what the battle screen then plays.       |
 | `layers`        | Optional. Variants of your ruleset a player turns on when a game is created.                      |
 
 The file may be up to 256 KB. Text that ends up in a prompt (names, labels, Game Master text) cannot contain line breaks, square brackets, or double curly braces.
@@ -472,13 +472,12 @@ The optional `combat` block is the other thing: it says how a fight is RESOLVED 
 parameterises a combat kind the Engine owns, exactly as `resolution` parameterises a check kind, and
 every name in it is yours. There is one kind today.
 
-**The fight runs on the server; the screen is the next release.** A game whose ruleset declares
-`combat` can now have a whole fight resolved by your block: the party's numbers are read off their
-own sheets, the opponents come out of your bestiary or off your threat scale, every turn is
+**A game whose ruleset declares `combat` fights by your block.** The party's numbers are read off
+their own sheets, the opponents come out of your bestiary or off your threat scale, every turn is
 resolved by your dice, and everything a character spends or loses is written back to their sheet as
-it happens, so closing the tab mid-fight loses nothing. What is not here yet is the screen that
-shows it, so your players still see Marinara's own battle until the next release. Write your block
-now if you want it ready.
+it happens, so closing the tab mid-fight loses nothing. The battle screen plays it in your words:
+your attacks and abilities as the menu, your budgets, your conditions, and a log with the real
+arithmetic. What it does not do yet is listed under Not yet.
 
 ```json
 "combat": {
@@ -506,8 +505,8 @@ now if you want it ready.
 }
 ```
 
-That is the whole Ember Roads block. A fight runs on it end to end, and no player sees one yet. The
-5e draft uses the same keys for a d20 system:
+That is the whole Ember Roads block, and a game on Ember Roads fights by it. The 5e draft uses the
+same keys for a d20 system:
 
 ```json
 "combat": {
@@ -751,14 +750,23 @@ Engine has always used:
 - **Your dice.** A fight carries its own seed and a cursor, so a fight read back off disk carries on
   with the dice it would have thrown.
 
+### On screen
+
+The fight plays on the battle screen in your words. The menu is your attacks,
+your abilities and the standard actions you listed, each saying what it spends out of your budgets
+and your pools. Turn order, the round, every condition you named with its rounds left, temporary
+points, concentration, and the two counts of your dying rule are all shown. The log prints the real
+arithmetic in your terms: "Juno attacks Rust jackal with Road axe: 8 (5 + 3) + 3 = 11 against Guard
+6, a hit." Every accepted action is written to the sheet as it happens, so a reload mid-fight is
+exact and the Game Master is told afterwards not to change those numbers again.
+
 ### Not yet
 
 Said plainly, because a ruleset should not claim what the Engine does not do:
 
-- **No screen.** The fight is resolved and saved, but there is no battle screen on your numbers yet,
-  so your players still see Marinara's own. That is the next release.
 - **No positions**: no distance, reach, ranges, areas on a map, cover, movement or opportunity
-  attacks. `range`, `area` and `economy.movement` are carried and not read.
+  attacks. `range`, `area` and `economy.movement` are carried and not read. The fight is theatre of
+  the mind: anybody can be pointed at anybody.
 - **No reactions**, so nothing interrupts a turn, and `cannot-react` changes nothing yet.
 - **Signature actions are stored, priced and resolved, but nothing opens the window they are used
   in.** The points, the options and the spending are all here; what asks a creature for one between
