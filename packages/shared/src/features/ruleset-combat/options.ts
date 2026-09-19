@@ -144,7 +144,7 @@ function blocked(definition: RulesetDefinition, combat: RulesetCombat, actor: Ru
 
 function firstTarget(state: RulesetEncounterState, actor: RulesetCombatant, action: RulesetCombatAction) {
   return state.combatants.find((combatant) => {
-    if (!rulesetCombatStanding(combatant)) return false;
+    if (combatant.defeated) return false;
     if (action.targets.side === "self") return combatant.id === actor.id;
     if (action.targets.side === "ally") return combatant.side === actor.side;
     if (action.targets.side === "enemy") return combatant.side !== actor.side;

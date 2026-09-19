@@ -571,8 +571,10 @@ export function applyRulesetCombatChoice(
   if (!actor) return refusal(state, choice.actorId, "unknown-actor", choice.optionId);
   if (currentRulesetActor(state)?.id !== actor.id)
     return refusal(state, choice.actorId, "not-your-turn", choice.optionId);
-  if (!rulesetCombatStanding(actor)) return refusal(state, choice.actorId, "down", choice.optionId);
+  // Ending a turn is always allowed, down or not: a character lying at zero still has a turn, and
+  // it is the one their roll against death happens on.
   if (choice.optionId === "end-turn") return advanceRulesetTurn(definition, state, roller);
+  if (!rulesetCombatStanding(actor)) return refusal(state, choice.actorId, "down", choice.optionId);
 
   const option = rulesetCombatOptions(definition, state, actor.id).find((entry) => entry.id === choice.optionId);
   if (!option) {
@@ -590,7 +592,9 @@ export function applyRulesetCombatChoice(
     if (ids.length < 1 || ids.length > wanted.count) return refusal(state, choice.actorId, "bad-target", option.id);
     for (const id of ids) {
       const target = rulesetCombatant(state, id);
-      if (!target || !rulesetCombatStanding(target)) return refusal(state, choice.actorId, "bad-target", option.id);
+      // A combatant who is down can still be healed, and can still be hit while they are down. Only
+      // one the fight is over for is off the table.
+      if (!target || target.defeated) return refusal(state, choice.actorId, "bad-target", option.id);
       const sameSide = target.side === actor.side;
       if (wanted.side === "self" && target.id !== actor.id)
         return refusal(state, choice.actorId, "bad-target", option.id);
@@ -673,10 +677,16 @@ function resolveAction(
   const extra = action.use?.perCostStep && steps > 0 ? { amount: action.use.perCostStep, times: steps } : undefined;
 
   // One roll for the whole use: an area or a volley of beams shares its dice, and only a critical
-  // hit adds anything of its own, for the one target that took it.
-  const damage = action.damage ? rollAmount(ctx, action.damage, extra) : null;
-  const heal = action.heal ? rollAmount(ctx, action.heal, extra) : null;
-  const temporary = action.temporary ? rollAmount(ctx, action.temporary, extra) : null;
+  // hit adds anything of its own, for the one target that took it. Rolled on the first target that
+  // needs it, so a use that misses everything costs no dice at all.
+  type Rolled = { rolls: number[]; flat: number; total: number };
+  const once = (amount: RulesetCombatAmount | undefined) => {
+    let rolled: Rolled | null = null;
+    return amount ? () => (rolled ??= rollAmount(ctx, amount, extra)) : null;
+  };
+  const damage = once(action.damage);
+  const heal = once(action.heal);
+  const temporary = once(action.temporary);
 
   for (const target of targets) {
     let landed = true;
@@ -727,26 +737,31 @@ function resolveAction(
     const halved = saved && action.save?.onSuccess === "half";
 
     if (damage && action.damage) {
+      const rolled = damage();
       const bonus = critical ? criticalExtra(ctx, action.damage, extra) : { rolls: [], flat: 0 };
-      const total = damage.total + sumOf(bonus.rolls) + bonus.flat;
+      const total = rolled.total + sumOf(bonus.rolls) + bonus.flat;
       dealDamage(ctx, target, {
         sourceId: actor.id,
         label: action.label,
         ...(action.damage.type ? { damageType: action.damage.type } : {}),
-        rolls: [...damage.rolls, ...bonus.rolls],
-        flat: damage.flat + bonus.flat,
+        rolls: [...rolled.rolls, ...bonus.rolls],
+        flat: rolled.flat + bonus.flat,
         amount: halved ? Math.floor(total / 2) : total,
         ...(halved ? { saved: true } : {}),
         ...(critical ? { critical: true } : {}),
       });
     }
-    if (heal) dealHeal(ctx, target, { sourceId: actor.id, rolls: heal.rolls, flat: heal.flat, amount: heal.total });
+    if (heal) {
+      const rolled = heal();
+      dealHeal(ctx, target, { sourceId: actor.id, rolls: rolled.rolls, flat: rolled.flat, amount: rolled.total });
+    }
     if (temporary) {
+      const rolled = temporary();
       grantTemporary(ctx, target, {
         sourceId: actor.id,
-        rolls: temporary.rolls,
-        flat: temporary.flat,
-        amount: temporary.total,
+        rolls: rolled.rolls,
+        flat: rolled.flat,
+        amount: rolled.total,
       });
     }
     if (!saved) {

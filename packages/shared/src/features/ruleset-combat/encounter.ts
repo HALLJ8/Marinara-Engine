@@ -121,7 +121,9 @@ export function rulesetCombatHealth(
   combat: RulesetCombat,
   combatant: RulesetCombatant,
 ): RulesetCombatHealth {
-  if (!combatant.sheet) return combatant.health ?? { value: 0, max: 0, temp: 0 };
+  // A copy, always: an opponent's health lives in the state, and a caller that read it before a
+  // blow has to still be holding what it was before.
+  if (!combatant.sheet) return { ...(combatant.health ?? { value: 0, max: 0, temp: 0 }) };
   const live = readRulesetLive(definition, combatant.sheet.build, combatant.sheet.live);
   const pool = live.pools.find((entry) => !entry.listId && entry.key === combat.health.pool);
   return pool ? { value: pool.value, max: pool.max, temp: pool.temp } : { value: 0, max: 0, temp: 0 };
@@ -391,7 +393,7 @@ function narrowCatalogs(build: RulesetSheetBuild, catalogs: RulesetCatalogEntrie
 
 function blockActions(block: RulesetStatBlockLike): RulesetCombatAction[] {
   return block.actions.map((action, index) => ({
-    id: `block:${index}`,
+    id: action.id ?? `block:${index}`,
     kind: "block" as const,
     label: action.name,
     budget: action.budget,
@@ -538,6 +540,9 @@ export function createRulesetEncounter(input: RulesetEncounterInput): RulesetEnc
     if (health.value <= 0 && health.max > 0) {
       combatant.down = true;
       combatant.dying = !!combat.dying;
+      if (combat.dying?.condition) {
+        writeRulesetSheet(definition, combatant, { op: "condition", condition: combat.dying.condition, active: true });
+      }
     }
     state.combatants.push(combatant);
   }

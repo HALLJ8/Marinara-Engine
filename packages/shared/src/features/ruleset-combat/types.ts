@@ -42,7 +42,8 @@ export interface RulesetCombatSaveRider {
 /** One thing a stat block can do. `reach` and `range` are carried and not read: distance starts to
  *  mean something in the slice that gives a fight positions. */
 export interface RulesetStatBlockAction {
-  id: string;
+  /** The block's own id when it has one, so a bestiary keeps its names across a reload. */
+  id?: string;
   name: string;
   budget: string;
   toHit?: number;
