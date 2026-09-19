@@ -541,7 +541,9 @@ export function getCapabilityPackageInstallIssue(
     const declaredPaths = new Set((manifest.contributions?.assets?.paths ?? []).map(tryNormalizeArchivePath));
     for (const catalog of catalogs) {
       const asset = catalog && typeof catalog === "object" ? (catalog as { asset?: unknown }).asset : undefined;
-      if (typeof asset === "string" && !declaredPaths.has(tryNormalizeArchivePath(asset))) {
+      // An unusable path normalizes to null on both sides, and two nulls must not count as a match.
+      const normalized = typeof asset === "string" ? tryNormalizeArchivePath(asset) : null;
+      if (typeof asset === "string" && (normalized === null || !declaredPaths.has(normalized))) {
         return `The ruleset names the catalog file ${asset}, which is not listed in contributions.assets.paths`;
       }
     }

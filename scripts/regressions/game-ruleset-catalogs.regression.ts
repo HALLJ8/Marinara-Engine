@@ -512,6 +512,21 @@ try {
       getCapabilityPackageInstallIssue(manifest as any, undeclaredAsset) ?? "",
       /catalogs\/never_declared\.json, which is not listed in contributions\.assets\.paths/,
     );
+    // A path that cannot be normalized matches nothing, even when the manifest declares one that
+    // cannot be normalized either.
+    const unusablePath = JSON.parse(JSON.stringify(undeclaredAsset));
+    unusablePath.catalogs[0].asset = "../outside.json";
+    const manifestWithUnusablePath = {
+      ...manifest,
+      contributions: {
+        ...manifest.contributions,
+        assets: { paths: [...(manifest.contributions?.assets?.paths ?? []), "../also-outside.json"] },
+      },
+    };
+    assert.match(
+      getCapabilityPackageInstallIssue(manifestWithUnusablePath as any, unusablePath) ?? "",
+      /which is not listed in contributions\.assets\.paths/,
+    );
   }
 
   // ── A community ruleset carries its catalogs inline, through the ordinary import ──
