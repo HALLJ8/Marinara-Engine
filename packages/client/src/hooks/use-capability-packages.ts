@@ -40,24 +40,32 @@ export function useInstalledRulesets(enabled = true) {
   });
 }
 
-/** One ruleset catalog's entries, for the sheet editor's picker. Only fetched while a picker is
- *  open, and cached for a long time: a catalog changes only when the package or an import does, and
- *  both invalidate `capabilityPackageKeys.rulesets()`, which this key sits under. The version is the
- *  one the sheet is being edited against, so a game keeps picking from its own version. */
-export function useRulesetCatalog(rulesetId: string, catalogId: string, version: number | undefined, enabled: boolean) {
-  return useQuery({
+/** One ruleset catalog's entries, cached for a long time: a catalog changes only when the package
+ *  or an import does, and both invalidate `capabilityPackageKeys.rulesets()`, which this key sits
+ *  under. The version is the one the sheet is being read against, so a game keeps reading its own
+ *  version. Shared with the combat bridge, which fetches the same query through the query client so
+ *  a battle never loads a second copy of what the sheet editor already has. */
+export function rulesetCatalogQuery(rulesetId: string, catalogId: string, version: number | undefined) {
+  return {
     queryKey: capabilityPackageKeys.rulesetCatalog(rulesetId, catalogId, version),
     queryFn: () => {
       const query = new URLSearchParams({ rulesetId, catalogId });
       if (version !== undefined) query.set("version", String(version));
       return api.get<RulesetCatalogPayload>(`/capability-packages/rulesets/catalog?${query.toString()}`);
     },
-    enabled: enabled && !!rulesetId && !!catalogId,
     staleTime: 30 * 60_000,
     // A 4xx is the server's considered answer (no such catalog, an unusable file): asking again
     // only delays the message. A dropped connection or a 5xx gets one more try.
-    retry: (failures, error) =>
+    retry: (failures: number, error: unknown) =>
       failures < 1 && !(error instanceof ApiError && error.status >= 400 && error.status < 500),
+  };
+}
+
+/** The picker's own query: only fetched while a picker is open. */
+export function useRulesetCatalog(rulesetId: string, catalogId: string, version: number | undefined, enabled: boolean) {
+  return useQuery({
+    ...rulesetCatalogQuery(rulesetId, catalogId, version),
+    enabled: enabled && !!rulesetId && !!catalogId,
   });
 }
 

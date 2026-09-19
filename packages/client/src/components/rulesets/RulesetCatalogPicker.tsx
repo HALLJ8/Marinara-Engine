@@ -15,6 +15,7 @@ import {
   type RulesetDefinition,
   type RulesetSheetBuild,
 } from "@marinara-engine/shared";
+import { rulesetBattleCatalogIds } from "../../lib/ruleset-combat-bridge";
 import { useRulesetCatalog } from "../../hooks/use-capability-packages";
 import { ApiError } from "../../lib/api-client";
 import {
@@ -103,6 +104,7 @@ export function RulesetCatalogPicker({
   const visible = matches.slice(0, CATALOG_VISIBLE_LIMIT);
 
   const labels = useMemo(() => catalogMechanicsLabels(definition, catalog), [catalog, definition]);
+  const battleCatalogIds = useMemo(() => rulesetBattleCatalogIds(definition), [definition]);
   const showsMechanics = useMemo(() => entries.some((entry) => entry.mechanics), [entries]);
 
   // A list `hideWhen` hides on this sheet is not drawn by the editor, so nothing is added to it.
@@ -257,7 +259,15 @@ export function RulesetCatalogPicker({
         )}
 
         {showsMechanics && (
-          <p className="text-[0.6875rem] text-[var(--muted-foreground)]">{t("game.ruleset.catalog.mechanicsNote")}</p>
+          <p className="text-[0.6875rem] text-[var(--muted-foreground)]">
+            {/* A ruleset whose battle block reads one of the lists this catalog fills does lend these
+                numbers to battles, so the note must not say otherwise. */}
+            {t(
+              battleCatalogIds.includes(catalog.id)
+                ? "game.ruleset.catalog.mechanicsNoteBattle"
+                : "game.ruleset.catalog.mechanicsNote",
+            )}
+          </p>
         )}
 
         <div className="shrink-0 space-y-1.5 border-t border-[var(--border)] pt-2">

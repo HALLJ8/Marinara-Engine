@@ -343,7 +343,10 @@ const catalogFile = (entries: unknown[], catalog = "knacks") =>
 
 // ── Capability API 1.21 ──
 {
-  assert.deepEqual(supportedCapabilityApi, { major: 1, minor: 21 });
+  assert.ok(
+    supportedCapabilityApi.major > 1 || supportedCapabilityApi.minor >= 21,
+    "the host still advertises the catalog seam introduced in API 1.21",
+  );
   const manifest = (capabilityApi: { major: number; minor: number }, paths: string[]) => ({
     schemaVersion: 2,
     capabilityApi,
@@ -418,7 +421,8 @@ const installedPackages = packages.map((fixture) => {
   ];
   const manifest = {
     schemaVersion: 2,
-    capabilityApi: { major: 1, minor: 21 },
+    // 1.22, because the example ruleset also carries the combat bridge's battle block now.
+    capabilityApi: { major: 1, minor: 22 },
     builtAgainst: { engineVersion: "2.4.6", engineCommit: "0".repeat(40) },
     id: packageId,
     name: fixture.id,
@@ -486,7 +490,7 @@ try {
     assert.equal(
       getCapabilityPackageInstallIssue(manifest as any, JSON.parse(packages[0]!.ruleset)),
       null,
-      "a 1.21 package with catalogs installs",
+      "a current package with catalogs installs",
     );
     assert.match(
       getCapabilityPackageInstallIssue(olderManifest as any, JSON.parse(packages[0]!.ruleset)) ?? "",
@@ -494,7 +498,15 @@ try {
       "the gate reads the ruleset file, because catalogs live inside it and not in the manifest",
     );
     assert.equal(
-      getCapabilityPackageInstallIssue(olderManifest as any, JSON.parse(ruleset((doc) => delete doc.catalogs))),
+      getCapabilityPackageInstallIssue(
+        olderManifest as any,
+        JSON.parse(
+          ruleset((doc) => {
+            delete doc.catalogs;
+            delete doc.battle;
+          }),
+        ),
+      ),
       null,
       "the same package without catalogs is unaffected",
     );

@@ -79,6 +79,7 @@ import {
 import { useConnections } from "../../hooks/use-connections";
 import { useAgentConfigs } from "../../hooks/use-agents";
 import {
+  rulesetCatalogQuery,
   selectGameExperiencePackages,
   useCapabilityClientModuleState,
   useInstalledCapabilityPackages,
@@ -119,6 +120,12 @@ import { resolveCombatFullBodyPose, resolveDialogueFullBodyPose } from "../../li
 import { characterNamesMatch, findNamedEntry } from "../../lib/game-character-name-match";
 import { normalizeGameSegmentEdit, serializeGameSegmentEdit, type GameSegmentEdit } from "../../lib/game-segment-edits";
 import { findReplayStoryboardKeyframe } from "../../lib/game-storyboard-keyframes";
+import {
+  applyRulesetBattleResult,
+  rulesetBattleCatalogIds,
+  seedRulesetBattleParty,
+  type RulesetCombatSeeds,
+} from "../../lib/ruleset-combat-bridge";
 import { useSceneAnalysis } from "../../hooks/use-scene-analysis";
 import { useTTSConfig } from "../../hooks/use-tts";
 import { useSidecarStore } from "../../stores/sidecar.store";
@@ -177,6 +184,8 @@ import {
   scoreAmbient,
   normalizeCharacterLookupName,
   rulesetSheetEnvelopeSchema,
+  type RulesetCatalogEntriesById,
+  type RulesetCatalogPayload,
   type RulesetLiveState,
   type RulesetSheetEnvelope,
 } from "@marinara-engine/shared";
@@ -8493,6 +8502,128 @@ function GameSurfaceComponent({
     ];
   }, [combatEnemies, combatParty]);
 
+  // ── Battles on a ruleset sheet ──
+  // A ruleset that opted in with a `battle` block lends the fight the sheet's own health, energy
+  // and slots, and turns the catalog rows the sheet carries into skills. Health travels as a share
+  // of the maximum, because the damage is still Marinara's and the two scales are nothing alike,
+  // which is what the notice says out loud. A game with no ruleset, or one whose ruleset has no
+  // block, never reaches any of this.
+  const gameRuleset = useGameRuleset(chatMeta);
+  /** What each seeded member started this battle with, keyed the way live state is. Null while this
+   *  session has not seeded a battle, which is what a battle restored after a reload looks like. */
+  const rulesetBattleSeedsRef = useRef<RulesetCombatSeeds | null>(null);
+  // A battle restored in another chat must never be measured against the seeds of the one left
+  // behind: two games can field characters with the same name.
+  useEffect(() => {
+    rulesetBattleSeedsRef.current = null;
+  }, [activeChatId]);
+
+  // The catalogs a bridged battle reads are fetched as soon as the game is open, so that starting a
+  // battle finds them in the cache and seeds the party in the same tick a game without a ruleset
+  // sets it. Nothing is fetched for a game whose ruleset has no `battle` block.
+  const battleDefinition = gameRuleset.status === "ok" && gameRuleset.definition.battle ? gameRuleset.definition : null;
+  useEffect(() => {
+    if (!battleDefinition) return;
+    for (const catalogId of rulesetBattleCatalogIds(battleDefinition)) {
+      void queryClient.prefetchQuery(rulesetCatalogQuery(battleDefinition.id, catalogId, battleDefinition.version));
+    }
+  }, [battleDefinition, queryClient]);
+
+  const startBattleParty = useCallback(
+    (party: Combatant[], apply: (party: Combatant[]) => void) => {
+      const definition = gameRuleset.status === "ok" ? gameRuleset.definition : null;
+      if (!definition?.battle) {
+        apply(party);
+        return;
+      }
+      const cards = chatMeta.gameCharacterCards;
+      const chatId = activeChatIdRef.current;
+      // Read at battle time, not at render time: a turn's own sheet commands may have landed since
+      // this callback was built, and the fight has to start from what they left behind. A snapshot
+      // that belongs to another chat is not this game's live state, and seeding from nothing would
+      // start everybody at full, so the bridge simply stands aside for this fight.
+      const snapshot = useGameStateStore.getState().current;
+      if (snapshot?.chatId !== chatId) {
+        console.warn("[game-ruleset] Game state was not ready, so this battle does not use the sheets");
+        // An EMPTY record, not null: nobody was seeded, so nobody is written back. Null would send
+        // the write-back down its reload path, which measures the end of the fight against the
+        // sheet's share, and these fighters started at full instead.
+        rulesetBattleSeedsRef.current = {};
+        apply(party);
+        return;
+      }
+      const live = snapshot.rulesetLive;
+      const playerName = personaInfo?.name;
+      const start = (catalogs: RulesetCatalogEntriesById) => {
+        const seeded = seedRulesetBattleParty(definition, cards, live, catalogs, party, playerName);
+        rulesetBattleSeedsRef.current = seeded.seeds;
+        if (Object.keys(seeded.seeds).length > 0) {
+          toast.info(localizeUi("game.ruleset.battle.sheetNotice", { ruleset: definition.name }));
+        }
+        apply(seeded.party);
+      };
+      // The usual case: the catalogs were fetched when the game opened, so the party is seeded and
+      // set right here, in the same tick as the enemies and the scene around it.
+      const catalogIds = rulesetBattleCatalogIds(definition);
+      const cached: RulesetCatalogEntriesById = {};
+      for (const catalogId of catalogIds) {
+        const payload = queryClient.getQueryData<RulesetCatalogPayload>(
+          rulesetCatalogQuery(definition.id, catalogId, definition.version).queryKey,
+        );
+        if (payload) cached[catalogId] = payload.entries;
+      }
+      if (Object.keys(cached).length === catalogIds.length) {
+        start(cached);
+        return;
+      }
+      // The slow path, for a battle that starts before the catalogs have arrived. The empty record
+      // marks this battle as started by this session; every place that ends or abandons a battle
+      // replaces it, which is how a late answer knows it has been overtaken.
+      const pending: RulesetCombatSeeds = {};
+      rulesetBattleSeedsRef.current = pending;
+      // The wait is shown and gated the way a battle still being generated is: the same "starting"
+      // state holds the narration and the input until the party is in place.
+      setCombatGenerationPending(true);
+      let applied = false;
+      void (async () => {
+        const catalogs: RulesetCatalogEntriesById = {};
+        const missing: string[] = [];
+        await Promise.all(
+          rulesetBattleCatalogIds(definition).map(async (catalogId) => {
+            try {
+              const payload = await queryClient.fetchQuery(
+                rulesetCatalogQuery(definition.id, catalogId, definition.version),
+              );
+              catalogs[catalogId] = payload.entries;
+            } catch {
+              missing.push(catalogId);
+            }
+          }),
+        );
+        // A catalog that will not load costs the skills it holds and nothing else: the fight still
+        // starts on the sheet's own hit points and slots rather than not starting at all.
+        if (missing.length > 0) {
+          console.warn("[game-ruleset] Battle skills were skipped: these catalogs did not load", missing);
+        }
+        // A chat switch while the catalogs were in flight abandons this battle with them, and so
+        // does a battle the player already backed out of: the party must not be set on a game
+        // that is no longer fighting. The combat screen only mounts once the party is set, so
+        // nothing was playable in the meantime.
+        if (activeChatIdRef.current !== chatId) return;
+        if (rulesetBattleSeedsRef.current !== pending) return;
+        start(catalogs);
+        applied = true;
+      })().finally(() => {
+        // Only the battle that raised the gate lowers it, and only while it is still that battle's:
+        // a chat switch resets the gate by its own means, and a battle that replaced this one owns
+        // the gate it raised.
+        if (activeChatIdRef.current !== chatId) return;
+        if (applied || rulesetBattleSeedsRef.current === pending) setCombatGenerationPending(false);
+      });
+    },
+    [chatMeta.gameCharacterCards, gameRuleset, localizeUi, personaInfo?.name, queryClient],
+  );
+
   const hydrateGeneratedCombatState = useCallback(
     (combatState: CombatInitState): { party: Combatant[]; enemies: Combatant[] } | null => {
       const fallbackLevel = sessionNumber ?? 5;
@@ -8836,7 +8967,7 @@ function GameSurfaceComponent({
     if (isStreaming || scenePreparing || assetGenerationBlocksScene || directionsPlaying) return;
     if (latestNarrationText && !narrationDone) return;
 
-    setCombatParty(preparedCombatState.party);
+    startBattleParty(preparedCombatState.party, setCombatParty);
     setCombatEnemies(preparedCombatState.enemies);
     setCombatItemEffects(preparedCombatState.itemEffects);
     setCombatMechanics(preparedCombatState.mechanics);
@@ -8870,6 +9001,7 @@ function GameSurfaceComponent({
     preparedCombatState,
     queuedCombatGeneration,
     scenePreparing,
+    startBattleParty,
     transitionGameState,
   ]);
 
@@ -9357,8 +9489,9 @@ function GameSurfaceComponent({
       return;
     }
 
-    setCombatParty(
+    startBattleParty(
       partyCombatants.map((c) => ({ ...c, tactics: assignCombatTactics(c, Math.floor(Math.random() * 0x100000000)) })),
+      setCombatParty,
     );
   }, [
     pendingEncounter,
@@ -9370,6 +9503,7 @@ function GameSurfaceComponent({
     characters,
     characterMap,
     npcs,
+    startBattleParty,
     transitionGameState,
     sessionNumber,
   ]);
@@ -9638,8 +9772,8 @@ function GameSurfaceComponent({
 
   // ── Ruleset sheets ──
   // A game that pinned a ruleset carries a per-card BUILD on `gameCharacterCards[].rulesetSheet`
-  // and LIVE state in the game-state snapshot, so a swipe rewinds what was spent.
-  const gameRuleset = useGameRuleset(chatMeta);
+  // and LIVE state in the game-state snapshot, so a swipe rewinds what was spent. The resolution
+  // itself (`gameRuleset`) is read further up, where battles start.
   const { patchField: patchGameStateField } = useGameStatePatcher(activeChatId, "game-ruleset-sheet");
 
   /** The stored card for a party card's title, matched exactly as `handleSaveCharacterSheet` does. */
@@ -10355,6 +10489,8 @@ function GameSurfaceComponent({
     setCombatStartMessageId(null);
     appliedCombatStatusMessageIdsRef.current.clear();
     appliedCombatElementMessageIdsRef.current.clear();
+    // The fight is being undone, so nothing is written to the sheets and nothing is remembered.
+    rulesetBattleSeedsRef.current = null;
     useGameModeStore.getState().setGameState("exploration");
     if (activeChatId) {
       transitionGameState.mutate({ chatId: activeChatId, newState: "exploration" });
@@ -10408,6 +10544,46 @@ function GameSurfaceComponent({
         clearCombatSnapshot(activeChatId);
       }
 
+      // Tell the sheets what the fight cost, before the recap goes out, so the Game Master's next
+      // turn and the sheet on screen agree about what is left. A battle abandoned without ending
+      // (the empty-party guard, deleting the turn that started it) never reaches here and writes
+      // nothing back, because that fight did not happen.
+      const rulesetDefinition = gameRuleset.status === "ok" ? gameRuleset.definition : null;
+      // Plain English, like every other line of the recap: it is a prompt, not UI copy.
+      let sheetRecapLine: string | null = null;
+      if (rulesetDefinition?.battle) {
+        const current = useGameStateStore.getState().current;
+        // The patch replaces the WHOLE live object, so a snapshot that is missing or belongs to
+        // another chat would wipe every character's state. `handleRulesetLiveChange` refuses on
+        // exactly the same test; here the fight is already over, so it is said to the console.
+        if (current?.chatId !== activeChatId) {
+          console.warn("[game-ruleset] Game state was not ready, so the battle was not written to the sheets");
+        } else {
+          const written = applyRulesetBattleResult(
+            rulesetDefinition,
+            chatMeta.gameCharacterCards,
+            current.rulesetLive,
+            rulesetBattleSeedsRef.current,
+            summary.party,
+            personaInfo?.name,
+          );
+          for (const refusal of written.refused) {
+            console.warn("[game-ruleset] A sheet refused part of the battle result", refusal);
+          }
+          // The battle already showed the change, so a sheet that did not take it has to be said
+          // out loud, the way a refused sheet command from the Game Master is.
+          if (written.refused.length > 0) {
+            const names = [...new Set(written.refused.map((refusal) => refusal.name))];
+            toast.warning(localizeUi("game.ruleset.battle.writeBackRefused", { names: names.join(", ") }));
+          }
+          if (written.live) patchGameStateField("rulesetLive", written.live);
+          if (written.updated.length > 0) {
+            sheetRecapLine = `Sheets: the ${rulesetDefinition.name} sheets for ${written.updated.join(", ")} were updated with what this battle cost. Do not change those numbers again.`;
+          }
+        }
+      }
+      rulesetBattleSeedsRef.current = null;
+
       // Build a compact, model-friendly recap so the GM can narrate the aftermath.
       const defeatedEnemies = summary.enemies.filter((e) => e.defeated).map((e) => e.name);
       const survivingEnemies = summary.enemies.filter((e) => !e.defeated);
@@ -10441,6 +10617,7 @@ function GameSurfaceComponent({
         recapLines.push(`Survived: ${survivingEnemies.map((e) => `${e.name} (${e.hp}/${e.maxHp} HP)`).join(", ")}`);
       }
       recapLines.push(`Party: ${partyStatus.join("; ")}`);
+      if (sheetRecapLine) recapLines.push(sheetRecapLine);
       if (summary.battlefieldSummary?.trim()) recapLines.push(`Battlefield: ${summary.battlefieldSummary.trim()}`);
       if (lootText) recapLines.push(`Loot: ${lootText}`);
       else
@@ -10483,7 +10660,17 @@ function GameSurfaceComponent({
         })
         .catch(() => {});
     },
-    [sendMessage, activeChatId, clearCombatSnapshot, transitionGameState],
+    [
+      sendMessage,
+      activeChatId,
+      chatMeta.gameCharacterCards,
+      clearCombatSnapshot,
+      gameRuleset,
+      localizeUi,
+      patchGameStateField,
+      personaInfo?.name,
+      transitionGameState,
+    ],
   );
 
   // Toggle audio mute

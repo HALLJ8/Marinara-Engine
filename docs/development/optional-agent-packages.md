@@ -664,6 +664,32 @@ Desktop uses a browse list with an adjacent detail region. Mobile uses one pane 
 
 An extraction is complete only when the base production client and server bundles no longer contain the package implementation, a fresh install cannot activate it without downloading the package, an upgraded install retains it, and package install/update/uninstall passes on desktop, mobile, and Termux-compatible filesystems.
 
+### Capability API 1.22: the battle block
+
+A ruleset may carry an optional `battle` block, which lends a battle the numbers on the character
+sheet: the live pool that is hit points, an optional pool that becomes MP, the pools that become
+spell slots, and the sheet lists whose catalog-marked rows become the Engine's own `CombatSkill`s.
+When the fight ends, the hit points, energy and slots it spent are written back through the same
+sheet operations a player's own buttons use.
+
+```json
+{
+  "capabilityApi": { "major": 1, "minor": 22 },
+  "kind": ["ruleset"],
+  "contributions": { "assets": { "paths": ["ruleset.json"] } }
+}
+```
+
+This is not a combat adapter. The damage arithmetic stays the Engine's, and `attackRoll`, `save`,
+`concentration` and `perCostStep` on a catalog entry are read by nobody: rules-accurate resolution
+belongs to the combat handoff's per-ruleset adapters. `coverage.combat` keeps its own meaning and
+the bridge never reads it.
+
+The block lives inside `ruleset.json`, which the manifest cannot show, so install reads the verified
+bytes and refuses a `battle` key under a declaration older than 1.22, exactly as it does for
+`catalogs` under 1.21. An older Engine's strict schema would refuse the whole ruleset file anyway.
+No permission, and no change for a ruleset that ships no `battle` block.
+
 ### Capability API 1.21: ruleset catalogs
 
 A ruleset may ship **catalogs**: named collections of ready-made entries (spells, class features,
