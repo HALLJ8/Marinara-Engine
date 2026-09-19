@@ -408,6 +408,10 @@ const ENGINE_MAX_HP = 60;
   assert.equal(synthetic({ kind: "attack", area: { shape: "line", size: 40 } })!.areaRadius, 1);
   assert.equal(synthetic({ kind: "attack", area: { shape: "burst", size: 8 } })!.targetScope, "all-enemies");
   assert.equal(synthetic({ kind: "attack", range: 12 })!.targetScope, undefined);
+  // The Engine has no "all allies" scope, so an area heal or buff must never borrow "all enemies".
+  assert.equal(synthetic({ kind: "heal", area: { shape: "burst", size: 8 } })!.targetScope, undefined);
+  assert.equal(synthetic({ kind: "buff", area: { shape: "burst", size: 8 } })!.targetScope, undefined);
+  assert.equal(synthetic({ kind: "debuff", area: { shape: "burst", size: 8 } })!.targetScope, "all-enemies");
   // A catalog that declares no distance unit counts in cells already.
   assert.equal(synthetic({ kind: "attack", range: 12 }, "plain")!.range, 12);
 }

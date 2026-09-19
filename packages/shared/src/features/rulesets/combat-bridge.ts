@@ -248,7 +248,9 @@ function combatSkillFromEntry(
   if (mechanics.range !== undefined) skill.range = inCells(mechanics.range, perCell);
   if (mechanics.area) {
     skill.areaRadius = areaRadius(mechanics.area, perCell);
-    skill.targetScope = "all-enemies";
+    // The Engine's only wide scope is "all enemies", which is right for something that harms and
+    // badly wrong for a heal or a buff: those stay single-target rather than mending the other side.
+    if (mechanics.kind === "attack" || mechanics.kind === "debuff") skill.targetScope = "all-enemies";
   }
   if (mechanics.friendlyFire !== undefined) skill.friendlyFire = mechanics.friendlyFire;
   if (mechanics.damageType) skill.element = mechanics.damageType;
