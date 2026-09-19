@@ -184,7 +184,7 @@ The copy is the character's. The player can edit any of it afterwards, the sheet
 
 An entry may carry an optional `mechanics` block that says what it does in numbers: `kind` (`attack`, `heal`, `buff`, `debuff`, `utility`), `range`, `area`, `targets`, `friendlyFire`, `amount` (dice such as `2d6`, or a flat number), `damageType`, `attackRoll`, `save` (one of your sheet's saves, and what a success does), `cost` (which pool using it spends), `perCostStep`, `concentration`, and `reaction`.
 
-The picker shows this block as one line. A battle reads part of it, but only when your ruleset opts in with a [`battle` block](#battles-lending-the-sheet-to-marinaras-combat), and only the parts Marinara's own combat has somewhere to put: `attackRoll`, `save`, `concentration` and `perCostStep` are recorded and never applied. The vocabulary is closed, so a key or a value that is not in the list above is refused instead of being quietly ignored.
+The picker shows this block as one line. A battle reads part of it, but only when your ruleset opts in with a [`battle` block](#battles-lending-the-sheet-to-marinaras-combat), and only the parts Marinara's own combat has somewhere to put. It reads `kind`, `range`, `area`, `friendlyFire`, `amount`, `damageType` and `cost`. Four fields stay in the file and are never read or applied by a battle: `attackRoll`, `save`, `concentration` and `perCostStep`. The vocabulary is closed, so a key or a value that is not in the list above is refused instead of being quietly ignored.
 
 ### Inline, or a file of its own
 

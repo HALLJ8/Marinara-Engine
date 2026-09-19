@@ -1047,6 +1047,11 @@ function refineRulesetDefinition(def: RulesetDefinitionBase, ctx: z.RefinementCt
       );
     };
     battlePool(battle.health.pool, ["battle", "health", "pool"]);
+    // A pool that starts empty counts UP (stress, corruption), so as health it would put every
+    // fresh character into their first fight already down.
+    if (sheet.live.pools.find((pool) => pool.id === battle.health.pool)?.start === "empty") {
+      issue(["battle", "health", "pool"], `"${battle.health.pool}" starts empty, so it cannot be the health pool`);
+    }
     if (battle.energy) {
       battlePool(battle.energy.pool, ["battle", "energy", "pool"]);
       // Health is not spendable as energy: the Engine drains hit points as damage and spends the

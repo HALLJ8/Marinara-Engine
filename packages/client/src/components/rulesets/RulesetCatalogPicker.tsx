@@ -15,6 +15,7 @@ import {
   type RulesetDefinition,
   type RulesetSheetBuild,
 } from "@marinara-engine/shared";
+import { rulesetBattleCatalogIds } from "../../lib/ruleset-combat-bridge";
 import { useRulesetCatalog } from "../../hooks/use-capability-packages";
 import { ApiError } from "../../lib/api-client";
 import {
@@ -261,7 +262,7 @@ export function RulesetCatalogPicker({
             {/* A ruleset whose battle block reads one of the lists this catalog fills does lend these
                 numbers to battles, so the note must not say otherwise. */}
             {t(
-              definition.battle?.skills?.some((source) => catalog.feeds.includes(source.list))
+              rulesetBattleCatalogIds(definition).includes(catalog.id)
                 ? "game.ruleset.catalog.mechanicsNoteBattle"
                 : "game.ruleset.catalog.mechanicsNote",
             )}
