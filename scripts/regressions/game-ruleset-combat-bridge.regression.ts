@@ -163,6 +163,12 @@ const ENGINE_MAX_HP = 60;
   );
   refuses(
     emberText,
+    (doc) => (doc.battle.skills = [{ list: "knacks", alwaysWhen: { column: "name", equals: 0 } }]),
+    /battle\.skills\.0\.alwaysWhen\.equals: "name" is a text column, so equals must be a string/,
+    "the exception compares against a value the column can hold",
+  );
+  refuses(
+    emberText,
     (doc) => (doc.battle.spells = { pool: "luck" }),
     /battle: Unrecognized key\(s\) in object: 'spells'/,
     "the block is strict, like the rest of the file",

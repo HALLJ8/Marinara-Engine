@@ -1076,8 +1076,31 @@ function refineRulesetDefinition(def: RulesetDefinitionBase, ctx: z.RefinementCt
       if (source.onlyWhen && typeOf(source.onlyWhen) !== "boolean") {
         issue([...path, "onlyWhen"], "Must name a boolean column");
       }
-      if (source.alwaysWhen && typeOf(source.alwaysWhen.column) === undefined) {
-        issue([...path, "alwaysWhen", "column"], `Unknown column "${source.alwaysWhen.column}"`);
+      if (source.alwaysWhen) {
+        const column = list.columns.find((entry) => entry.id === source.alwaysWhen!.column);
+        if (!column) {
+          issue([...path, "alwaysWhen", "column"], `Unknown column "${source.alwaysWhen.column}"`);
+        } else {
+          // `equals` must be a value the column can hold, or the rule could never match a row. The
+          // same standard `hideWhen` is held to.
+          const equalsPath = [...path, "alwaysWhen", "equals"];
+          const { equals } = source.alwaysWhen;
+          if (column.type === "enum") {
+            if (typeof equals !== "string" || !column.values.includes(equals)) {
+              issue(equalsPath, `${JSON.stringify(equals)} is not one of the values of "${column.id}"`);
+            }
+          } else if (column.type === "number") {
+            if (typeof equals !== "number") {
+              issue(equalsPath, `"${column.id}" is a number column, so equals must be a number`);
+            }
+          } else if (column.type === "boolean") {
+            if (typeof equals !== "boolean") {
+              issue(equalsPath, `"${column.id}" is a boolean column, so equals must be true or false`);
+            }
+          } else if (typeof equals !== "string") {
+            issue(equalsPath, `"${column.id}" is a text column, so equals must be a string`);
+          }
+        }
       }
     });
   }

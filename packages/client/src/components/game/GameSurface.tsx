@@ -185,6 +185,7 @@ import {
   normalizeCharacterLookupName,
   rulesetSheetEnvelopeSchema,
   type RulesetCatalogEntriesById,
+  type RulesetCatalogPayload,
   type RulesetLiveState,
   type RulesetSheetEnvelope,
 } from "@marinara-engine/shared";
@@ -8517,6 +8518,17 @@ function GameSurfaceComponent({
     rulesetBattleSeedsRef.current = null;
   }, [activeChatId]);
 
+  // The catalogs a bridged battle reads are fetched as soon as the game is open, so that starting a
+  // battle finds them in the cache and seeds the party in the same tick a game without a ruleset
+  // sets it. Nothing is fetched for a game whose ruleset has no `battle` block.
+  const battleDefinition = gameRuleset.status === "ok" && gameRuleset.definition.battle ? gameRuleset.definition : null;
+  useEffect(() => {
+    if (!battleDefinition) return;
+    for (const catalogId of rulesetBattleCatalogIds(battleDefinition)) {
+      void queryClient.prefetchQuery(rulesetCatalogQuery(battleDefinition.id, catalogId, battleDefinition.version));
+    }
+  }, [battleDefinition, queryClient]);
+
   const startBattleParty = useCallback(
     (party: Combatant[], apply: (party: Combatant[]) => void) => {
       const definition = gameRuleset.status === "ok" ? gameRuleset.definition : null;
@@ -8533,12 +8545,42 @@ function GameSurfaceComponent({
       const snapshot = useGameStateStore.getState().current;
       if (snapshot?.chatId !== chatId) {
         console.warn("[game-ruleset] Game state was not ready, so this battle does not use the sheets");
+        // An EMPTY record, not null: nobody was seeded, so nobody is written back. Null would send
+        // the write-back down its reload path, which measures the end of the fight against the
+        // sheet's share, and these fighters started at full instead.
         rulesetBattleSeedsRef.current = {};
         apply(party);
         return;
       }
       const live = snapshot.rulesetLive;
       const playerName = personaInfo?.name;
+      const start = (catalogs: RulesetCatalogEntriesById) => {
+        const seeded = seedRulesetBattleParty(definition, cards, live, catalogs, party, playerName);
+        rulesetBattleSeedsRef.current = seeded.seeds;
+        if (Object.keys(seeded.seeds).length > 0) {
+          toast.info(localizeUi("game.ruleset.battle.sheetNotice", { ruleset: definition.name }));
+        }
+        apply(seeded.party);
+      };
+      // The usual case: the catalogs were fetched when the game opened, so the party is seeded and
+      // set right here, in the same tick as the enemies and the scene around it.
+      const catalogIds = rulesetBattleCatalogIds(definition);
+      const cached: RulesetCatalogEntriesById = {};
+      for (const catalogId of catalogIds) {
+        const payload = queryClient.getQueryData<RulesetCatalogPayload>(
+          rulesetCatalogQuery(definition.id, catalogId, definition.version).queryKey,
+        );
+        if (payload) cached[catalogId] = payload.entries;
+      }
+      if (Object.keys(cached).length === catalogIds.length) {
+        start(cached);
+        return;
+      }
+      // The slow path, for a battle that starts before the catalogs have arrived. The empty record
+      // marks this battle as started by this session; every place that ends or abandons a battle
+      // replaces it, which is how a late answer knows it has been overtaken.
+      const pending: RulesetCombatSeeds = {};
+      rulesetBattleSeedsRef.current = pending;
       void (async () => {
         const catalogs: RulesetCatalogEntriesById = {};
         const missing: string[] = [];
@@ -8559,14 +8601,13 @@ function GameSurfaceComponent({
         if (missing.length > 0) {
           console.warn("[game-ruleset] Battle skills were skipped: these catalogs did not load", missing);
         }
-        // A chat switch while the catalogs were in flight abandons this battle with them.
+        // A chat switch while the catalogs were in flight abandons this battle with them, and so
+        // does a battle the player already backed out of: the party must not be set on a game
+        // that is no longer fighting. The combat screen only mounts once the party is set, so
+        // nothing was playable in the meantime.
         if (activeChatIdRef.current !== chatId) return;
-        const seeded = seedRulesetBattleParty(definition, cards, live, catalogs, party, playerName);
-        rulesetBattleSeedsRef.current = seeded.seeds;
-        if (Object.keys(seeded.seeds).length > 0) {
-          toast.info(localizeUi("game.ruleset.battle.sheetNotice", { ruleset: definition.name }));
-        }
-        apply(seeded.party);
+        if (rulesetBattleSeedsRef.current !== pending) return;
+        start(catalogs);
       })();
     },
     [chatMeta.gameCharacterCards, gameRuleset, localizeUi, personaInfo?.name, queryClient],
