@@ -72,16 +72,18 @@ export function rulesetCellBlocked(grid: TacticalGrid, x: number, y: number): bo
 }
 
 /** What it costs to step INTO this cell, by the same terrain table the Engine's own fights use. */
-function enterCost(grid: TacticalGrid, x: number, y: number): number {
+export function rulesetCellEnterCost(grid: TacticalGrid, x: number, y: number): number {
   const terrain = grid.tiles[y]?.[x];
-  const cost = terrain === undefined ? 1 : TERRAIN_DATA[terrain].moveCost;
+  // A saved board can arrive through an import, and a terrain word this Engine does not know must
+  // cost an ordinary step rather than throw in the middle of a turn.
+  const cost = (terrain === undefined ? undefined : TERRAIN_DATA[terrain]?.moveCost) ?? 1;
   return Math.max(1, Math.round(cost));
 }
 
 /** What the ground under this cell is worth as cover, by the same terrain table. */
 export function rulesetCellCover(grid: TacticalGrid, cell: RulesetCombatCell): number {
   const terrain = grid.tiles[cell.y]?.[cell.x];
-  return terrain === undefined ? 0 : TERRAIN_DATA[terrain].defenseBonus;
+  return (terrain === undefined ? undefined : TERRAIN_DATA[terrain]?.defenseBonus) ?? 0;
 }
 
 /**
@@ -329,7 +331,7 @@ export function rulesetReachableCells(
         rulesetCellBlocked(grid, at.x, at.y + dy)
       )
         continue;
-      const cost = cheapest + enterCost(grid, x, y);
+      const cost = cheapest + rulesetCellEnterCost(grid, x, y);
       if (cost > budget || cost >= (best.get(next) ?? Infinity)) continue;
       best.set(next, cost);
       cameFrom.set(next, key);

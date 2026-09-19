@@ -1219,9 +1219,20 @@ const cellsOf = (cells: Array<{ x: number; y: number }>) =>
   assert.match(refusalOf(withCombat((combat) => (combat.distance.perCell = -5))), /greater than 0/);
 
   // Everything that is measured in cells needs a cell to measure it in.
-  for (const key of ["ranged", "cover", "opportunity"] as const) {
+  const measured = ["ranged", "cover", "opportunity"] as const;
+  for (const key of measured) {
     assert.match(
-      refusalOf(withCombat((combat) => delete combat.distance)),
+      refusalOf(
+        withCombat((combat) => {
+          // ONLY this key is left standing beside the missing cell size, so the refusal is its own.
+          delete combat.distance;
+          for (const other of measured) if (other !== key) delete combat[other];
+          for (const source of combat.attacks as Array<Record<string, unknown>>) {
+            delete source.reach;
+            delete source.range;
+          }
+        }),
+      ),
       /is measured in cells, so the block declares "distance" too/,
       `"${key}" without a cell size`,
     );

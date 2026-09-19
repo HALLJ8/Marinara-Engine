@@ -495,8 +495,8 @@ C4a is the board, on the shared and server sides. C4b is the screen that draws i
 - **Proven** in `scripts/regressions/game-ruleset-combat-grid.regression.ts` (hand-drawn boards,
   scripted dice, both example rulesets, and the byte-for-byte comparison), plus positioned cases in
   `ruleset-combat-director.regression.ts` and `ruleset-combat-director-route.regression.ts`.
-- **Left for C4b and C5**: the board on screen, and with it the log lines for the four new events;
-  reaction windows, three-quarter and total cover, elevation, flying over obstacles, squeezing,
+- **Left for C4b and C5**: the board on screen (the log lines for the four new events already ship
+  here, because the screen's drift guard asks for a line per event); reaction windows, three-quarter and total cover, elevation, flying over obstacles, squeezing,
   hiding and forced movement.
 
 ## Architecture

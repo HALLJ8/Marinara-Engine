@@ -22,8 +22,7 @@ import {
   rulesetMovementAllowance,
   writeRulesetSheet,
 } from "./encounter.js";
-import { rulesetAreaCells, rulesetOpportunityAttack } from "./grid.js";
-import { TERRAIN_DATA } from "../tactical-combat/types.js";
+import { rulesetAreaCells, rulesetCellEnterCost, rulesetOpportunityAttack } from "./grid.js";
 import {
   planRulesetCombatCost,
   rulesetActionAvailable,
@@ -866,7 +865,7 @@ function resolveMove(ctx: RulesetCombatContext, actor: RulesetCombatant, destina
       stopped = true;
       break;
     }
-    spent += grid ? enterCostOf(grid, cell) : 1;
+    spent += grid ? rulesetCellEnterCost(grid, cell.x, cell.y) : 1;
     walked.push(cell);
     at = cell;
     actor.x = cell.x;
@@ -883,11 +882,6 @@ function resolveMove(ctx: RulesetCombatContext, actor: RulesetCombatant, destina
     left: actor.movementLeft,
     ...(stopped ? { stopped: true } : {}),
   });
-}
-
-function enterCostOf(grid: NonNullable<RulesetEncounterState["board"]>["grid"], cell: RulesetCombatCell): number {
-  const terrain = grid.tiles[cell.y]?.[cell.x];
-  return terrain === undefined ? 1 : Math.max(1, Math.round(TERRAIN_DATA[terrain].moveCost));
 }
 
 /** Everybody whose reach this one step leaves, in the order the fight holds them. Re-read at every
