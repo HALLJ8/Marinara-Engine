@@ -174,17 +174,105 @@ A feature with limited uses is two rows on a sheet: the feature itself, and the 
 }
 ```
 
+### Values the ruleset keeps up to date
+
+A row's numbers belong to the player once it is picked. One exception is worth having: a maximum that
+follows the character, such as uses equal to an ability score, or a class resource that grows with a
+level. A row may name up to four of its own number columns in a `scaled` map, and the sheet editor
+keeps those cells right.
+
+```json
+{
+  "list": "tricks",
+  "values": { "name": "Last Ember", "uses": 1, "recharge": "camp" },
+  "scaled": { "uses": { "from": { "abilityScore": "heart" } } }
+}
+```
+
+- The key is one of the list's `number` columns.
+- `from` is an ordinary value reference, the same closed vocabulary used everywhere else. Anything
+  more complicated is a `derived` value your sheet declares, which `from` then points at
+  (`"from": { "derived": "lay_on_hands_max" }`). No new arithmetic is added here.
+- `table` is optional. With it, the reference's value is looked up in a step table, which is how a
+  level gives a number: `"scaled": { "max": { "from": { "field": "level" }, "table": [[1, 2], [3, 3], [6, 4]] } }`.
+- `values` must still hold a plain number for the column, and a row that leaves it out is refused.
+  That is what the row is before any sheet is known, and what a sheet with no such reference keeps.
+- A row with `scaled` must be the entry's only row for that list, so a marked row on a sheet always
+  matches one spec.
+
+The value is worked out when the sheet is edited and never when it is read, so a stored row is always
+the number it says it is. It is fitted to the column it lands in: clamped to the column's `min` and
+`max`, and rounded down when the column takes whole numbers. In the example above, a character with
+Heart 3 has three uses and one with Heart 0 or less has none. The row stays on their sheet with 0
+uses, and because a counter with a maximum of 0 is not a pool, there is nothing to spend in play.
+
+Scaled columns are Capability API 1.23 for a packaged ruleset. A community ruleset you import is
+validated by the Engine that reads it, so it needs nothing.
+
 ### Picked rows are copies
 
 Each picked row is copied onto the sheet with one extra key, `_catalog`, holding `<catalog id>/<entry id>`. Column ids always start with a letter, so this key can never be one of yours.
 
-The copy is the character's. The player can edit any of it afterwards, the sheet keeps working while your ruleset is not installed, and publishing a new version of the ruleset never rewrites anyone's character. The mark is only there so the picker can show what a sheet already has.
+The copy is the character's. The player can edit any of it afterwards, the sheet keeps working while your ruleset is not installed, and publishing a new version of the ruleset never rewrites anyone's character. The mark is what the picker reads to show what a sheet already has, and what Refresh reads below.
+
+### Refresh from ruleset
+
+Because a picked row keeps its mark, the sheet editor can tell a player when your newer text differs from what their row holds. A short line under the list says how many rows have newer text, and a **Review** button shows each of them with what the sheet holds beside what the ruleset says, and a tick per row. Nothing is written until the player clicks **Update selected**, and only the columns that differ in the ticked rows are written. Everything else in the row survives, the mark included.
+
+What is compared is deliberately narrow:
+
+- Only `text`, `longtext`, `dice` and `enum` columns. A `number` or a `boolean` is where the player's own state lives (prepared, proficient, a magic weapon's bonus, a maximum they set by hand), and there is no stored base to merge against, so a difference there is never offered. A scaled column is never part of it either: it already follows the sheet.
+- Only columns your entry sets. A column your entry leaves out is never touched, whatever the sheet holds in it.
+- A value the column itself would refuse, such as an `enum` value you no longer offer or text past its `maxLength`, is skipped rather than written.
+- A row is matched to the entry row it came from by position among the rows carrying the same mark in that list, which holds while the sheet still has as many of them as your entry writes. Otherwise it works only when your entry writes a single row for that list. If a player deleted one row of a two-row entry, that entry is left alone rather than guessed at.
+- A row whose entry your catalog no longer has is left alone, silently.
+
+So rewording or renaming an entry can reach characters who already picked it, if they accept it. Changing what a number means cannot, and will not: that column is the player's once the row is theirs.
 
 ### `mechanics`, for later
 
 An entry may carry an optional `mechanics` block that says what it does in numbers: `kind` (`attack`, `heal`, `buff`, `debuff`, `utility`), `range`, `area`, `targets`, `friendlyFire`, `amount` (dice such as `2d6`, or a flat number), `damageType`, `attackRoll`, `save` (one of your sheet's saves, and what a success does), `cost` (which pool using it spends), `perCostStep`, `concentration`, and `reaction`.
 
 The picker shows this block as one line. A battle reads part of it, but only when your ruleset opts in with a [`battle` block](#battles-lending-the-sheet-to-marinaras-combat), and only the parts Marinara's own combat has somewhere to put. It reads `kind`, `range`, `area`, `friendlyFire`, `amount`, `damageType` and `cost`. Four fields stay in the file and are never read or applied by a battle: `attackRoll`, `save`, `concentration` and `perCostStep`. The vocabulary is closed, so a key or a value that is not in the list above is refused instead of being quietly ignored.
+
+`cost` is also what the Game Master's `use` command pays, outside battle, which is the next section.
+
+### The `use` command: letting the Game Master spend a price you wrote
+
+While it narrates, the Game Master keeps each sheet up to date with `[sheet: ...]` commands: `spend`,
+`restore` (`heal` means the same thing), `damage`, `temp`, `track`, `condition`, `note` and `rest`. A
+ruleset that ships catalogs gets one more:
+
+```
+[sheet: who="Mira" op="use" name="Fireball"]
+[sheet: who="Mira" op="use" name="Fireball" pool="3rd-level slots"]
+```
+
+`op="cast"` means the same as `op="use"` and `spell=` the same as `name=`, so the wording a Game
+Master reaches for works without your format having to know the word "spell".
+
+The name is matched, ignoring case, against the rows on that character's sheet that came from one of
+your catalogs. A row answers to the name the Game Master was shown (the `sheetSummary` name column for
+that list, then the list's `pools.nameColumn`, then its first text column) and to the `label` of the
+entry it came from, so a player who renamed their row still has it. A name nothing answers to, and a
+name two different entries answer to, are both refused.
+
+What it spends:
+
+- every term of the entry's `mechanics.cost`. A term naming a live pool pays from that pool; a term
+  naming a pool GROUP pays from the first pool of that group, in declaration order, that can afford
+  it. There is no automatic climb to a higher pool, because a group is not always a ladder.
+- plus one from every list-row pool the same entry wrote, such as the counter that tracks a feature's
+  uses. That is the second row of the `Last Ember` entry above. A counter whose maximum is 0 has no
+  uses to give, so the command is refused instead of going through for free.
+
+`pool=` is the upcast: the same single price, paid from another pool of the same group. It is only
+accepted when the cost has exactly one term and the named pool shares that term's group. Anything
+else is refused rather than reinterpreted.
+
+It is all or nothing. If any part cannot be paid the whole command is refused, nothing changes, and
+the player is told. An entry with no cost at all, such as a cantrip or a passive feature, is accepted
+and changes nothing.
 
 ### Inline, or a file of its own
 

@@ -664,6 +664,35 @@ Desktop uses a browse list with an adjacent detail region. Mobile uses one pane 
 
 An extraction is complete only when the base production client and server bundles no longer contain the package implementation, a fresh install cannot activate it without downloading the package, an upgraded install retains it, and package install/update/uninstall passes on desktop, mobile, and Termux-compatible filesystems.
 
+### Capability API 1.23: scaled catalog values
+
+A catalog entry's row may carry an optional `scaled` map: up to four of that row's own number columns
+whose value the ruleset keeps, rather than the player. Each one is an ordinary value reference with an
+optional step table, so a class resource can follow a level and a feature's uses can follow an ability
+score without the format learning any new arithmetic.
+
+```json
+{
+  "capabilityApi": { "major": 1, "minor": 23 },
+  "kind": ["ruleset"],
+  "contributions": { "assets": { "paths": ["ruleset.json", "catalogs/spells.json"] } }
+}
+```
+
+The value is worked out when the sheet is edited and never when it is read, so live state, the Game
+Master's prompt block and the battle bridge all keep reading the stored number.
+
+A scaled row can sit inline in `ruleset.json` or in a `catalogs/<id>.json` asset. The manifest
+declares both files as assets but cannot show the keys inside them, so install reads the verified
+bytes of both and refuses a `scaled` key under a
+declaration older than 1.23, exactly as it does for `catalogs` under 1.21 and `battle` under 1.22. An
+older Engine's strict schema would refuse the file that holds it anyway. No permission, and no change
+for a ruleset whose catalogs ship none.
+
+The same release adds the `[sheet: op="use" name="..."]` command, which pays a catalog entry's
+`mechanics.cost` plus one use of every row pool that entry wrote. It needs no declaration: it reads
+catalogs the Engine already serves.
+
 ### Capability API 1.22: the battle block
 
 A ruleset may carry an optional `battle` block, which lends a battle the numbers on the character

@@ -62,9 +62,13 @@ In a game that uses a ruleset (see [Games that use a ruleset](dice-and-skill-che
 
 The Game Master keeps the same sheet up to date while it narrates. When a character spends a resource, takes damage, heals, gains or loses a condition, or rests, it records the change, and the Engine checks it against the sheet. A change that is not possible, such as a spell cast with no slot left, is refused: nothing changes and a notice tells you so.
 
+When a character uses something they picked from the ruleset's catalogs, such as a spell or a class feature, the Game Master names it and the Engine pays the whole price: whatever the ruleset says it costs, plus one use of each counter that came with it. A spell that costs a slot is paid from the slot level the ruleset names for it, and the Game Master can ask for a higher one instead. The Engine never climbs to a higher slot on its own. If any part of the price cannot be paid, the whole thing is refused and nothing is spent. Something that costs nothing, such as a cantrip, is simply narrated.
+
+Some numbers on the sheet belong to the ruleset rather than to you. A class resource whose maximum follows your level, or uses that follow an ability score, is set by the ruleset and kept right when you edit the sheet.
+
 These live values belong to the message they happened in. If you swipe to another version of a turn, or regenerate it, the sheet goes back to how it was before that turn, so nothing is ever spent twice.
 
-Click **Edit sheet** to change the build itself, for example after a level-up: scores, fields, lists such as spells, and skill and save training. Calculated values update as you type. Click **Save sheet** when you are done. This changes only this game's copy of the sheet. The sheet stored on the character or persona is never changed by a game.
+Click **Edit sheet** to change the build itself, for example after a level-up: scores, fields, lists such as spells, and skill and save training. Calculated values update as you type. It is the same editor as the one on the character card, so rows can be added from the ruleset's catalogs here too, cells the ruleset keeps are shown but cannot be typed in, and a list whose ruleset text has changed offers a **Review** button. Click **Save sheet** when you are done. This changes only this game's copy of the sheet. The sheet stored on the character or persona is never changed by a game.
 
 The separate **Edit Sheet** button described above still edits the general sheet (class, abilities, strengths and so on) and leaves the ruleset sheet alone.
 

@@ -8,10 +8,14 @@
 // starts from the state before it and can never spend twice.
 import {
   applySheetCommandTags,
+  createSheetCommandTagRegex,
   defaultRulesetSheetBuild,
   normalizeCharacterLookupName,
+  parseSheetCommandTagBody,
   renderRulesetSheetBlock,
+  rulesetCatalogIdsForBuild,
   rulesetSheetEnvelopeSchema,
+  type RulesetCatalogEntriesById,
   type RulesetDefinition,
   type RulesetLiveStates,
   type SheetCommandCard,
@@ -21,10 +25,14 @@ import type { DB } from "../../db/connection.js";
 import { logger } from "../../lib/logger.js";
 import { createChatsStorage } from "../storage/chats.storage.js";
 import { createCharactersStorage } from "../storage/characters.storage.js";
+import { loadRulesetCatalogEntries } from "./ruleset-catalog.service.js";
 import { loadRulesetRegistry, resolveGameRuleset, type ResolvedGameRuleset } from "./ruleset-registry.service.js";
 
 export interface GameRulesetSheetContext {
   definition: RulesetDefinition;
+  /** The package that supplied the ruleset, or null for an imported one. A catalog asset can only
+   *  be read from a package, so the `use` command needs to know which. */
+  packageId: string | null;
   cards: SheetCommandCard[];
   /** The player's card name, which a command that names nobody applies to. */
   playerName: string | null;
@@ -105,9 +113,53 @@ export async function loadGameRulesetSheetContext(
   const persona = personaId ? await createCharactersStorage(db).getPersona(personaId) : null;
   return {
     definition: pinned.definition,
+    packageId: pinned.packageId,
     cards: sheetCommandCards(pinned.definition, cards),
     playerName: persona?.name?.trim() || null,
   };
+}
+
+/** Whether this reply asks to use something out of a catalog. Every other command is answered from
+ *  the sheet alone, so a turn without one never touches a catalog file. */
+function replyUsesCatalogEntry(content: string): boolean {
+  if (!content.includes("[")) return false;
+  for (const match of content.matchAll(createSheetCommandTagRegex())) {
+    if (parseSheetCommandTagBody(match[1] ?? "").op?.op === "use") return true;
+  }
+  return false;
+}
+
+/** The catalog entries this reply's `use` commands need: nothing at all unless the reply carries
+ *  one, and then only the catalogs the party's own rows point at. A catalog that cannot be read is
+ *  logged and left out, and the command is refused as naming something the Engine does not know,
+ *  which is the honest answer: it cannot tell what the ability would have cost. */
+export async function loadTurnRulesetCatalogs(
+  context: GameRulesetSheetContext,
+  content: string,
+): Promise<RulesetCatalogEntriesById> {
+  const declared = context.definition.catalogs;
+  if (!declared?.length || !replyUsesCatalogEntry(content)) return {};
+  const wanted = new Set(context.cards.flatMap((card) => rulesetCatalogIdsForBuild(context.definition, card.build)));
+  const catalogs: RulesetCatalogEntriesById = {};
+  for (const catalog of declared) {
+    if (!wanted.has(catalog.id)) continue;
+    try {
+      const read = await loadRulesetCatalogEntries(context.packageId, context.definition, catalog);
+      if (read.ok) catalogs[catalog.id] = read.entries;
+      else {
+        logger.warn(
+          "[game/sheet] Catalog %s of %s could not be read for this turn: %s",
+          catalog.id,
+          context.definition.id,
+          read.issues.slice(0, 3).join("; "),
+        );
+      }
+    } catch (error) {
+      // A turn is never lost to a catalog file.
+      logger.warn(error, "[game/sheet] Could not read catalog %s of %s", catalog.id, context.definition.id);
+    }
+  }
+  return catalogs;
 }
 
 export interface GameRulesetSheetTurn {
@@ -122,9 +174,11 @@ export function applyGameRulesetSheetTurn(
   context: GameRulesetSheetContext,
   content: string,
   baseLive: RulesetLiveStates | null | undefined,
+  /** What `loadTurnRulesetCatalogs` found, for the `use` command. Absent, every `use` is refused. */
+  catalogs?: RulesetCatalogEntriesById,
 ): GameRulesetSheetTurn {
   try {
-    const applied = applySheetCommandTags(content, { ...context, live: baseLive ?? {} });
+    const applied = applySheetCommandTags(content, { ...context, live: baseLive ?? {}, catalogs });
     for (const outcome of applied.outcomes) {
       if (!outcome.ok) logger.warn("[game/sheet] Refused for %s: %s (%s)", outcome.who, outcome.reason, outcome.tag);
     }

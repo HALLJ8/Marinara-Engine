@@ -248,6 +248,24 @@ try {
     assert.match(withSheets, /Tracks: .*Exhaustion \(0 to 6\)/);
     assert.match(withSheets, /3rd-level slots 0\/2/);
     assert.match(withSheets, /<character_sheets>\nMira\n[\s\S]*<\/character_sheets>/, "sheets are delimited as data");
+    // The `use` line is only for a ruleset that ships catalogs: nothing else on a sheet carries a
+    // price the Engine could pay, so the line would describe a command that always refuses.
+    assert.doesNotMatch(withSheets, /op="use"/, "this example declares no catalogs");
+    const emberParsed = parseRulesetDefinition(
+      JSON.parse(
+        readFileSync(fileURLToPath(new URL("../../docs/examples/rulesets/ember-roads.json", import.meta.url)), "utf8"),
+      ),
+    );
+    assert.ok(emberParsed.ok, "the 2d6 example must validate");
+    const withCatalogs = buildGmFormatReminder({
+      ...base,
+      ruleset: emberParsed.definition,
+      rulesetSheetBlocks: renderGameRulesetSheetBlocks(emberParsed.definition, [{ name: "Vex" }], null),
+    });
+    assert.match(
+      withCatalogs,
+      /\[sheet: who="Name" op="use" name="Name on the sheet"\] - pays what that ability costs\. Add pool="Pool" to pay from a higher pool of the same group\./,
+    );
     // No sheets to show (or no ruleset): the section is not rendered at all.
     assert.doesNotMatch(buildGmFormatReminder({ ...base, ruleset: fiveE }), /CHARACTER SHEETS:/);
     assert.doesNotMatch(buildGmFormatReminder(base), /\[sheet:/);

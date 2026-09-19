@@ -134,6 +134,7 @@ import { createGameStateStorage, parseStoredRulesetLive } from "../services/stor
 import {
   applyGameRulesetSheetTurn,
   loadGameRulesetSheetContext,
+  loadTurnRulesetCatalogs,
   renderGameRulesetSheetBlocks,
   type GameRulesetSheetTurn,
 } from "../services/game/ruleset-sheet-turn.service.js";
@@ -8326,6 +8327,7 @@ export async function generateRoutes(app: FastifyInstance) {
                   sheetContext,
                   fullResponse,
                   parseStoredRulesetLive((continuedRow ?? baseGameStateSnapshot)?.rulesetLive),
+                  await loadTurnRulesetCatalogs(sheetContext, fullResponse),
                 );
                 if (rulesetSheetTurn.content !== fullResponse) {
                   fullResponse = rulesetSheetTurn.content;

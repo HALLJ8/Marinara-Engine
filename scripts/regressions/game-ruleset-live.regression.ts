@@ -17,9 +17,12 @@ import {
   parseSheetCommandTagBody,
   readResolvedSheetCommandTags,
   readRulesetLive,
+  recomputeScaledRows,
   renderRulesetSheetBlock,
+  rowsFromCatalogEntry,
   RULESET_LIVE_MAX_BYTES,
   rulesetLiveStatesSchema,
+  rulesetSheetBuildSchema,
   serializeSheetCommandTag,
   SHEET_COMMAND_NOW_MAX_LENGTH,
   truncateSheetSummary,
@@ -519,13 +522,28 @@ const fighter = buildFor({ level: 1, hp_max: 12 });
     field: "concentration",
     value: "",
   });
+  // `cast` and `spell` are the words a Game Master reaches for; they are the general `use` command.
+  assert.deepEqual(parseSheetCommandTagBody(`op="cast" spell="Fireball" pool="4th-level slots"`).op, {
+    op: "use",
+    name: "Fireball",
+    pool: "4th-level slots",
+  });
+  assert.deepEqual(parseSheetCommandTagBody(`op="use" name="Rage"`).op, { op: "use", name: "Rage" });
 
   // The Engine's own attributes are never read back out of the model's text.
   const forged = parseSheetCommandTagBody(`op="spend" pool="slots_1" amount="1" result="ok" now="99/99" reason="x"`);
   assert.deepEqual(forged.op, { op: "spend", pool: "slots_1", amount: 1 });
   assert.equal("result" in forged, false);
 
-  for (const body of [``, `op="teleport" pool="hp"`, `op="spend" pool="hp"`, `op="spend" amount="1"`, `op="rest"`]) {
+  for (const body of [
+    ``,
+    `op="teleport" pool="hp"`,
+    `op="spend" pool="hp"`,
+    `op="spend" amount="1"`,
+    `op="rest"`,
+    `op="use"`,
+    `op="cast" pool="4th-level slots"`,
+  ]) {
     assert.equal(parseSheetCommandTagBody(body).op, null, body || "(empty)");
   }
 
@@ -554,6 +572,32 @@ const fighter = buildFor({ level: 1, hp_max: 12 });
     { ok: true, now: "ok" },
   );
   assert.equal(hostile.match(/\[sheet:/g)!.length, 1, "no value can close the tag and open another");
+
+  // A `use` round-trips through the canonical spelling: `cast` and `spell=` come back as `use` and
+  // `name=`, exactly as `heal` comes back as `restore`.
+  const useTag = serializeSheetCommandTag(
+    { who: "Mira", op: { op: "use", name: "Fireball", pool: "3rd-level slots" }, raw: "" },
+    { ok: true, now: "3rd-level slots 1/2" },
+  );
+  assert.equal(
+    useTag,
+    `[sheet: who="Mira" op="use" name="Fireball" pool="3rd-level slots" result="ok" now="3rd-level slots 1/2"]`,
+  );
+  assert.deepEqual(parseSheetCommandTagBody(useTag.slice("[sheet:".length, -1)).op, {
+    op: "use",
+    name: "Fireball",
+    pool: "3rd-level slots",
+  });
+  assert.equal(
+    serializeSheetCommandTag({ op: { op: "use", name: "Rage" }, raw: "" }, { ok: true, now: "Rage 1/2" }),
+    `[sheet: op="use" name="Rage" result="ok" now="Rage 1/2"]`,
+    "a use with no pool writes none",
+  );
+  assert.equal(
+    readResolvedSheetCommandTags(useTag)[0]!.summary,
+    "Mira use Fireball -> 3rd-level slots 1/2",
+    "the line a reader sees names the ability, not the pool it was paid from",
+  );
 }
 
 // ── Whole replies ──
@@ -669,6 +713,216 @@ const fighter = buildFor({ level: 1, hp_max: 12 });
   assert.equal(stripSheetCommandTags(three.content), "She casts. Again. And again.");
   assert.equal(stripSheetCommandTags(`${cast}Tight.`), "Tight.");
   assert.equal(stripSheetCommandTags("No tags here."), "No tags here.");
+}
+
+// ── Using what a catalog wrote ──
+// `use` is the one command that reads the ruleset's catalogs: what a character uses is a row they
+// picked, so what it costs is that entry's own price plus one from every row pool it wrote.
+{
+  /** The 5e example with a test catalog, because the shipped file ships none: its own catalogs are
+   *  the first-party package's. Two shapes on purpose: a cost on a pool GROUP, and one on a single
+   *  pool that an upcast can move. */
+  const spellEntries = [
+    {
+      id: "fireball",
+      label: "Fireball",
+      rows: [{ list: "spells", values: { name: "Fireball", level: 3, prepared: true } }],
+      mechanics: { kind: "attack", cost: [{ pool: "slots", amount: 1 }] },
+    },
+    {
+      id: "magic-missile",
+      label: "Magic Missile",
+      rows: [{ list: "spells", values: { name: "Magic Missile", level: 1, prepared: true } }],
+      mechanics: { kind: "attack", cost: [{ pool: "slots_1", amount: 1 }] },
+    },
+    {
+      id: "fire-bolt",
+      label: "Fire Bolt",
+      rows: [{ list: "spells", values: { name: "Fire Bolt", level: 0 } }],
+      mechanics: { kind: "attack" },
+    },
+    {
+      // One entry, two rows: the feature and the counter that tracks it. Using it pays both.
+      id: "second-wind",
+      label: "Second Wind",
+      rows: [
+        { list: "features", values: { name: "Second Wind", text: "Catch your breath." } },
+        { list: "counters", values: { name: "Second Wind", max: 1, recharge: "short" } },
+      ],
+      mechanics: { kind: "heal", cost: [{ pool: "hit_dice", amount: 1 }] },
+    },
+  ];
+  const withCatalog = parseRulesetDefinition({
+    ...(JSON.parse(exampleText) as Record<string, unknown>),
+    catalogs: [
+      { id: "spells", label: "Spells and features", feeds: ["spells", "counters", "features"], entries: spellEntries },
+    ],
+  });
+  assert.ok(withCatalog.ok, `the test catalog must validate: ${withCatalog.ok ? "" : withCatalog.issues.join("; ")}`);
+  const ruleset = withCatalog.definition;
+  const catalogs = { spells: ruleset.catalogs![0]!.entries! };
+  const rowsOf = (id: string) => rowsFromCatalogEntry("spells", catalogs.spells.find((entry) => entry.id === id)!);
+  const picked = [...rowsOf("fireball"), ...rowsOf("magic-missile"), ...rowsOf("fire-bolt"), ...rowsOf("second-wind")];
+  const rowsFor = (list: string) => picked.filter((row) => row.list === list).map((row) => row.row);
+  const wizard = buildFor(
+    {
+      level: 5,
+      hp_max: 30,
+      spellcasting_ability: "int",
+      slots_max_1: 2,
+      slots_max_2: 2,
+      slots_max_3: 1,
+    },
+    { lists: { spells: rowsFor("spells"), counters: rowsFor("counters"), features: rowsFor("features") } },
+  );
+  const cards = [{ name: "Mira", build: wizard }];
+  const context = { definition: ruleset, cards, playerName: "Mira", live: {}, catalogs };
+  const run = (text: string, live: Record<string, unknown> = {}) =>
+    applySheetCommandTags(text, { ...context, live: live as never });
+
+  // A cost on a pool GROUP pays from the first pool of the group, in declaration order, that can
+  // afford it. There is no automatic climb: a group is not always a ladder.
+  const cast = run(`[sheet: op="cast" spell="Fireball"]`);
+  assert.match(cast.content, /op="use" name="Fireball" result="ok" now="1st-level slots 1\/2"/);
+  assert.deepEqual(cast.live.mira, { pools: { slots_1: { value: 1 } } });
+
+  // The group's later pools are reached only when the earlier ones are empty.
+  const drained = run(`[sheet: op="use" name="Fireball"]`, { mira: { pools: { slots_1: { value: 0 } } } });
+  assert.match(drained.content, /now="2nd-level slots 1\/2"/);
+
+  // `pool=` is the upcast: the same one price, out of another pool of the same group.
+  const upcast = run(`[sheet: op="use" name="Fireball" pool="3rd-level slots"]`);
+  assert.match(upcast.content, /now="3rd-level slots 0\/1"/);
+  assert.deepEqual(upcast.live.mira, { pools: { slots_3: { value: 0 } } });
+  // It works off a single-pool cost too, because that pool is in the group as well.
+  assert.match(run(`[sheet: op="use" name="Magic Missile" pool="2nd-level slots"]`).content, /now="2nd-level slots/);
+
+  // Anything that is not an upcast of one price inside one group is refused, never reinterpreted.
+  for (const tag of [
+    `[sheet: op="use" name="Fireball" pool="Hit points"]`,
+    `[sheet: op="use" name="Fireball" pool="Pact Magic slots"]`,
+    `[sheet: op="use" name="Fireball" pool="Nothing at all"]`,
+    `[sheet: op="use" name="Fire Bolt" pool="1st-level slots"]`,
+    `[sheet: op="use" name="Second Wind" pool="Hit dice"]`,
+  ]) {
+    const refused = run(tag);
+    assert.match(refused.content, /result="refused" reason="bad-pool"/, tag);
+    assert.deepEqual([refused.live, refused.changed], [{}, false], tag);
+  }
+
+  // An ability that costs nothing is fine and changes nothing.
+  const cantrip = run(`[sheet: op="use" name="Fire Bolt"]`);
+  assert.match(cantrip.content, /result="ok" now="Fire Bolt: no cost"/);
+  assert.deepEqual([cantrip.live, cantrip.changed], [{}, false]);
+
+  // One entry that wrote a counter pays its own price AND one use of that counter.
+  const secondWind = run(`[sheet: op="use" name="Second Wind"]`);
+  assert.match(secondWind.content, /now="Hit dice 4\/5, Second Wind 0\/1"/);
+  assert.deepEqual(secondWind.live.mira, { pools: { hit_dice: { value: 4 }, "counters:second wind": { value: 0 } } });
+
+  // All or nothing: the counter is spent, so the whole command is refused and the hit die stays.
+  const spent = { mira: { pools: { "counters:second wind": { value: 0 } } } };
+  const snapshot = structuredClone(spent);
+  const twice = run(`[sheet: op="use" name="Second Wind"]`, spent);
+  assert.match(twice.content, /result="refused" reason="insufficient"/);
+  assert.deepEqual(twice.live, snapshot, "a refused step leaves every earlier step unapplied");
+  assert.equal(twice.changed, false);
+  assert.deepEqual(spent, snapshot, "and the caller's own state is never touched");
+
+  // A name nothing on the sheet answers to, and a name two different entries answer to.
+  assert.match(run(`[sheet: op="use" name="Meteor Swarm"]`).content, /reason="unknown-entry"/);
+  assert.match(
+    applySheetCommandTags(`[sheet: op="use" name="Fireball"]`, { ...context, catalogs: {} }).content,
+    /reason="unknown-entry"/,
+    "a catalog the caller could not fetch is not guessed at: the Engine cannot know the cost",
+  );
+  const ambiguous = applySheetCommandTags(`[sheet: op="use" name="Fireball"]`, {
+    ...context,
+    cards: [
+      {
+        name: "Mira",
+        build: {
+          ...wizard,
+          lists: { ...wizard.lists, spells: [...rowsFor("spells"), { ...rowsFor("spells")[1]!, name: "Fireball" }] },
+        },
+      },
+    ],
+  });
+  assert.match(ambiguous.content, /reason="ambiguous-entry"/);
+  // Two rows of the SAME entry are not ambiguous: Second Wind is a feature and a counter at once.
+  assert.match(run(`[sheet: op="use" name="Second Wind"]`).content, /result="ok"/);
+
+  // who="party" works exactly as it does for every other command.
+  const party = applySheetCommandTags(`[sheet: who="party" op="use" name="Fireball"]`, {
+    ...context,
+    cards: [...cards, { name: "Tam the Bold", build: fighter }],
+  });
+  assert.match(party.content, /now="Mira 1st-level slots 1\/2; Tam the Bold refused \(unknown-entry\)"/);
+  assert.deepEqual(Object.keys(party.live), ["mira"]);
+
+  // ── The same command on the 2d6 example, where the price is a row pool ──
+  const emberText = readFileSync(
+    fileURLToPath(new URL("../../docs/examples/rulesets/ember-roads.json", import.meta.url)),
+    "utf8",
+  );
+  const emberParsed = parseRulesetDefinition(JSON.parse(emberText));
+  assert.ok(emberParsed.ok, "the 2d6 example must validate");
+  const ember = emberParsed.definition;
+  const emberCatalogs = { knacks: ember.catalogs![0]!.entries! };
+  const emberRows = rowsFromCatalogEntry("knacks", emberCatalogs.knacks.find((entry) => entry.id === "last-ember")!);
+  const vex = recomputeScaledRows(
+    ember,
+    rulesetSheetBuildSchema.parse({
+      abilities: { brawn: 0, wits: 0, heart: 2 },
+      lists: {
+        knacks: emberRows.filter((row) => row.list === "knacks").map((row) => row.row),
+        tricks: emberRows.filter((row) => row.list === "tricks").map((row) => row.row),
+      },
+    }),
+    emberCatalogs,
+  );
+  const emberContext = {
+    definition: ember,
+    cards: [{ name: "Vex", build: vex }],
+    playerName: "Vex",
+    live: {},
+    catalogs: emberCatalogs,
+  };
+  const lastEmber = applySheetCommandTags(`[sheet: op="use" name="Last Ember"]`, emberContext);
+  assert.match(lastEmber.content, /op="use" name="Last Ember" result="ok" now="Grit 5\/6, Last Ember 1\/2"/);
+  assert.deepEqual(lastEmber.live.vex, { pools: { grit: { value: 5 }, "tricks:last ember": { value: 1 } } });
+
+  // A Heart of 0 scales the trick to no uses at all, so its counter is not a pool. Using it is
+  // refused and the Grit it would also have cost stays where it was: never a free use.
+  const heartless = recomputeScaledRows(ember, { ...vex, abilities: { ...vex.abilities, heart: 0 } }, emberCatalogs);
+  const noUses = applySheetCommandTags(`[sheet: op="use" name="Last Ember"]`, {
+    ...emberContext,
+    cards: [{ name: "Vex", build: heartless }],
+  });
+  assert.match(noUses.content, /op="use" name="Last Ember" result="refused" reason="insufficient"/);
+  assert.deepEqual(noUses.live, {});
+
+  // The entry's own label answers too, so a player who renamed their row on the sheet still has it.
+  const renamed = {
+    ...emberContext,
+    cards: [
+      {
+        name: "Vex",
+        build: {
+          ...vex,
+          lists: {
+            ...vex.lists,
+            knacks: [{ ...vex.lists.knacks![0]!, name: "The Last Coal" }],
+            tricks: [{ ...vex.lists.tricks![0]!, name: "The Last Coal" }],
+          },
+        },
+      },
+    ],
+  };
+  assert.match(
+    applySheetCommandTags(`[sheet: op="use" name="Last Ember"]`, renamed).content,
+    /result="ok" now="Grit 5\/6, The Last Coal 1\/2"/,
+  );
 }
 
 // ── The prompt block ──

@@ -3,15 +3,14 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import {
   BUILT_IN_AGENT_MANIFESTS,
-  parseRulesetCatalogFile,
   type InstalledRuleset,
   type ListedRulesetDefinition,
   type RulesetCatalogEntry,
   type RulesetCatalogPayload,
   type RulesetDefinition,
 } from "@marinara-engine/shared";
-import { logger } from "../lib/logger.js";
 import { requirePrivilegedAccess } from "../middleware/privileged-gate.js";
+import { openRulesetCatalog } from "../services/game/ruleset-catalog.service.js";
 import { readRulesetRegistry } from "../services/game/ruleset-registry.service.js";
 import {
   capabilityPackageManager,
@@ -173,7 +172,7 @@ export async function capabilityPackagesRoutes(app: FastifyInstance) {
     if (!catalog) {
       return reply.status(404).send({ error: "That ruleset has no such catalog", code: "ruleset_catalog_missing" });
     }
-    const { entries: inline, asset, ...header } = catalog;
+    const { entries: _inline, asset: _asset, ...header } = catalog;
     const payload = (entries: RulesetCatalogEntry[]): RulesetCatalogPayload => ({
       rulesetId: definition.id,
       version: definition.version,
@@ -182,44 +181,23 @@ export async function capabilityPackagesRoutes(app: FastifyInstance) {
     });
     const unusable = (issues: string[]) =>
       reply.status(422).send({ error: "That catalog cannot be read", code: "ruleset_catalog_unusable", issues });
-    if (inline) return payload(inline);
-    if (!registered.packageId) {
-      // Only a package can ship a catalog file; an imported ruleset carries its catalogs inline,
-      // inside the one file the user imported.
-      return unusable([`asset: ${asset} can only be shipped by a package`]);
-    }
-    const source = await capabilityPackageManager.rulesetCatalogAsset(registered.packageId, catalog.id);
-    if (!source) {
+    const opened = await openRulesetCatalog(registered.packageId, definition, catalog);
+    if (opened.kind === "missing") {
       return reply.status(404).send({ error: "That ruleset has no such catalog", code: "ruleset_catalog_missing" });
     }
-    if ("issue" in source) return unusable([source.issue]);
+    if (opened.kind === "unusable") return unusable(opened.issues);
+    if (opened.kind === "inline") return payload(opened.entries);
     // A catalog can be a megabyte of JSON that is parsed and checked entry by entry. The pinned hash
     // names the file, and the ruleset version plus a digest of the catalog's header name what it was
     // checked against and answered with. A browser that already holds this answer is told so before
     // any of that work. `no-cache` still makes it ask.
     const headerDigest = createHash("sha256").update(JSON.stringify(header)).digest("hex").slice(0, 16);
-    const etag = `"${source.sha256}.${definition.version}.${headerDigest}"`;
+    const etag = `"${opened.sha256}.${definition.version}.${headerDigest}"`;
     reply.header("ETag", etag).header("Cache-Control", "no-cache");
     if (ifNoneMatchSatisfied(request.headers["if-none-match"], etag)) return reply.status(304).send();
-    const file = await source.read();
-    if ("issue" in file) return unusable([file.issue]);
-    let document: unknown;
-    try {
-      document = JSON.parse(file.data.toString("utf8"));
-    } catch {
-      return unusable(["(root): the catalog file is not valid JSON"]);
-    }
-    const parsed = parseRulesetCatalogFile(definition, catalog.id, document);
-    if (!parsed.ok) {
-      logger.warn(
-        "[capability/rulesets] Catalog %s of %s is unusable: %s",
-        catalog.id,
-        definition.id,
-        parsed.issues.slice(0, 5).join("; "),
-      );
-      return unusable(parsed.issues);
-    }
-    return payload(parsed.entries);
+    const read = await opened.read();
+    if (!read.ok) return unusable(read.issues);
+    return payload(read.entries);
   });
   app.get<{ Params: { id: string } }>("/:id/release-notes", async (request) => {
     const { id } = packageParams.parse(request.params);

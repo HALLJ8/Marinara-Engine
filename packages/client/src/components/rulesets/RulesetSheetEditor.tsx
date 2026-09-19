@@ -2,12 +2,20 @@
 // ruleset definition: no ruleset ships client code, and nothing here knows a system by name.
 // Values are clamped to the ruleset's bounds when they are edited, never when they are read.
 import { BookOpen, Plus, Trash2 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { useQueries } from "@tanstack/react-query";
 import { useTranslation as useUiTranslation } from "react-i18next";
 import {
   defaultRulesetSheetBuild,
   evaluateRulesetSheet,
   isRulesetItemHidden,
+  recomputeScaledRows,
+  rulesetCatalogEntriesByRef,
+  rulesetCatalogIdsForBuild,
+  scaledRowColumns,
+  RULESET_CATALOG_ROW_KEY,
+  type RulesetCatalogEntriesById,
+  type RulesetCatalogPayload,
   type RulesetDefinition,
   type RulesetField,
   type RulesetListColumn,
@@ -15,6 +23,9 @@ import {
   type RulesetSheetEnvelope,
 } from "@marinara-engine/shared";
 import { RulesetCatalogPicker } from "./RulesetCatalogPicker";
+import { RulesetCatalogRefreshModal } from "./RulesetCatalogRefreshModal";
+import { rulesetCatalogQuery } from "../../hooks/use-capability-packages";
+import { applyCatalogRefresh, planCatalogRefresh, type CatalogRefreshRow } from "../../lib/ruleset-catalog";
 import { DraftNumberInput } from "../ui/DraftNumberInput";
 import { DraftTextarea } from "../ui/DraftTextarea";
 
@@ -54,11 +65,21 @@ function TypedInput({
   value,
   onChange,
   ariaLabel,
+  disabled = false,
+  title,
+  describedBy,
 }: {
   spec: RulesetField | RulesetListColumn;
   value: Scalar | undefined;
   onChange: (value: Scalar) => void;
   ariaLabel: string;
+  /** Set for a cell the ruleset keeps itself. The control stays in place and stops taking edits. */
+  disabled?: boolean;
+  /** The hint behind such a cell, for a pointer. */
+  title?: string;
+  /** The id of the visible text that says the same thing. A disabled control cannot be focused, so
+   *  a `title` alone never reaches a keyboard or a screen reader. */
+  describedBy?: string;
 }) {
   if (spec.type === "number") {
     return (
@@ -70,7 +91,10 @@ function TypedInput({
         min={spec.min}
         max={spec.max}
         integer={spec.integer}
+        disabled={disabled}
+        title={title}
         ariaLabel={ariaLabel}
+        ariaDescribedBy={describedBy}
         className={`${inputClass} text-center`}
       />
     );
@@ -81,7 +105,10 @@ function TypedInput({
         type="checkbox"
         checked={value === true}
         onChange={(event) => onChange(event.target.checked)}
+        disabled={disabled}
+        title={title}
         aria-label={ariaLabel}
+        aria-describedby={describedBy}
         className="h-4 w-4 accent-[var(--primary)]"
       />
     );
@@ -96,7 +123,10 @@ function TypedInput({
       <select
         value={current}
         onChange={(event) => onChange(event.target.value)}
+        disabled={disabled}
+        title={title}
         aria-label={ariaLabel}
+        aria-describedby={describedBy}
         className={inputClass}
       >
         {spec.values.map((option) => (
@@ -114,7 +144,10 @@ function TypedInput({
         onCommit={(next) => onChange(next.slice(0, spec.maxLength))}
         maxLength={spec.maxLength}
         rows={2}
+        disabled={disabled}
+        title={title}
         aria-label={ariaLabel}
+        aria-describedby={describedBy}
         className={inputClass}
       />
     );
@@ -127,7 +160,10 @@ function TypedInput({
       onChange={(event) => onChange(event.target.value.slice(0, maxLength))}
       maxLength={maxLength}
       placeholder={spec.type === "dice" ? spec.example : undefined}
+      disabled={disabled}
+      title={title}
       aria-label={ariaLabel}
+      aria-describedby={describedBy}
       className={inputClass}
     />
   );
@@ -231,11 +267,59 @@ export function RulesetSheetEditor({
   // Which catalog's picker is open. A ruleset that ships none, and a listing that carries none
   // (an older Engine, a stubbed response), simply never offers the button.
   const [pickerId, setPickerId] = useState<string | null>(null);
+  // Which list's Refresh review is open.
+  const [refreshListId, setRefreshListId] = useState<string | null>(null);
   const catalogs = definition.catalogs ?? [];
   const openPicker = catalogs.find((catalog) => catalog.id === pickerId);
 
-  const commit = (patch: Partial<RulesetSheetBuild>) =>
-    onChange({ ...envelope, v: sheet.version, build: { ...build, ...patch } });
+  // The catalogs this sheet's own rows point at, and only those: a build with no picked rows fetches
+  // nothing and takes exactly the code path a ruleset without catalogs takes. The query is the
+  // picker's and the battle prefetch's, so all three share one cache entry.
+  const catalogIds = useMemo(() => rulesetCatalogIdsForBuild(definition, build), [definition, build]);
+  const combineCatalogs = useCallback(
+    (results: readonly { data: RulesetCatalogPayload | undefined }[]): RulesetCatalogEntriesById => {
+      const loaded: RulesetCatalogEntriesById = {};
+      results.forEach((result, index) => {
+        const catalogId = catalogIds[index];
+        // A catalog that is still loading or failed to load simply is not here: nothing is locked
+        // and nothing is recomputed from it, which is the same as a ruleset that ships none.
+        if (catalogId && result.data) loaded[catalogId] = result.data.entries;
+      });
+      return loaded;
+    },
+    [catalogIds],
+  );
+  const loadedCatalogs = useQueries({
+    queries: catalogIds.map((catalogId) => rulesetCatalogQuery(definition.id, catalogId, definition.version)),
+    combine: combineCatalogs,
+  });
+
+  // Whether the user has changed anything in THIS editor. Opening a sheet must never write to it,
+  // so the late recompute below is only for a sheet that is already being edited.
+  const editedRef = useRef(false);
+  const hintBaseId = useId();
+
+  const commit = (patch: Partial<RulesetSheetBuild>) => {
+    editedRef.current = true;
+    // The one change path, so every edit leaves the ruleset's own cells right. The helper hands
+    // back the very build it was given when nothing scaled changes, which is what today's editor
+    // stored, so an ordinary edit behaves exactly as it always has.
+    const patched = { ...build, ...patch };
+    onChange({ ...envelope, v: sheet.version, build: recomputeScaledRows(definition, patched, loadedCatalogs) });
+  };
+
+  // The catalogs can land after the user has already typed. Such a sheet is brought up to date once,
+  // here; a sheet that was only opened is left alone, so opening one never writes anything back.
+  // Deliberately keyed on the catalogs alone: a later edit carries its own recompute through
+  // `commit`, and the recompute is a no-op once it has run, since it returns the same build.
+  useEffect(() => {
+    if (!editedRef.current) return;
+    const next = recomputeScaledRows(definition, build, loadedCatalogs);
+    if (next === build) return;
+    onChange({ ...envelope, v: sheet.version, build: next });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loadedCatalogs]);
+
   const hidden = (item: Parameters<typeof isRulesetItemHidden>[0]) => isRulesetItemHidden(item, build, definition);
   const offered = (ids: string[] | undefined) =>
     ids ? resolution.proficiencyTiers.filter((tier) => ids.includes(tier.id)) : resolution.proficiencyTiers;
@@ -256,6 +340,47 @@ export function RulesetSheetEditor({
       lists: sheet.lists.filter((list) => (list.section ?? "") === section.id && !hidden(list)),
     }))
     .filter((group) => group.fields.length + group.derived.length + group.lists.length > 0);
+
+  // The cells the ruleset keeps, by list and then by row index. Built once per build change, with
+  // one lookup of the fetched entries shared by every row, and not at all while nothing loaded
+  // scales anything.
+  const scaledCells = useMemo(() => {
+    const byList = new Map<string, Map<number, string[]>>();
+    const anyScaled = Object.values(loadedCatalogs).some((entries) =>
+      entries.some((entry) => entry.rows.some((row) => row.scaled)),
+    );
+    if (!anyScaled) return byList;
+    const byRef = rulesetCatalogEntriesByRef(loadedCatalogs);
+    for (const list of sheet.lists) {
+      const rows = build.lists[list.id];
+      if (!Array.isArray(rows)) continue;
+      const byIndex = new Map<number, string[]>();
+      rows.forEach((row, index) => {
+        if (!row || typeof row[RULESET_CATALOG_ROW_KEY] !== "string") return;
+        const columns = scaledRowColumns(definition, list.id, row, byRef);
+        if (columns.length > 0) byIndex.set(index, columns);
+      });
+      if (byIndex.size > 0) byList.set(list.id, byIndex);
+    }
+    return byList;
+  }, [build.lists, definition, loadedCatalogs, sheet.lists]);
+
+  // Which picked rows the ruleset now has different text for, gathered per list: one list may be fed
+  // by more than one catalog, and a row belongs to exactly one of them.
+  const refreshByList = useMemo(() => {
+    const byList = new Map<string, CatalogRefreshRow[]>();
+    for (const [catalogId, entries] of Object.entries(loadedCatalogs)) {
+      for (const plan of planCatalogRefresh(definition, catalogId, entries, build.lists)) {
+        const rows = byList.get(plan.listId);
+        if (rows) rows.push(...plan.rows);
+        else byList.set(plan.listId, [...plan.rows]);
+      }
+    }
+    for (const rows of byList.values()) rows.sort((left, right) => left.index - right.index);
+    return byList;
+  }, [build.lists, definition, loadedCatalogs]);
+  const refreshList = refreshListId ? sheet.lists.find((list) => list.id === refreshListId) : undefined;
+  const refreshRows = refreshList ? (refreshByList.get(refreshList.id) ?? []) : [];
 
   // The row is SPREAD, so a key the editor does not draw survives an edit. That is what keeps the
   // reserved catalog mark on a picked row: a column id can never start with "_", so the mark is
@@ -329,6 +454,8 @@ export function RulesetSheetEditor({
             const rows = (Array.isArray(build.lists[list.id]) ? build.lists[list.id] : []) as ListRow[];
             const feeding = catalogs.filter((catalog) => catalog.feeds.includes(list.id));
             const atLimit = rows.length >= list.maxItems;
+            const locked = scaledCells.get(list.id);
+            const stale = refreshByList.get(list.id) ?? [];
             return (
               <div key={list.id} className="space-y-1.5">
                 <div className="flex flex-wrap items-center justify-between gap-2">
@@ -381,26 +508,57 @@ export function RulesetSheetEditor({
                     </button>
                   </div>
                 </div>
+                {/* Deliberately not a live region: it is recounted as the sheet is typed in, and a
+                    notice that re-announces on every keystroke is worse than one that waits. */}
+                {stale.length > 0 && (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-[0.6875rem] text-[var(--muted-foreground)]">
+                      {t("ui.rulesets.sheet.refreshNotice", { count: stale.length })}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setRefreshListId(list.id)}
+                      aria-label={t("ui.rulesets.sheet.refreshReviewFor", { list: list.label })}
+                      className="rounded-lg border border-[var(--border)] px-2 py-1 text-[0.6875rem] text-[var(--foreground)] hover:bg-[var(--accent)]"
+                    >
+                      {t("ui.rulesets.sheet.refreshReview")}
+                    </button>
+                  </div>
+                )}
                 {rows.map((row, index) => (
                   <div
                     key={index}
                     className="flex items-start gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--card)] p-2"
                   >
                     <div className="grid min-w-0 flex-1 grid-cols-2 gap-1.5 sm:grid-cols-3">
-                      {list.columns.map((column) => (
-                        <label
-                          key={column.id}
-                          className={`flex min-w-0 flex-col gap-0.5 ${column.type === "longtext" ? "col-span-full" : ""}`}
-                        >
-                          <span className={labelClass}>{column.label}</span>
-                          <TypedInput
-                            spec={column}
-                            value={row[column.id]}
-                            onChange={(value) => updateRow(list.id, rows, index, column.id, value)}
-                            ariaLabel={`${list.label} ${index + 1}: ${column.label}`}
-                          />
-                        </label>
-                      ))}
+                      {list.columns.map((column) => {
+                        // A cell the ruleset keeps follows this character's own numbers, so it is
+                        // shown where it always was and simply does not take edits.
+                        const setByRuleset = locked?.get(index)?.includes(column.id) ?? false;
+                        const hintId = setByRuleset ? `${hintBaseId}-${list.id}-${index}-${column.id}` : undefined;
+                        return (
+                          <label
+                            key={column.id}
+                            className={`flex min-w-0 flex-col gap-0.5 ${column.type === "longtext" ? "col-span-full" : ""}`}
+                          >
+                            <span className={labelClass}>{column.label}</span>
+                            <TypedInput
+                              spec={column}
+                              value={row[column.id]}
+                              onChange={(value) => updateRow(list.id, rows, index, column.id, value)}
+                              ariaLabel={`${list.label} ${index + 1}: ${column.label}`}
+                              disabled={setByRuleset}
+                              title={setByRuleset ? t("ui.rulesets.sheet.scaledHint") : undefined}
+                              describedBy={hintId}
+                            />
+                            {hintId && (
+                              <span id={hintId} className="text-[0.625rem] text-[var(--muted-foreground)]">
+                                {t("ui.rulesets.sheet.scaledHint")}
+                              </span>
+                            )}
+                          </label>
+                        );
+                      })}
                     </div>
                     <button
                       type="button"
@@ -455,6 +613,18 @@ export function RulesetSheetEditor({
           // Every list the pick touches moves in ONE envelope change, so a two-list entry can never
           // land half-applied.
           onAdd={(lists) => commit({ lists: { ...build.lists, ...lists } })}
+        />
+      )}
+
+      {refreshList && refreshRows.length > 0 && (
+        <RulesetCatalogRefreshModal
+          open
+          onClose={() => setRefreshListId(null)}
+          listLabel={refreshList.label}
+          rows={refreshRows}
+          // Every chosen row moves in ONE envelope change, and only the columns that differ are
+          // written: everything else the row holds, the catalog mark included, is kept.
+          onApply={(chosen) => commit({ lists: { ...build.lists, ...applyCatalogRefresh(build.lists, chosen) } })}
         />
       )}
     </div>

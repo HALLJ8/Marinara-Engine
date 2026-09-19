@@ -686,6 +686,13 @@ function renderRulesetSheetSection(
     ...(ruleset.rests.length > 0
       ? [`- [sheet: who="Name" op="rest" rest="Rest"] - rests: ${names(ruleset.rests)}.`]
       : []),
+    // Only a ruleset with catalogs has entries to use: without them nothing on a sheet carries a
+    // price the Engine could pay, and the line would describe a command that always refuses.
+    ...(ruleset.catalogs?.length
+      ? [
+          `- [sheet: who="Name" op="use" name="Name on the sheet"] - pays what that ability costs. Add pool="Pool" to pay from a higher pool of the same group.`,
+        ]
+      : []),
     `Leave out who for the player; who="party" applies to every member. Use the pool, track, field and condition names shown on the sheets. Never write result, reason or now yourself: the Engine adds them. A refused command did not happen, so do not narrate it as if it had.`,
     // A sheet block leaves out a track or a note that still has its default, so the names a command
     // can use are listed once here.

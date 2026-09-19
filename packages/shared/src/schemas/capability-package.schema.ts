@@ -244,7 +244,12 @@ const capabilityPackageManifestBaseSchema = z
 //        catalog-marked rows become the Engine's own combat skills. Not a soft seam, for the same
 //        reason as 1.20 and 1.21: an engine that cannot read `battle` refuses the whole ruleset
 //        file, so a package that ships one declares 1.22. No permission.
-export const supportedCapabilityApi = Object.freeze({ major: 1, minor: 22 } as const);
+// 1.23: scaled catalog values — a catalog entry row may carry a `scaled` map naming number columns
+//        the ruleset keeps up to date from the sheet (a maximum that follows a level or an ability),
+//        each a value reference with an optional step table. Not a soft seam, for the same reason as
+//        1.20, 1.21 and 1.22: an engine that cannot read `scaled` refuses the whole ruleset file, or
+//        the catalog file that holds it, so a package that ships one declares 1.23. No permission.
+export const supportedCapabilityApi = Object.freeze({ major: 1, minor: 23 } as const);
 
 const capabilityApiVersionSchema = z
   .object({
