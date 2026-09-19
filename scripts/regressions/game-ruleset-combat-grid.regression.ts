@@ -799,6 +799,50 @@ const cellsOf = (cells: Array<{ x: number; y: number }>) =>
   assert.deepEqual(rulesetAreaTargets(state, "juno", toss.id, { x: 5, y: 0 }).sort(), ["ash", "dust"]);
 }
 
+// ── A strike made in passing keeps the same books as one made on a turn ──
+{
+  // A creature whose only way of striking can be used once. Spent, it threatens nobody: the menu
+  // lists no one a walk past it provokes, and nothing is thrown when the walk is taken.
+  const stinger: RulesetCombatantInput = {
+    id: "stinger",
+    name: "Stinger",
+    side: "enemy",
+    block: {
+      health: 12,
+      defense: 12,
+      initiativeModifier: 0,
+      speed: 30,
+      actions: [
+        {
+          id: "sting",
+          name: "Sting",
+          budget: "action",
+          toHit: 4,
+          damage: { count: 1, sides: 6, flat: 0, type: "piercing" },
+          reach: 5,
+          uses: { per: "encounter", count: 1 },
+        },
+      ],
+    },
+  };
+  const board = { grid: open(7, 3), placements: { brenna: { x: 0, y: 1 }, stinger: { x: 2, y: 1 } } };
+  const state = fight(fiveE, [fighter(), stinger], [12, 9], board);
+  const past = { actorId: "brenna", optionId: RULESET_MOVE_OPTION, targetIds: [], to: { x: 5, y: 1 } };
+  const first = act(fiveE, state, past, 17, 4);
+  assert.equal(eventsOf(first.events, "opportunity").length, 1, "the one sting it has is thrown at the passer-by");
+  assert.equal(who(first.state, "stinger").uses.sting, 0, "and it is spent, exactly as it would be on its own turn");
+
+  // A fresh round gives the reaction back, and the sting is still gone.
+  const endOf = (from: RulesetEncounterState, actorId: string) =>
+    act(fiveE, from, { actorId, optionId: "end-turn", targetIds: [] }).state;
+  const round = endOf(endOf(first.state, "brenna"), "stinger");
+  assert.equal(who(round, "stinger").budgets.reaction, 1);
+  const back = optionNamed(fiveE, round, "brenna", "Move").cells!.find((cell) => cell.x === 0 && cell.y === 1);
+  assert.deepEqual(back?.provokes, [], "with nothing left to strike with, it threatens nobody");
+  const second = act(fiveE, round, { ...past, to: { x: 0, y: 1 } });
+  assert.equal(eventsOf(second.events, "opportunity").length, 0);
+}
+
 // ── Moving, and being struck at on the way ──
 {
   //    0 1 2 3 4 5 6

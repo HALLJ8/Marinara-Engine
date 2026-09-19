@@ -456,7 +456,7 @@ export function rulesetMenu(
   actorId: string,
 ): DirectedRulesetOption[] {
   return rulesetCombatOptions(definition, encounter, actorId).map((option) => {
-    const aim = option.area ? rulesetAimCells(encounter, actorId, option.id).slice(0, RULESET_AIM_LIMIT) : [];
+    const aim = option.area ? rulesetAimCells(encounter, actorId, option.id, RULESET_AIM_LIMIT) : [];
     return {
       ...option,
       targetIds: rulesetOptionTargets(encounter, actorId, option),

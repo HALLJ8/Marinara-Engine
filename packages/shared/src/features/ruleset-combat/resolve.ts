@@ -931,6 +931,8 @@ function opportunityStrike(
   striker.budgets[budget] = Math.max(0, (striker.budgets[budget] ?? 0) - 1);
   ctx.events.push({ type: "opportunity", actorId: striker.id, targetId: mover.id, label: strike.label, budget });
   ctx.events.push({ type: "budget", actorId: striker.id, budget, left: striker.budgets[budget]! });
+  // A strike made in passing keeps the same books as one made on a turn: a use is a use.
+  spendAvailability(ctx, striker, strike);
   resolveAction(ctx, striker, strike, [mover]);
 }
 

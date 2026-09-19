@@ -224,7 +224,12 @@ export function rulesetOpportunityAttack(combatant: RulesetCombatant): RulesetCo
   let best: RulesetCombatAction | null = null;
   let most = -1;
   for (const action of combatant.actions) {
-    if (action.range || action.area || action.signature || !action.damage) continue;
+    if (action.range || action.area || action.signature || action.sequence || !action.damage) continue;
+    // The same bookkeeping the menu keeps: a strike that has run out of uses, or is waiting for its
+    // dice, is not one to be made in passing either. (Written out rather than imported, because the
+    // menu's own module reads this one.)
+    if (action.uses && (combatant.uses[action.id] ?? 0) < 1) continue;
+    if (combatant.spent.includes(action.id)) continue;
     const average = action.damage.count * ((action.damage.sides + 1) / 2) + action.damage.flat;
     if (average > most) {
       most = average;
