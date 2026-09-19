@@ -238,7 +238,10 @@ assert.deepEqual(
   ["notes"],
 );
 assert.equal(refreshedRow?.columns[0]?.current, "What it used to say.");
-assert.equal(refreshedRow?.columns[0]?.next, entries.find((entry) => entry.id === "last-ember")?.rows[0]?.values.notes);
+assert.equal(
+  refreshedRow?.columns[0]?.next,
+  entries.find((entry) => entry.id === "last-ember")?.rows?.[0]?.values.notes,
+);
 // The same row, and the picker still does not offer the entry it came from.
 assert.ok(!offered.some((entry) => entry.id === "last-ember"));
 

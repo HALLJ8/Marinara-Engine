@@ -958,6 +958,10 @@ const traveller = (live: unknown = {}): RulesetCombatantInput => ({
     `the best round averages ${roundAverage(low.block)}, over the ${tier0.damagePerRound[1]} of CR 0`,
   );
   assert.ok(smash.damage!.count >= 1 && smash.damage!.sides >= 2, "and never scaled away to nothing");
+  assert.ok(
+    [12, 10, 8, 6, 4, 3, 2].includes(smash.damage!.sides),
+    `a d12 shrinks along dice a table owns, never to a d${smash.damage!.sides}`,
+  );
   assert.deepEqual(
     low.block.actions.find((action) => action.id === "flurry")!.sequence,
     [{ action: "smash", times: 1 }],

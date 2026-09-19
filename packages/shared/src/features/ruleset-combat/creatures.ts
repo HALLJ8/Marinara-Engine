@@ -216,6 +216,14 @@ function dropOneStrike(sequence: NonNullable<RulesetStatBlockAction["sequence"]>
   return false;
 }
 
+/** The next die down that a table actually owns. A clamp that answers "1d7" is right about the
+ *  number and wrong about the game, so the size steps along real dice and only falls back to one
+ *  face less for a die that is not among them. */
+const RULESET_CLAMP_DICE = [100, 20, 12, 10, 8, 6, 4, 3, 2] as const;
+function smallerDie(sides: number): number {
+  return RULESET_CLAMP_DICE.find((size) => size < sides) ?? sides - 1;
+}
+
 function knownTypes(definition: RulesetDefinition): ReadonlySet<string> | null {
   const types = definition.combat?.damageTypes;
   return types ? new Set(types.map((type) => type.trim().toLowerCase())) : null;
@@ -412,7 +420,7 @@ export function clampRulesetStatBlock(
     if (damage && damage.count > 1 && damage.sides > 0) damage.count -= 1;
     else if (damage && damage.flat > (rolls ? 0 : 1)) damage.flat -= 1;
     else if (round.action?.sequence && dropOneStrike(round.action.sequence)) fewer = true;
-    else if (damage && rolls && damage.sides > 2) damage.sides -= 1;
+    else if (damage && rolls && damage.sides > 2) damage.sides = smallerDie(damage.sides);
     else break;
     scaled = true;
   }
