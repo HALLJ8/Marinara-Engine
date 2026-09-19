@@ -679,6 +679,9 @@ try {
     const layerFixture = () => {
       const doc = JSON.parse(emberText);
       delete doc.combat;
+      // The bestiary is written in the numbers that block declares, and gates on its own later
+      // declaration, so it goes with it.
+      doc.catalogs = (doc.catalogs ?? []).filter((catalog: Record<string, any>) => catalog.holds !== "creatures");
       for (const entry of doc.catalogs?.[0]?.entries ?? []) {
         for (const key of ["targetCount", "autoHit", "applies", "temporary", "budget"]) delete entry.mechanics?.[key];
       }
