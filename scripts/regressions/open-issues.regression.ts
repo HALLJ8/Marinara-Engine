@@ -5303,7 +5303,10 @@ const termuxClientBuildBlock = termuxLauncher
   .split("if ! node scripts/check-client-build.mjs; then\n")[1]
   ?.split("\nfi")[0];
 assert.ok(termuxClientBuildBlock, "Termux must handle an incomplete client build");
-assert.match(termuxClientBuildBlock, /SKIP_PWA=1 run_pnpm --filter @marinara-engine\/client exec vite build/u);
+assert.equal(termuxClientBuildBlock.match(/build_termux_client/gu)?.length, 2, "Initial build and retry must use the bounded build heap");
+const termuxClientBuildHelper = termuxLauncher.split("build_termux_client() (")[1]?.split("\n)")[0];
+assert.ok(termuxClientBuildHelper, "Termux must define the isolated client build helper");
+assert.match(termuxClientBuildHelper, /SKIP_PWA=1 run_pnpm --filter @marinara-engine\/client exec vite build/u);
 assert.match(
   termuxClientBuildBlock,
   /    node scripts\/check-client-build\.mjs$/u,
