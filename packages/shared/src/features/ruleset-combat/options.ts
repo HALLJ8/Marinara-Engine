@@ -114,6 +114,26 @@ export function rulesetTargetRefusal(
   return null;
 }
 
+/** Whether an area option may be aimed at this cell: on the board, within the distance it carries,
+ *  and with nothing solid in the way. Aiming at an empty patch of ground is perfectly legal and
+ *  simply catches nobody. */
+export function rulesetAimLegal(
+  state: RulesetEncounterState,
+  actorId: string,
+  optionId: string,
+  at: RulesetCombatCell,
+): boolean {
+  const grid = state.board?.grid;
+  const actor = rulesetCombatant(state, actorId);
+  const action = actor ? actionOf(actor, optionId) : undefined;
+  const from = rulesetPositionOf(actor);
+  const reach = rulesetOptionReach(state, actorId, optionId);
+  if (!grid || !action?.area || !from || !reach) return false;
+  if (!Number.isInteger(at.x) || !Number.isInteger(at.y)) return false;
+  if (at.x < 0 || at.y < 0 || at.x >= grid.width || at.y >= grid.height) return false;
+  return rulesetCellDistance(from, at) <= reach.max && rulesetLineOfSight(grid, from, at);
+}
+
 /** Where an area option may be aimed, and who each aim would catch. Empty for anything that is not
  *  an area, and for every fight without a board. */
 export function rulesetAimCells(
@@ -121,19 +141,14 @@ export function rulesetAimCells(
   actorId: string,
   optionId: string,
 ): Array<{ x: number; y: number; targetIds: string[] }> {
-  const grid = state.board?.grid;
-  const actor = rulesetCombatant(state, actorId);
-  const action = actor ? actionOf(actor, optionId) : undefined;
-  const from = rulesetPositionOf(actor);
+  const from = rulesetPositionOf(rulesetCombatant(state, actorId));
   const reach = rulesetOptionReach(state, actorId, optionId);
-  if (!grid || !actor || !action?.area || !from || !reach) return [];
+  if (!from || !reach) return [];
   const aims: Array<{ x: number; y: number; targetIds: string[] }> = [];
   for (let y = from.y - reach.max; y <= from.y + reach.max; y++) {
     for (let x = from.x - reach.max; x <= from.x + reach.max; x++) {
-      if (x < 0 || y < 0 || x >= grid.width || y >= grid.height) continue;
       const at = { x, y };
-      if (rulesetCellDistance(from, at) > reach.max) continue;
-      if (!rulesetLineOfSight(grid, from, at)) continue;
+      if (!rulesetAimLegal(state, actorId, optionId, at)) continue;
       const targetIds = rulesetAreaTargets(state, actorId, optionId, at);
       // A cell the shape would catch nobody from is still somewhere it may be aimed, but it is not
       // worth carrying to a screen or to a picker.
@@ -588,6 +603,9 @@ function movementOptions(
   actor: RulesetCombatant,
 ): RulesetCombatOption[] {
   if (!positioned(state) || !rulesetPositionOf(actor)) return [];
+  // A condition that pins somebody takes their movement away the moment it lands, not at the start
+  // of their next turn.
+  if (rulesetCombatEffects(definition, combat, actor).has("speed-zero")) return [];
   const left = Math.max(0, Math.floor(actor.movementLeft ?? 0));
   const prone = rulesetProneCondition(definition, combat, actor);
   if (prone) {
