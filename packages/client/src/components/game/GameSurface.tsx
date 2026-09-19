@@ -8581,6 +8581,9 @@ function GameSurfaceComponent({
       // replaces it, which is how a late answer knows it has been overtaken.
       const pending: RulesetCombatSeeds = {};
       rulesetBattleSeedsRef.current = pending;
+      // The wait is shown and gated the way a battle still being generated is: the same "starting"
+      // state holds the narration and the input until the party is in place.
+      setCombatGenerationPending(true);
       void (async () => {
         const catalogs: RulesetCatalogEntriesById = {};
         const missing: string[] = [];
@@ -8608,7 +8611,10 @@ function GameSurfaceComponent({
         if (activeChatIdRef.current !== chatId) return;
         if (rulesetBattleSeedsRef.current !== pending) return;
         start(catalogs);
-      })();
+      })().finally(() => {
+        // Only the battle that raised the gate lowers it: a chat switch resets it by its own means.
+        if (activeChatIdRef.current === chatId) setCombatGenerationPending(false);
+      });
     },
     [chatMeta.gameCharacterCards, gameRuleset, localizeUi, personaInfo?.name, queryClient],
   );
