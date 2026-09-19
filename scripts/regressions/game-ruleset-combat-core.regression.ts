@@ -521,10 +521,6 @@ const who = (state: RulesetEncounterState, id: string): RulesetCombatant => {
   assert.ok(combatant, `no combatant "${id}"`);
   return combatant;
 };
-const healthOf = (state: RulesetEncounterState, id: string) =>
-  rulesetEncounterSummary(fiveE, state)
-    .party.concat()
-    .find((entry) => entry.id === id);
 const labels = (definition: RulesetDefinition, state: RulesetEncounterState, id: string) =>
   rulesetCombatOptions(definition, state, id).map((option) => option.label);
 
