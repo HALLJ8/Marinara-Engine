@@ -536,6 +536,15 @@ export function getCapabilityPackageInstallIssue(
     if (!api || api.major < 1 || (api.major === 1 && api.minor < 21)) {
       return "A ruleset with catalogs requires schemaVersion 2 and capabilityApi 1.21 or newer";
     }
+    // A catalog file the ruleset names but the package never declared would install fine and then
+    // leave the picker with nothing to open. Said at install, where the author can still fix it.
+    const declaredPaths = new Set((manifest.contributions?.assets?.paths ?? []).map(tryNormalizeArchivePath));
+    for (const catalog of catalogs) {
+      const asset = catalog && typeof catalog === "object" ? (catalog as { asset?: unknown }).asset : undefined;
+      if (typeof asset === "string" && !declaredPaths.has(tryNormalizeArchivePath(asset))) {
+        return `The ruleset names the catalog file ${asset}, which is not listed in contributions.assets.paths`;
+      }
+    }
   }
   return null;
 }

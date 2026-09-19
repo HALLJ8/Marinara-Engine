@@ -503,6 +503,15 @@ try {
       null,
       "an unreadable ruleset is the registry's story, not a failed install",
     );
+    // A catalog file the ruleset names but the package never declared would install and then leave
+    // the picker with nothing to open, so it is refused where the author can still fix it.
+    const undeclaredAsset = JSON.parse(packages[0]!.ruleset);
+    undeclaredAsset.catalogs = [{ ...undeclaredAsset.catalogs[0], asset: "catalogs/never_declared.json" }];
+    delete undeclaredAsset.catalogs[0].entries;
+    assert.match(
+      getCapabilityPackageInstallIssue(manifest as any, undeclaredAsset) ?? "",
+      /catalogs\/never_declared\.json, which is not listed in contributions\.assets\.paths/,
+    );
   }
 
   // ── A community ruleset carries its catalogs inline, through the ordinary import ──
