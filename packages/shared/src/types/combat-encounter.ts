@@ -143,6 +143,12 @@ export interface CombatEnemy {
   statuses: CombatStatus[];
   description: string;
   sprite: string;
+  /** What a ruleset that resolves its own fights should build this opponent from: a bestiary
+   *  reference, the rung of the threat scale it belongs on, and a stat block written for it. The
+   *  blueprint only carries them for such a ruleset, and every other fight ignores all three. */
+  creature?: string;
+  tier?: string;
+  proposed?: unknown;
   /** Tactical-combat class hint (fighter/knight/rogue/archer/mage/healer). Classic combat ignores this. */
   class?: string;
   /** Tactical traversal rule. Classic combat ignores this; missing means walk. */

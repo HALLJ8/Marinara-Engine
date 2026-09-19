@@ -425,6 +425,9 @@ export interface RulesetEncounterSummary {
     temp: number;
     down: boolean;
     dying: boolean;
+    /** Down and no longer being rolled for. A recap that only knew `down` and `dying` could not
+     *  tell a member who has stopped slipping from one who is still on the clock. */
+    stable: boolean;
     conditions: string[];
   }>;
   enemies: Array<{ id: string; name: string; health: number; maxHealth: number; defeated: boolean }>;

@@ -550,6 +550,12 @@ export interface Combatant extends CombatAttackTraits {
   combatClass?: string;
   /** Tactical traversal rule. Classic combat ignores this; missing means walk. */
   movementMode?: TacticalMovementMode;
+  /** An opponent in the ruleset's own terms, carried from the encounter blueprint to the fight that
+   *  is resolved by the ruleset: a bestiary reference, the rung of the threat scale, a stat block
+   *  written for it. The numbers above stay the Engine's, and every other style ignores these. */
+  creature?: string;
+  tier?: string;
+  proposed?: unknown;
 }
 
 export interface CombatStatusEffect {
@@ -693,6 +699,9 @@ export interface CombatSummary {
   /** Resolved tactical terrain retained after the live combat snapshot is cleared. */
   battlefieldSummary?: string;
   loot?: Array<{ name: string; quantity?: number }>;
+  /** What a ruleset fight really ended on, in the ruleset's own numbers. Present only for a fight
+   *  the ruleset resolved, and the recap is written from it instead of the shares above. */
+  ruleset?: import("../features/ruleset-combat/types.js").RulesetEncounterSummary;
 }
 
 // ── Cinematic Direction ──

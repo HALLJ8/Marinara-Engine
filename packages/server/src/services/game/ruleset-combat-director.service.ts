@@ -291,6 +291,9 @@ export function syncRulesetCombatants(definition: RulesetDefinition, state: Comb
   // below are the same numbers, but the ruleset is the one that is read.
   const outcome = rulesetEncounterOutcome(fight.encounter);
   if (!state.outcome && outcome !== "ongoing") state.outcome = outcome;
+  // The Engine's own round is the ruleset's round here, so the shell's header and the recap's
+  // "after N rounds" report the fight that was actually fought rather than staying on round one.
+  state.round = fight.encounter.round;
   const units = new Map<string, Combatant>();
   for (const unit of [...state.party, ...state.enemies]) units.set(unit.id, unit);
   for (const combatant of fight.encounter.combatants) {
