@@ -159,7 +159,11 @@ export function rulesetNamesOf(view: DirectedRulesetView, ids: readonly string[]
  * battlefield and translating it twice would let the two boards disagree.
  */
 export function rulesetCellSentences(cell: RulesetBoardCell, view: DirectedRulesetView, t: TFunction): string[] {
-  const said: string[] = [t(`ui.game.tacticalcombatui.terrain.${cell.terrain}`, { defaultValue: cell.terrain })];
+  const said: string[] = [
+    t("game.combat.ruleset.board.terrain", {
+      label: t(`ui.game.tacticalcombatui.terrain.${cell.terrain}`, { defaultValue: cell.terrain }),
+    }),
+  ];
   if (cell.solid) said.push(t("game.combat.ruleset.board.solid"));
   const who = cell.occupant;
   if (who) {

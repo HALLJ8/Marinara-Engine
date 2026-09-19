@@ -778,6 +778,7 @@
   "game.combat.ruleset.board.solid": "Solid ground nothing walks into or sees through.",
   "game.combat.ruleset.board.stand": "Stand up",
   "game.combat.ruleset.board.targetable": "Can be chosen as a target.",
+  "game.combat.ruleset.board.terrain": "{{label}}.",
   "game.combat.ruleset.board.title": "Battlefield",
   "game.combat.ruleset.board.turnOf": "{{name}} is up",
   "game.combat.ruleset.board.walk": "Move",

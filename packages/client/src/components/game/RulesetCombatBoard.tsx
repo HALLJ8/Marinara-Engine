@@ -99,10 +99,19 @@ export function RulesetCombatBoard({
   }, [step?.stage, step?.option.id, view.actorId, view.round]);
 
   const holdStep = useCallback((next: RulesetMenuStep | null) => setStep(next), []);
+  // Escape is the PLAYER closing the step, so the keyboard goes back to the menu the choice was
+  // made on. Not in the handler: the menu only draws the root it lands on once the step is gone,
+  // so the move waits for the render that puts it back.
+  const returnFocus = useRef(false);
   const leaveStep = useCallback(() => {
+    returnFocus.current = true;
     setStep(null);
-    menuRoot.current?.focus();
   }, []);
+  useEffect(() => {
+    if (step !== null || !returnFocus.current) return;
+    returnFocus.current = false;
+    menuRoot.current?.focus();
+  }, [step]);
 
   const focusCell = (x: number, y: number) => {
     const clampedX = Math.max(0, Math.min(grid.width - 1, x));
@@ -216,12 +225,12 @@ export function RulesetCombatBoard({
         <div
           role="group"
           aria-label={t("game.combat.ruleset.board.title")}
-          className="relative"
-          style={{
-            aspectRatio: `${grid.width} / ${grid.height}`,
-            width: `min(100%, calc(100% * ${grid.width} / ${grid.height}))`,
-            maxHeight: "100%",
-          }}
+          // Whole and square, whichever way the room runs out. The width is the box's, the height
+          // follows the board's own shape, and the ceiling on the height is carried back through
+          // that shape to the width: a short box gives a smaller board, never a stretched one. A
+          // board with no room left scrolls inside THIS box, so the page never scrolls sideways.
+          className="relative m-auto max-h-full max-w-full shrink-0"
+          style={{ aspectRatio: `${grid.width} / ${grid.height}`, width: "100%", height: "auto" }}
         >
           <div
             className="absolute inset-0 grid gap-[2px]"
@@ -233,7 +242,7 @@ export function RulesetCombatBoard({
             {cells.map((cell) => {
               const key = rulesetCellKey(cell);
               const icon = resolveTerrainIcon(environment, cell.terrain);
-              const onPath = path.has(key) && !cell.reach;
+              const onPath = path.has(key);
               const provokes = (cell.reach?.provokes.length ?? 0) > 0;
               const isCursor = cursor.x === cell.x && cursor.y === cell.y;
               const isActor = actor?.x === cell.x && actor?.y === cell.y;
@@ -305,9 +314,6 @@ export function RulesetCombatBoard({
                       {icon}
                     </span>
                   )}
-                  {onPath && (
-                    <span className="pointer-events-none absolute inset-0 bg-[var(--primary)]/25 ring-1 ring-inset ring-dashed ring-[var(--primary)]/50" />
-                  )}
                   {cell.reach && (
                     <span
                       className={cn(
@@ -318,6 +324,18 @@ export function RulesetCombatBoard({
                       )}
                       style={{ animation: "tc-move-range 1.5s ease-in-out infinite" }}
                     />
+                  )}
+                  {/* The walk itself, over the highlight: every cell it passes through, drawn as it
+                      is hovered or focused so the way round a wall is visible before it is taken. */}
+                  {onPath && (
+                    <span className="pointer-events-none absolute inset-0 bg-white/30 ring-2 ring-inset ring-white/70" />
+                  )}
+                  {/* Somebody would swing at this walk on the way. The cell is amber above; this is
+                      the mark that says why, and the strip under the board names them. */}
+                  {provokes && (
+                    <span className="pointer-events-none absolute left-0 top-0 bg-amber-300/90 px-[2px] text-[0.5rem] font-black leading-tight text-black">
+                      !
+                    </span>
                   )}
                   {cell.reach && (
                     <span className="pointer-events-none absolute bottom-0 right-0 bg-black/60 px-[2px] text-[0.5rem] font-bold leading-tight tabular-nums text-white/90">
@@ -365,7 +383,7 @@ export function RulesetCombatBoard({
                 style={{
                   left: `${((cell.x + 0.5) / grid.width) * 100}%`,
                   top: `${((cell.y + 0.5) / grid.height) * 100}%`,
-                  width: `${(100 / grid.width) * 0.9}%`,
+                  width: `${(100 / grid.width) * 0.84}%`,
                 }}
               >
                 <div
@@ -393,9 +411,12 @@ export function RulesetCombatBoard({
                   {(combatant.defeated || combatant.down) && (
                     <Skull className="absolute -top-1.5 left-1/2 h-3 w-3 -translate-x-1/2 text-[var(--destructive)] drop-shadow" />
                   )}
-                </div>
-                <div className="mt-0.5 h-1 w-full overflow-hidden rounded-full bg-black/60">
-                  <div className={cn("h-full transition-all duration-300", bar)} style={{ width: `${percent}%` }} />
+                  {/* The health bar sits ON the token rather than under it: a bar below the circle
+                      is taller than the square it belongs to, and on a small board it laps over the
+                      combatant in the next row. */}
+                  <div className="absolute -bottom-1 left-0 right-0 h-1 overflow-hidden rounded-full bg-black/70 ring-1 ring-black/50">
+                    <div className={cn("h-full transition-all duration-300", bar)} style={{ width: `${percent}%` }} />
+                  </div>
                 </div>
               </div>
             );
