@@ -49,6 +49,7 @@ import { usePageActivity } from "../../hooks/use-page-activity";
 import { useRenderTimer, useWhyRender } from "../../lib/perf-diagnostics";
 import { usePresenceClock } from "../../hooks/use-presence-clock";
 import { useKeepLatestChatMessageVisible } from "../../hooks/use-visual-viewport-chat-bottom";
+import { useChatOpeningScroll } from "../../hooks/use-chat-opening-scroll";
 import { api, ApiError, isRequestTimeoutError } from "../../lib/api-client";
 import { getChatDisplayName, getConnectedChatDisplayName, parseChatMetadata } from "../../lib/chat-display";
 import { getChatCharacterIds } from "../../lib/chat-macros";
@@ -2465,6 +2466,7 @@ export const ChatArea = memo(function ChatArea() {
   const userScrolledAtRef = useRef(0);
   const forcedBottomScrollRef = useRef<{ requestedAt: number; behavior: ScrollBehavior } | null>(null);
   const openedAtBottomChatIdRef = useRef<string | null>(null);
+  const gotoRequest = useChatStore((s) => s.gotoRequest);
   const streamScrollFrameRef = useRef(0);
   const scrollToMessagesBottom = useCallback((behavior: ScrollBehavior = "smooth") => {
     if (hasActiveTextSelection()) return;
@@ -2503,6 +2505,14 @@ export const ChatArea = memo(function ChatArea() {
     [scrollToMessagesBottom],
   );
   useKeepLatestChatMessageVisible(scrollRef, scrollToMessagesBottom);
+  const followOpeningScroll = useChatOpeningScroll(
+    isRoleplay && gotoRequest?.chatId !== activeChatId ? activeChatId : null,
+    scrollRef,
+    scrollToMessagesBottom,
+  );
+  useEffect(() => {
+    openedAtBottomChatIdRef.current = null;
+  }, [activeChatId]);
   useEffect(() => {
     const handleScrollRequest = (event: Event) => {
       const detail = (event as CustomEvent<ChatScrollToBottomDetail>).detail;
@@ -2520,9 +2530,9 @@ export const ChatArea = memo(function ChatArea() {
   }, [activeChatId, scheduleScrollToMessagesBottom]);
 
   useEffect(() => {
-    if (!activeChatId || isFetchingNextPage || isLoadingMoreRef.current) return;
+    if (!activeChatId || !isRoleplay || isFetchingNextPage || isLoadingMoreRef.current) return;
     if (openedAtBottomChatIdRef.current === activeChatId) return;
-    if (isLoading && loadedMessageCount === 0) return;
+    if (!messages || (isLoading && loadedMessageCount === 0) || gotoRequest?.chatId === activeChatId) return;
 
     let frame = 0;
     const scrollWhenSurfaceIsReady = () => {
@@ -2537,7 +2547,7 @@ export const ChatArea = memo(function ChatArea() {
       openedAtBottomChatIdRef.current = activeChatId;
       userScrolledAwayRef.current = false;
       isNearBottomRef.current = true;
-      scheduleScrollToMessagesBottom("auto");
+      followOpeningScroll();
     };
 
     document.addEventListener("selectionchange", scrollWhenSurfaceIsReady);
@@ -2546,7 +2556,16 @@ export const ChatArea = memo(function ChatArea() {
       cancelAnimationFrame(frame);
       document.removeEventListener("selectionchange", scrollWhenSurfaceIsReady);
     };
-  }, [activeChatId, isFetchingNextPage, isLoading, loadedMessageCount, scheduleScrollToMessagesBottom]);
+  }, [
+    activeChatId,
+    isRoleplay,
+    isFetchingNextPage,
+    isLoading,
+    loadedMessageCount,
+    messages,
+    gotoRequest,
+    followOpeningScroll,
+  ]);
 
   useEffect(() => {
     const el = scrollRef.current;
@@ -2833,7 +2852,6 @@ export const ChatArea = memo(function ChatArea() {
   }, [fetchNextPage, hasNextPage, isFetchingNextPage]);
 
   // ── /goto command: paginate older pages until target message is loaded, then scroll to it
-  const gotoRequest = useChatStore((s) => s.gotoRequest);
   useEffect(() => {
     if (!gotoRequest || gotoRequest.chatId !== activeChatId) return;
     if (!messages) return;
@@ -2861,6 +2879,7 @@ export const ChatArea = memo(function ChatArea() {
       const raf = requestAnimationFrame(() => {
         const el = document.querySelector(`[data-message-id="${CSS.escape(targetId)}"]`);
         if (el instanceof HTMLElement) {
+          openedAtBottomChatIdRef.current = activeChatId;
           el.scrollIntoView({ behavior: "smooth", block: "center" });
           userScrolledAwayRef.current = true; // suppress auto-scroll-to-bottom hijacking the jump
         }

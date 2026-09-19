@@ -60,6 +60,7 @@ import { useInstalledCapabilityPackages } from "../../hooks/use-capability-packa
 import { CapabilityElement } from "../capabilities/CapabilityElement";
 import { TURN_GAME_BOT_REQUEST_EVENT } from "../../lib/capability-turn-game-events";
 import { useGenerate } from "../../hooks/use-generate";
+import { useChatOpeningScroll } from "../../hooks/use-chat-opening-scroll";
 import {
   useChatComposerFocused,
   useChatKeyboardOpen,
@@ -570,6 +571,7 @@ export function ConversationView({
   const composerScrollTopRef = useRef(0);
   const userScrolledAtRef = useRef(0);
   const openedAtBottomChatIdRef = useRef<string | null>(null);
+  const gotoRequest = useChatStore((state) => state.gotoRequest);
   const streamScrollFrameRef = useRef(0);
   const keyboardOpen = useChatKeyboardOpen();
   const composerFocused = useChatComposerFocused();
@@ -600,17 +602,12 @@ export function ConversationView({
     [],
   );
 
-  const scheduleScrollToMessagesBottom = useCallback(
-    (behavior: ScrollBehavior = "smooth") => {
-      scrollToMessagesBottom(behavior);
-      requestAnimationFrame(() => {
-        scrollToMessagesBottom(behavior);
-        requestAnimationFrame(() => scrollToMessagesBottom(behavior));
-      });
-    },
-    [scrollToMessagesBottom],
-  );
   useKeepLatestChatMessageVisible(scrollRef, scrollToMessagesBottom);
+  const followOpeningScroll = useChatOpeningScroll(
+    gotoRequest?.chatId === chatId ? null : chatId,
+    scrollRef,
+    scrollToMessagesBottom,
+  );
 
   useEffect(() => {
     if (shouldKeepMobileComposerOpen) setMobileHistoryComposerCollapsed(false);
@@ -712,6 +709,7 @@ export function ConversationView({
 
   useLayoutEffect(() => {
     setTranscriptWindowStart(null);
+    openedAtBottomChatIdRef.current = null;
   }, [chatId]);
 
   const messagesPerPage = useUIStore((s) => s.messagesPerPage);
@@ -726,7 +724,6 @@ export function ConversationView({
     () => getTranscriptRenderWindow(messages, { maxMountedMessages, startIndex: transcriptWindowStart }),
     [maxMountedMessages, messages, transcriptWindowStart],
   );
-  const gotoRequest = useChatStore((state) => state.gotoRequest);
   // ChatArea clears the request after scrolling; only reveal its transcript window once.
   const handledTranscriptGotoRef = useRef<typeof gotoRequest>(null);
 
@@ -772,7 +769,7 @@ export function ConversationView({
   useLayoutEffect(() => {
     if (!chatId || isFetchingNextPage || isLoadingMoreRef.current) return;
     if (openedAtBottomChatIdRef.current === chatId) return;
-    if (isLoading && (messages?.length ?? 0) === 0) return;
+    if (!messages || (isLoading && messages.length === 0)) return;
     if (transcriptWindow.hiddenAfterCount > 0) return;
     // A pending jump-to-message owns the initial scroll position. With an
     // unbounded render window nothing is ever hidden after the target, so the
@@ -796,7 +793,7 @@ export function ConversationView({
       openedAtBottomChatIdRef.current = chatId;
       userScrolledAwayRef.current = false;
       isNearBottomRef.current = true;
-      scheduleScrollToMessagesBottom("auto");
+      followOpeningScroll();
     };
     document.addEventListener("selectionchange", openAtBottom);
     openAtBottom();
@@ -807,7 +804,7 @@ export function ConversationView({
     isFetchingNextPage,
     isLoading,
     messages,
-    scheduleScrollToMessagesBottom,
+    followOpeningScroll,
     totalMessageCount,
     transcriptWindow.hiddenAfterCount,
   ]);
