@@ -611,6 +611,12 @@ const coverageSchema = z
   })
   .strict();
 
+/** A handful of dice a fight rolls. Its own object because an attack roll, an initiative roll, a
+ *  roll against death and a creature's recharge roll are the same shape. */
+const combatDiceSchema = z
+  .object({ count: z.number().int().min(1).max(10), sides: z.number().int().min(2).max(1000) })
+  .strict();
+
 // ── Catalogs: ready-made entries an author ships with the ruleset ──
 
 /** The reserved key a picked row carries, recording `<catalogId>/<entryId>` so the picker can mark
@@ -780,6 +786,165 @@ const catalogEntryRowSchema = z
   })
   .strict();
 
+// ── Creatures: the opponents a bestiary catalog ships ──
+//
+// A creature is written in exactly the numbers a fight reads, and every name in it is the ruleset's
+// own: the pool it is measured in, the saves it rolls, the conditions it shrugs off, the damage
+// types its hide answers to and the rung of its own threat scale it sits on. Nothing here knows one
+// system's vocabulary, and nothing in it is text a fight interprets.
+
+/** How many actions one creature may carry. Generous, because a written opponent has its strikes,
+ *  the sequence that spends them and a thing it does once a fight. */
+export const RULESET_CREATURE_MAX_ACTIONS = 12;
+
+/** What a creature can take: a plain number, or dice thrown once when the fight is created. The
+ *  average is what a forecast reads, so a menu never promises a die nobody has thrown. */
+const creatureHealthSchema = z.union([
+  z.number().int().min(1).max(100000),
+  z
+    .object({ dice: catalogDice, flat: z.number().int().min(-1000).max(100000).optional() })
+    .strict(),
+]);
+
+/** What one action does to what it reaches: the same amount shape a catalog entry uses, plus the
+ *  type the target's own hide is checked against. */
+const creatureDamageSchema = z
+  .object({
+    dice: catalogDice.optional(),
+    flat: z.number().int().min(-1000).max(10000).optional(),
+    type: promptSafeText(40).optional(),
+  })
+  .strict()
+  .superRefine((damage, ctx) => {
+    if (damage.dice === undefined && damage.flat === undefined) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Damage names dice, a flat amount, or both" });
+    }
+  });
+
+/** A save the action itself forces. The difficulty is the action's own, because a stat block is not
+ *  a sheet and has no abilities list to read one off. */
+const creatureSaveSchema = z
+  .object({
+    save: sheetId,
+    difficulty: z.number().int().min(0).max(1000),
+    onSuccess: z.enum(["none", "half", "negates"]),
+  })
+  .strict();
+
+const creatureActionSchema = z
+  .object({
+    id: sheetId,
+    name: promptSafeText(80),
+    budget: sheetId,
+    toHit: z.number().int().min(-50).max(100).optional(),
+    /** The amount simply lands: no roll to make. */
+    autoHit: z.boolean().optional(),
+    damage: creatureDamageSchema.optional(),
+    save: creatureSaveSchema.optional(),
+    /** What a save that ENDS one of `applies` is rolled against, when the action has no save of its
+     *  own to borrow the number from. */
+    saveDifficulty: z.number().int().min(0).max(1000).optional(),
+    applies: z.array(catalogAppliesSchema).max(4).optional(),
+    targetCount: z.number().int().min(1).max(20).optional(),
+    /** In the ruleset's own distance unit. Carried until a fight has positions. */
+    reach: z.number().finite().min(0).max(10000).optional(),
+    range: z.number().finite().min(0).max(10000).optional(),
+    /** How many times it can be done at all, and over what stretch. */
+    uses: z
+      .object({ per: z.enum(["encounter", "day"]), count: z.number().int().min(1).max(20) })
+      .strict()
+      .optional(),
+    /** Spent when it is used, and rolled for at the start of the creature's own turn: `from` or
+     *  higher on these dice brings it back. It starts the fight available. */
+    recharge: z
+      .object({ dice: combatDiceSchema, from: z.number().int().min(1).max(1000) })
+      .strict()
+      .optional(),
+    /** Other actions of this same block, in order, each with its own target choice. ONE budget pays
+     *  for the lot: this is how a creature that strikes twice in one action is written. A step may
+     *  never name another sequence. */
+    sequence: z
+      .array(z.object({ action: sheetId, times: z.number().int().min(1).max(10).default(1) }).strict())
+      .min(1)
+      .max(6)
+      .optional(),
+    /** Bought out of the creature's own points instead of a budget. */
+    signature: z.object({ cost: z.number().int().min(1).max(20) }).strict().optional(),
+  })
+  .strict()
+  .superRefine((action, ctx) => {
+    if (action.sequence) {
+      // A sequence is a container. Anything else on it would be a second thing the one budget also
+      // did, with nothing to say when it happened.
+      for (const key of ["toHit", "autoHit", "damage", "save", "saveDifficulty", "applies", "targetCount"] as const) {
+        if (action[key] !== undefined) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: [key],
+            message: "A sequence resolves the actions it names, so it carries nothing of its own",
+          });
+        }
+      }
+    }
+    if (action.save && action.saveDifficulty !== undefined) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["saveDifficulty"],
+        message: "This action has a save of its own, and that save's difficulty is what a save-ends uses",
+      });
+    }
+    // A save with nothing to be rolled against is a save everybody passes, so it is refused here
+    // rather than rolled for nothing in the middle of a turn.
+    if (!action.save && action.saveDifficulty === undefined && action.applies?.some((entry) => entry.saveEnds)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["saveDifficulty"],
+        message: "A condition that ends on a save needs a difficulty for that save to be rolled against",
+      });
+    }
+  });
+
+const creatureSchema = z
+  .object({
+    health: creatureHealthSchema,
+    defense: z.number().int().min(0).max(1000),
+    /** In the ruleset's own distance unit, read by the slice that gives a fight positions. */
+    speed: z.number().finite().min(0).max(10000).optional(),
+    initiativeModifier: z.number().int().min(-50).max(100),
+    /** Scores, keyed by the sheet's own ability ids. Shown to the Game Master; a later slice asks a
+     *  creature for a check with them. */
+    abilities: z.record(z.number().int().min(-1000).max(1000)).optional(),
+    /** What it adds when it saves, keyed by the sheet's own save ids. One it does not name is zero. */
+    saves: z.record(z.number().int().min(-50).max(50)).optional(),
+    /** Damage types, matched without case: half, double, none at all. */
+    resist: z.array(promptSafeText(40)).max(30).optional(),
+    vulnerable: z.array(promptSafeText(40)).max(30).optional(),
+    immune: z.array(promptSafeText(40)).max(30).optional(),
+    /** The sheet's own condition ids this creature is never in. */
+    conditionImmunities: z.array(sheetId).max(40).optional(),
+    /** The rung of `combat.threat` it was filed under. */
+    tier: sheetId,
+    /** Short lines the Game Master is shown and the Engine never resolves: a trait is fiction here,
+     *  not a rule, so anything with numbers in it belongs in an action. */
+    traits: z
+      .array(z.object({ name: promptSafeText(60), text: promptSafeText(400) }).strict())
+      .max(8)
+      .optional(),
+    /** Points given back at the start of its own turn, spent on `signature` actions. */
+    signaturePoints: z.number().int().min(1).max(20).optional(),
+    actions: z.array(creatureActionSchema).min(1).max(RULESET_CREATURE_MAX_ACTIONS),
+  })
+  .strict()
+  .superRefine((creature, ctx) => {
+    if (creature.signaturePoints === undefined && creature.actions.some((action) => action.signature)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["signaturePoints"],
+        message: "An action bought with points needs signaturePoints for it to be bought from",
+      });
+    }
+  });
+
 const catalogEntrySchema = z
   .object({
     id: z.string().max(80).regex(RULESET_ID_PATTERN, "An entry id is lowercase letters, digits and single hyphens"),
@@ -791,17 +956,36 @@ const catalogEntrySchema = z
       .optional(),
     /** What picking the entry writes. One entry may fill several lists: a feature plus the counter
      *  that tracks its uses is one pick, not two. */
-    rows: z.array(catalogEntryRowSchema).min(1).max(6),
+    rows: z.array(catalogEntryRowSchema).min(1).max(6).optional(),
     mechanics: catalogMechanicsSchema.optional(),
+    /** An opponent instead of rows. An entry is one or the other, never both: rows are picked onto
+     *  a character sheet and a creature is put on the other side of a fight. */
+    creature: creatureSchema.optional(),
   })
-  .strict();
+  .strict()
+  .superRefine((entry, ctx) => {
+    if ((entry.rows === undefined) === (entry.creature === undefined)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'An entry has exactly one of "rows" or "creature"' });
+    }
+    if (entry.creature && entry.mechanics) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["mechanics"],
+        message: "A creature says what it does in its own actions, so it carries no mechanics",
+      });
+    }
+  });
 
 const catalogSchema = z
   .object({
     id: sheetId,
     label,
+    /** What this catalog's entries are. `rows` is the picker's own kind, offered on every list the
+     *  catalog feeds; `creatures` is a bestiary, which writes nothing onto a sheet and is never
+     *  offered by the picker at all. */
+    holds: z.enum(["rows", "creatures"]).default("rows"),
     /** The sheet lists this catalog's entries may write rows into. */
-    feeds: z.array(sheetId).min(1).max(8),
+    feeds: z.array(sheetId).min(1).max(8).optional(),
     filters: z.array(catalogFilterSchema).max(8).optional(),
     /** What a `mechanics.range` or `area.size` number means here, for the later combat bridge. */
     units: z
@@ -827,6 +1011,23 @@ const catalogSchema = z
   .superRefine((catalog, ctx) => {
     if ((catalog.entries === undefined) === (catalog.asset === undefined)) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'A catalog has exactly one of "entries" or "asset"' });
+    }
+    // The picker offers a catalog on the lists it feeds, so a bestiary declaring feeds would be
+    // offered on a sheet it can write nothing into.
+    if (catalog.holds === "creatures") {
+      if (catalog.feeds !== undefined) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["feeds"],
+          message: "A catalog of creatures writes no rows, so it feeds no list",
+        });
+      }
+    } else if (catalog.feeds === undefined) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["feeds"],
+        message: 'A catalog of rows names the lists it "feeds"',
+      });
     }
     // The path is derived from the id rather than chosen, so the route can find the file from the
     // catalog alone and two catalogs can never name each other's asset.
@@ -880,12 +1081,6 @@ const battleSchema = z
 // It parameterises an Engine-owned combat kind exactly as `resolution` parameterises a check kind,
 // and it is just as free of system words: the dice, the defense, the budgets, the conditions and
 // the damage types are all named by the ruleset.
-
-/** A handful of dice a fight rolls. Its own object because an attack roll, an initiative roll and
- *  a roll against death are the same shape. */
-const combatDiceSchema = z
-  .object({ count: z.number().int().min(1).max(10), sides: z.number().int().min(2).max(1000) })
-  .strict();
 
 /** What the extreme faces of a single attack die do. `hit` is for a system whose top face always
  *  lands without being worth more, and `none` is pure arithmetic. */
@@ -1621,7 +1816,12 @@ function refineRulesetDefinition(def: RulesetDefinitionBase, ctx: z.RefinementCt
   unique(catalogs, ["catalogs"], "catalog");
   catalogs.forEach((catalog, index) => {
     const path = ["catalogs", index];
-    catalog.feeds.forEach((listId, feedIndex) => {
+    // A creature is written in the numbers a fight reads, and those numbers are the `combat` block's
+    // own: its budgets, its saves, its damage types and its threat scale.
+    if (catalog.holds === "creatures" && !def.combat) {
+      issue([...path, "holds"], "A catalog of creatures needs a combat block for its creatures to be written in");
+    }
+    (catalog.feeds ?? []).forEach((listId, feedIndex) => {
       if (!listById.has(listId)) issue([...path, "feeds", feedIndex], `Unknown list "${listId}"`);
     });
     unique(catalog.filters ?? [], [...path, "filters"], "catalog filter");
@@ -2077,6 +2277,13 @@ export type RulesetCatalogScaled = z.infer<typeof catalogScaledSchema>;
 export type RulesetCatalogScaledColumn = z.infer<typeof catalogScaledColumnSchema>;
 export type RulesetCatalogFilter = z.infer<typeof catalogFilterSchema>;
 export type RulesetCatalogMechanics = z.infer<typeof catalogMechanicsSchema>;
+/** What a catalog's entries are: rows for the sheet's lists, or a bestiary of creatures. */
+export type RulesetCatalogHolds = RulesetCatalogHeader["holds"];
+/** One opponent, exactly as a bestiary entry writes it. */
+export type RulesetCreature = z.infer<typeof creatureSchema>;
+export type RulesetCreatureAction = RulesetCreature["actions"][number];
+export type RulesetCreatureDamage = NonNullable<RulesetCreatureAction["damage"]>;
+export type RulesetCreatureTrait = NonNullable<RulesetCreature["traits"]>[number];
 export type RulesetList = RulesetSheetSchema["lists"][number];
 
 /** The entries of every catalog the caller fetched, keyed by catalog id. Fetching is the caller's
@@ -2127,6 +2334,83 @@ export function rulesetListRowIssues(list: RulesetList, values: Record<string, u
  *  inside `ruleset.json` and as a `path: message` line for a catalog asset. */
 export type RulesetCatalogEntryIssue = { path: (string | number)[]; message: string };
 
+/** Everything a creature must satisfy against the ruleset that declares it: every name it carries
+ *  is one the `combat` block or the sheet already has. Shared by the inline catalogs in
+ *  `ruleset.json` and by a `catalogs/<id>.json` asset, so both are held to one rule. */
+function creatureIssues(
+  definition: RulesetDefinition,
+  creature: RulesetCreature,
+  at: (string | number)[],
+  add: (path: (string | number)[], message: string) => void,
+): void {
+  const combat = definition.combat;
+  if (!combat) {
+    return add(at, "This ruleset has no combat block, so there is nothing for a creature to be written in");
+  }
+  const budgets = new Set(combat.economy.budgets.map((budget) => budget.id));
+  const saves = new Set(definition.sheet.saves.map((save) => save.id));
+  const abilities = new Set(definition.sheet.abilities.map((ability) => ability.id));
+  const conditions = new Set(definition.sheet.live.conditions.map((condition) => condition.id));
+  // Only checked where the ruleset says what its types are. One that declares none reads a type as
+  // free text, exactly as a fight matches it.
+  const damageTypes = combat.damageTypes ? new Set(combat.damageTypes.map((type) => type.toLowerCase())) : null;
+
+  const tiers = combat.threat?.tiers ?? [];
+  if (tiers.length === 0) add([...at, "tier"], "This ruleset declares no threat tiers for a creature to sit on");
+  else if (!tiers.some((tier) => tier.id === creature.tier)) {
+    add([...at, "tier"], `Unknown threat tier "${creature.tier}"`);
+  }
+
+  for (const ability of Object.keys(creature.abilities ?? {})) {
+    if (!abilities.has(ability)) add([...at, "abilities", ability], `Unknown ability "${ability}"`);
+  }
+  for (const save of Object.keys(creature.saves ?? {})) {
+    if (!saves.has(save)) add([...at, "saves", save], `Unknown save "${save}"`);
+  }
+  for (const key of ["resist", "vulnerable", "immune"] as const) {
+    creature[key]?.forEach((type, index) => {
+      if (damageTypes && !damageTypes.has(type.trim().toLowerCase())) {
+        add([...at, key, index], `Unknown damage type "${type}"`);
+      }
+    });
+  }
+  creature.conditionImmunities?.forEach((condition, index) => {
+    if (!conditions.has(condition)) add([...at, "conditionImmunities", index], `Unknown condition "${condition}"`);
+  });
+
+  const byId = new Map<string, RulesetCreatureAction>();
+  creature.actions.forEach((action, index) => {
+    if (byId.has(action.id)) add([...at, "actions", index, "id"], `Duplicate action id "${action.id}"`);
+    byId.set(action.id, action);
+  });
+  creature.actions.forEach((action, index) => {
+    const path = [...at, "actions", index];
+    if (!budgets.has(action.budget)) add([...path, "budget"], `Unknown budget "${action.budget}"`);
+    if (action.damage?.type && damageTypes && !damageTypes.has(action.damage.type.trim().toLowerCase())) {
+      add([...path, "damage", "type"], `Unknown damage type "${action.damage.type}"`);
+    }
+    if (action.save && !saves.has(action.save.save)) {
+      add([...path, "save", "save"], `Unknown save "${action.save.save}"`);
+    }
+    action.applies?.forEach((applies, appliesIndex) => {
+      const where = [...path, "applies", appliesIndex];
+      if (!conditions.has(applies.condition)) add([...where, "condition"], `Unknown condition "${applies.condition}"`);
+      if (applies.saveEnds && !saves.has(applies.saveEnds.save)) {
+        add([...where, "saveEnds", "save"], `Unknown save "${applies.saveEnds.save}"`);
+      }
+    });
+    action.sequence?.forEach((step, stepIndex) => {
+      const where = [...path, "sequence", stepIndex, "action"];
+      const named = byId.get(step.action);
+      if (!named) return add(where, `Unknown action "${step.action}"`);
+      if (named.id === action.id) return add(where, "A sequence cannot name itself");
+      // One budget, one list of strikes. A sequence of sequences would spend one budget on a tree,
+      // and there would be nothing left to say how deep it may go.
+      if (named.sequence) add(where, `"${step.action}" is a sequence, and a sequence cannot name another`);
+    });
+  });
+}
+
 /** Everything an entry must satisfy against the ruleset that declares it. */
 export function rulesetCatalogEntryIssues(
   definition: RulesetDefinition,
@@ -2137,7 +2421,7 @@ export function rulesetCatalogEntryIssues(
   const add = (path: (string | number)[], message: string) => issues.push({ path, message });
   const listById = new Map(definition.sheet.lists.map((list) => [list.id, list]));
   const names = rulesetSheetNames(definition.sheet);
-  const feeds = new Set(catalog.feeds);
+  const feeds = new Set(catalog.feeds ?? []);
   const filterById = new Map((catalog.filters ?? []).map((filter) => [filter.id, filter]));
   const saves = new Set(definition.sheet.saves.map((save) => save.id));
   const liveConditions = new Set(definition.sheet.live.conditions.map((condition) => condition.id));
@@ -2150,10 +2434,21 @@ export function rulesetCatalogEntryIssues(
     definition.sheet.live.pools.flatMap((pool) => [pool.id, ...(pool.group ? [pool.group] : [])]),
   );
 
+  const holdsCreatures = catalog.holds === "creatures";
+
   const seen = new Set<string>();
   entries.forEach((entry, index) => {
     if (seen.has(entry.id)) add([index, "id"], `Duplicate entry id "${entry.id}"`);
     seen.add(entry.id);
+
+    // One catalog, one kind of entry: the picker reads a catalog of rows and a fight reads a
+    // catalog of creatures, and neither has anything to do with the other's entries.
+    if (holdsCreatures && !entry.creature) {
+      add([index, "creature"], `Catalog "${catalog.id}" holds creatures, so every entry carries one`);
+    } else if (!holdsCreatures && entry.creature) {
+      add([index, "creature"], `Catalog "${catalog.id}" holds rows, so an entry cannot carry a creature`);
+    }
+    if (entry.creature) creatureIssues(definition, entry.creature, [index, "creature"], add);
 
     for (const [filterId, value] of Object.entries(entry.filters ?? {})) {
       const filter = filterById.get(filterId);
@@ -2177,9 +2472,9 @@ export function rulesetCatalogEntryIssues(
     // has to be the entry's only one there: a marked row on a sheet is then matched to its spec
     // without guessing which of two identical marks it came from.
     const rowsPerList = new Map<string, number>();
-    for (const row of entry.rows) rowsPerList.set(row.list, (rowsPerList.get(row.list) ?? 0) + 1);
+    for (const row of entry.rows ?? []) rowsPerList.set(row.list, (rowsPerList.get(row.list) ?? 0) + 1);
 
-    entry.rows.forEach((row, rowIndex) => {
+    (entry.rows ?? []).forEach((row, rowIndex) => {
       const path = [index, "rows", rowIndex];
       if (!feeds.has(row.list)) return add([...path, "list"], `"${row.list}" is not one of this catalog's feeds`);
       const list = listById.get(row.list);
@@ -2233,7 +2528,7 @@ export function rulesetCatalogEntryIssues(
     // nothing, and everybody would always succeed.
     const asksForSave = !!mechanics?.save || !!mechanics?.applies?.some((applies) => applies.saveEnds);
     if (asksForSave && definition.combat) {
-      const lists = new Set(entry.rows.map((row) => row.list));
+      const lists = new Set((entry.rows ?? []).map((row) => row.list));
       (definition.combat.abilities ?? []).forEach((source) => {
         if (lists.has(source.list) && source.saveDifficulty === undefined) {
           add(
@@ -2266,10 +2561,11 @@ export type RulesetCatalogRow = { list: string; row: Record<string, string | num
 
 /** An entry as rows the sheet can hold. The rows are COPIES: the player may edit them afterwards,
  *  the sheet stays self-contained while its ruleset is uninstalled, and an updated ruleset never
- *  rewrites a character. The mark only says where the row came from. */
+ *  rewrites a character. The mark only says where the row came from. A creature entry writes
+ *  nothing onto a sheet, so it comes back as no rows at all. */
 export function rowsFromCatalogEntry(catalogId: string, entry: RulesetCatalogEntry): RulesetCatalogRow[] {
   const ref = catalogRowRef(catalogId, entry.id);
-  return entry.rows.map((row) => ({ list: row.list, row: { ...row.values, [RULESET_CATALOG_ROW_KEY]: ref } }));
+  return (entry.rows ?? []).map((row) => ({ list: row.list, row: { ...row.values, [RULESET_CATALOG_ROW_KEY]: ref } }));
 }
 
 /** A `catalogs/<id>.json` asset. `$comment` is allowed anywhere, exactly as in `ruleset.json`. */

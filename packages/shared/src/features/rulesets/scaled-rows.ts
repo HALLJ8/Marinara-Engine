@@ -67,7 +67,8 @@ function scaledRowSpec(
   if (typeof ref !== "string") return null;
   const entry = byRef.get(ref);
   if (!entry) return null;
-  return entry.rows.find((candidate) => candidate.list === listId && candidate.scaled) ?? null;
+  // A creature entry writes no rows at all, so it never matches a marked row on a sheet.
+  return entry.rows?.find((candidate) => candidate.list === listId && candidate.scaled) ?? null;
 }
 
 /** The value fitted into the column's own rules, so the recompute can never write something the
