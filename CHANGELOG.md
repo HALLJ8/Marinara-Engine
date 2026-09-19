@@ -4,6 +4,8 @@ This file is the release-notes source of truth for Marinara Engine. Reuse these 
 
 ## [Unreleased]
 
+- Conversation and Roleplay chats keep the latest message in view while their opening layout finishes loading, on desktop and mobile; scrolling through older history still takes precedence (#6392).
+
 - Touch dragging in chats and resource libraries lets a second finger scroll the list while the first keeps holding the item; lifting the scrolling finger no longer drops or assigns it (#6390).
 
 - Inventory Tracker preserves saved items when a model response is incomplete or contains malformed rows, including batched agent calls. Failed updates use the existing retry path instead of repairing missing inventory into deletions (#6387).
