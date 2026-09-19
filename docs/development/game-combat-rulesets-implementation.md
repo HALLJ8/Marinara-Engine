@@ -14,8 +14,12 @@
 > with the same revision, idempotency, mutex and single "pick a candidate id" model call. As of
 > slice C3b it is ON SCREEN: a game whose ruleset declares `combat` plays the fight on the Classic
 > shell with the ruleset's own menu, its own words and the real arithmetic in the log, and the
-> sheets are written as the fight runs rather than afterwards. Positions, reactions and the windows
-> signature actions are used in are still to come, in C4 and C5.
+> sheets are written as the fight runs rather than afterwards. As of slice C4a it has POSITIONS: a
+> ruleset that declares `combat.distance` can be fought on the tactical engine's own generated
+> board, with movement, reach, ranges, burst, cone and line areas, line of sight, cover and strikes
+> at somebody walking away all resolved from the ruleset's own numbers, and an opponent that moves.
+> The board is not drawn on screen yet, so a positioned fight is reachable only through the API
+> until C4b; reactions and the windows signature actions are used in are still to come, in C5.
 
 Status: implementation proposal, September 17, 2026. The AI overhaul does not implement these rulesets. Traditional's speed-follow-up requirement is accepted product direction; thresholds and other defaults below are proposals for tuning. Implement against current `staging`, after checking related work.
 
