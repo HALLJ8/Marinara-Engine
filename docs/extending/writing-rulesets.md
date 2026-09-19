@@ -766,6 +766,16 @@ player's game is set to the Tactical combat style. With the Classic style, or on
 `distance`, the fight is theatre of the mind exactly as it was: anybody can be pointed at anybody,
 and nothing below is read at all.
 
+**What the player sees.** The board is drawn, with the tactical style's own terrain. Every square is
+a button, reachable with the pointer or the arrow keys, and says what it is, who is on it and what
+the half-made choice makes of it. Walking lights up the squares the menu offered, each carrying its
+cost IN YOUR UNIT, draws the way there, and marks in amber any square whose path somebody would
+strike at, naming them under the board. An option that takes a target lights up who may be chosen,
+on the board and in the list at once. An option with an `area` is aimed at a square, and the square
+under the pointer says who it would catch, friends included. What is left of the allowance is shown
+beside your budgets, again in your unit. None of it is measured by the screen: every square, cost,
+path, target and aim is sent by the server.
+
 **Movement.** A turn's allowance is `economy.movement` for a party member, or the creature's own
 `speed`, divided by `perCell` and rounded DOWN, and never less than one cell while it can move at
 all. It refills at the start of its holder's own turn and may be spent before, between and after
@@ -891,14 +901,14 @@ arithmetic in your terms: "Juno attacks Rust jackal with Road axe: 8 (5 + 3) + 3
 6, a hit." Every accepted action is written to the sheet as it happens, so a reload mid-fight is
 exact and the Game Master is told afterwards not to change those numbers again.
 
+A fight with positions is drawn on the board instead of on the portrait stage; see Positions for
+what the player does with it. Every distance on it, in the menu and in the log, is said in YOUR
+unit: "Juno moves to 4, 6 for 6 paces and has 2 paces left."
+
 ### Not yet
 
 Said plainly, because a ruleset should not claim what the Engine does not do:
 
-- **No board on screen yet.** Positions, movement, reach, ranges, areas, line of sight, cover and
-  strikes at somebody walking away are all resolved (see Positions), but the battle screen does not
-  draw the grid yet, so a positioned fight is reachable only through the API until the next release.
-  A ruleset that declares no `distance` is unaffected and plays exactly as it always has.
 - **Beyond the modest board**: no three-quarter or total cover, no elevation, no flying over
   obstacles, no squeezing, no mounts, no grapple or shove movement, no hiding or surprise, and
   nothing pushes anybody anywhere.
