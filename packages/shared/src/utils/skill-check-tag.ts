@@ -364,6 +364,37 @@ export function parseSkillCheckTagBody(body: string): SkillCheckTag | null {
   const resultValue = values.get("result")?.trim().toLowerCase();
   const resolution: SkillCheckResult["resolution"] = declaredResolution === "successes" ? "successes" : "sum";
 
+  // An EMPTY pool is a real result with no dice in it: a ruleset whose pool may be 0 fails the check
+  // without a roll and records `dice="0dN" rolls=""`. Read it back as the failure it was, so the
+  // record survives a reload instead of looking like a check nobody rolled. Nothing else may have
+  // an empty `rolls=`, and the shape is never Engine-rollable, so this cannot adopt a model's claim
+  // as a roll: it can only ever say "no dice, no successes".
+  const emptyPool =
+    values.has("rolls") &&
+    (rollsValue ?? "").trim() === "" &&
+    resolution === "successes" &&
+    total === 0 &&
+    modifier === 0 &&
+    /^0d[1-9]\d{0,3}$/.test(declaredDice ?? "") &&
+    (resultValue === "failure" || resultValue === "critical_failure" || resultValue === "critical failure");
+  if (emptyPool) {
+    tag.resolvedResult = {
+      skill,
+      dc,
+      rolls: [],
+      usedRoll: 0,
+      modifier: 0,
+      total: 0,
+      success: false,
+      criticalSuccess: false,
+      criticalFailure: resultValue !== "failure",
+      rollMode: "normal",
+      resolution,
+      dice: declaredDice,
+    };
+    return tag;
+  }
+
   if (!rollsValue || Number.isNaN(modifier) || Number.isNaN(total) || !resultValue) {
     // Sparse tag — the resolver will roll + apply modifier, unless the tag names
     // a system the engine does not roll. If the GM echoed a single integer in

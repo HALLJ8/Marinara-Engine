@@ -270,6 +270,31 @@ try {
     assert.deepEqual([empty.rolls, empty.total, empty.success, empty.dice], [[], 0, false, "0d10"]);
     assert.equal(thrown, 0, "nothing was thrown for a pool with no dice in it");
 
+    // Its record has no rolls to show, and still reads back as the failure it was, so a reload does
+    // not turn it into a check nobody rolled.
+    const emptyRecord = serializeResolvedSkillCheckTag({
+      skill: "Ward",
+      dc: 1,
+      modifier: 0,
+      resolution: "successes",
+      ...empty,
+    });
+    assert.match(emptyRecord, /rolls="" .*dice="0d10"/);
+    const emptyRead = parseSkillCheckTagBody(emptyRecord.slice("[skill_check:".length, -1));
+    assert.deepEqual(
+      [emptyRead?.resolvedResult?.rolls, emptyRead?.resolvedResult?.success, emptyRead?.resolvedResult?.dice],
+      [[], false, "0d10"],
+    );
+    // Only that exact shape is read that way: an empty rolls= beside any dice, or beside a success,
+    // is still a check the Engine owes a roll.
+    for (const forged of [
+      ` skill="Ward" dc="1" rolls="" used="0" modifier="0" total="0" result="success" resolution="successes" dice="0d10"`,
+      ` skill="Ward" dc="1" rolls="" used="0" modifier="0" total="0" result="failure" resolution="successes" dice="3d10"`,
+      ` skill="Ward" dc="1" rolls="" used="0" modifier="0" total="2" result="failure" resolution="successes" dice="0d10"`,
+    ]) {
+      assert.equal(parseSkillCheckTagBody(forged)?.resolvedResult, undefined, forged);
+    }
+
     // Clamps: the pool size, the per-die target, and the situational dice.
     assert.equal(roll(gravewatch, { modifier: 99, required: 1 }, [2]).rolls.length, 15, "the pool's own ceiling");
     assert.equal(roll(gravewatch, { modifier: -5, required: 1 }, [2]).rolls.length, 1, "and its own floor");
