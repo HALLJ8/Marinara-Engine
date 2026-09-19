@@ -725,8 +725,12 @@ export async function combatDirectorRoutes(
           return { session: sessionView(current.state, session) };
         const answer: DirectedCommand = candidateId ? { type: "choose", candidateId } : { type: "fallback" };
         const source = candidateId ? "gm" : "fallback";
-        if (ruleset) commandRulesetCombatDirector(ruleset, current.state, answer, source);
-        else commandCombatDirector(current.state, answer, source);
+        if (ruleset) {
+          // An answer the menu does not hold costs the model its turn, not the fight: the Engine's
+          // own picker takes it instead.
+          const answered = commandRulesetCombatDirector(ruleset, current.state, answer, source);
+          if (!answered.ok) commandRulesetCombatDirector(ruleset, current.state, { type: "fallback" }, "fallback");
+        } else commandCombatDirector(current.state, answer, source);
         current.state.requests = [...current.state.requests, input.requestId].slice(-256);
         return await save(current.row.id, input.chatId, current.state, session);
       });

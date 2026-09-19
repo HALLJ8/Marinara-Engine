@@ -285,6 +285,69 @@ async function buildGameStateContext(
 // Prompt Builders
 // ──────────────────────────────────────────────
 
+/** The shape a blueprint has to arrive in. Only ever loosened, never tightened: the Game Master
+ *  writes prose and numbers, and the Engine checks what it will act on rather than the whole reply.
+ *  Hoisted out of the handler so it is built once and a regression can drive it. */
+export const encounterBlueprintSchema = z
+  .object({
+    party: z.array(
+      z
+        .object({
+          projectile: z.boolean().optional(),
+          requiresSight: z.boolean().optional(),
+          aiHints: combatAiHintsSchema.optional(),
+          spellSlots: z.record(z.string().regex(/^[1-9]$/), z.number().int().min(0).max(100)).optional(),
+          attacks: z
+            .array(
+              z
+                .object({
+                  ...combatInterruptFields,
+                  kind: z.enum(["attack", "heal", "buff", "debuff"]).optional(),
+                  mpCost: z.number().min(0).max(10000).optional(),
+                })
+                .passthrough(),
+            )
+            .optional(),
+        })
+        .passthrough(),
+    ),
+    enemies: z.array(
+      z
+        .object({
+          projectile: z.boolean().optional(),
+          requiresSight: z.boolean().optional(),
+          aiHints: combatAiHintsSchema.optional(),
+          spellSlots: z.record(z.string().regex(/^[1-9]$/), z.number().int().min(0).max(100)).optional(),
+          boss: combatBossSchema.optional(),
+          mp: z.number().min(0).max(100000).optional(),
+          maxMp: z.number().min(0).max(100000).optional(),
+          // The ruleset's own terms for this opponent. A malformed stat block costs its
+          // opponent the proposal, never the whole blueprint: the Engine falls back to the
+          // bestiary and then to the tier.
+          creature: z.string().max(200).optional().catch(undefined),
+          tier: z.string().max(80).optional().catch(undefined),
+          proposed: rulesetCreatureSchema.optional().catch(undefined),
+          attacks: z
+            .array(
+              z
+                .object({
+                  ...combatInterruptFields,
+                  kind: z.enum(["attack", "heal", "buff", "debuff"]).optional(),
+                  mpCost: z.number().min(0).max(10000).optional(),
+                })
+                .passthrough(),
+            )
+            .optional(),
+        })
+        .passthrough()
+        .refine(
+          ({ mp, maxMp }) => mp === undefined || maxMp === undefined || mp <= maxMp,
+          "Invalid resource pool.",
+        ),
+    ),
+  })
+  .passthrough();
+
 /** How many bestiary names one blueprint prompt lists. A Game Master reads the list and picks from
  *  it, so it is a ceiling on the reading rather than on the bestiary.
  *  ponytail: the first sixty in declaration order, with no filtering of any kind. A bestiary big
@@ -759,66 +822,7 @@ export async function encounterRoutes(app: FastifyInstance) {
       if (!combatState?.party || !combatState?.enemies) {
         return reply.status(502).send({ error: "Invalid combat data returned by AI" });
       }
-      const aiBlueprintSchema = z
-        .object({
-          party: z.array(
-            z
-              .object({
-                projectile: z.boolean().optional(),
-                requiresSight: z.boolean().optional(),
-                aiHints: combatAiHintsSchema.optional(),
-                spellSlots: z.record(z.string().regex(/^[1-9]$/), z.number().int().min(0).max(100)).optional(),
-                attacks: z
-                  .array(
-                    z
-                      .object({
-                        ...combatInterruptFields,
-                        kind: z.enum(["attack", "heal", "buff", "debuff"]).optional(),
-                        mpCost: z.number().min(0).max(10000).optional(),
-                      })
-                      .passthrough(),
-                  )
-                  .optional(),
-              })
-              .passthrough(),
-          ),
-          enemies: z.array(
-            z
-              .object({
-                projectile: z.boolean().optional(),
-                requiresSight: z.boolean().optional(),
-                aiHints: combatAiHintsSchema.optional(),
-                spellSlots: z.record(z.string().regex(/^[1-9]$/), z.number().int().min(0).max(100)).optional(),
-                boss: combatBossSchema.optional(),
-                mp: z.number().min(0).max(100000).optional(),
-                maxMp: z.number().min(0).max(100000).optional(),
-                // The ruleset's own terms for this opponent. A malformed stat block costs its
-                // opponent the proposal, never the whole blueprint: the Engine falls back to the
-                // bestiary and then to the tier.
-                creature: z.string().max(200).optional().catch(undefined),
-                tier: z.string().max(80).optional().catch(undefined),
-                proposed: rulesetCreatureSchema.optional().catch(undefined),
-                attacks: z
-                  .array(
-                    z
-                      .object({
-                        ...combatInterruptFields,
-                        kind: z.enum(["attack", "heal", "buff", "debuff"]).optional(),
-                        mpCost: z.number().min(0).max(10000).optional(),
-                      })
-                      .passthrough(),
-                  )
-                  .optional(),
-              })
-              .passthrough()
-              .refine(
-                ({ mp, maxMp }) => mp === undefined || maxMp === undefined || mp <= maxMp,
-                "Invalid resource pool.",
-              ),
-          ),
-        })
-        .passthrough();
-      const aiBlueprint = aiBlueprintSchema.safeParse(combatState);
+      const aiBlueprint = encounterBlueprintSchema.safeParse(combatState);
       if (!aiBlueprint.success)
         return reply.status(502).send({ error: `Invalid combat AI data: ${aiBlueprint.error.issues[0]?.message}` });
       combatState = aiBlueprint.data;
