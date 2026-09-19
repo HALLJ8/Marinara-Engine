@@ -80,7 +80,13 @@ try {
    *  edits always travel together. */
   const fixTarget = (doc: Record<string, any>) => {
     doc.resolution.target = { default: 7, min: 7, max: 7 };
-    for (const step of doc.resolution.difficultyLadder) delete step.target;
+    // Every ladder in the file, the layers' own included: a step names a target only where the
+    // Game Master can move it, and a layer's ladder is held to the same rule as the base one.
+    const ladders = [
+      doc.resolution.difficultyLadder,
+      ...(doc.layers ?? []).map((layer: any) => layer.difficultyLadder),
+    ];
+    for (const ladder of ladders) for (const step of ladder ?? []) delete step.target;
   };
 
   const refusals = (edit: (doc: Record<string, any>) => void): string[] => {
@@ -708,6 +714,9 @@ try {
       restartRequired: false,
     });
     const document = JSON.parse(gravewatchText);
+    // The shipped example also carries a layer, which has a gate of its own (proven in the layers
+    // regression). This case is about the resolution kind, so it reads the file without one.
+    delete document.layers;
     assert.match(
       getCapabilityPackageInstallIssue(manifest(23) as any, document) ?? "",
       /dice-pool resolution requires schemaVersion 2 and capabilityApi 1\.24 or newer/,

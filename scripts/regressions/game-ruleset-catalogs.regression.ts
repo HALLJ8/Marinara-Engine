@@ -422,9 +422,9 @@ const installedPackages = packages.map((fixture) => {
   ];
   const manifest = {
     schemaVersion: 2,
-    // 1.23, because the example ruleset carries the combat bridge's battle block and a scaled
-    // catalog row now.
-    capabilityApi: { major: 1, minor: 23 },
+    // 1.25, because the example ruleset carries the combat bridge's battle block, a scaled catalog
+    // row and a layer now.
+    capabilityApi: { major: 1, minor: 25 },
     builtAgainst: { engineVersion: "2.4.6", engineCommit: "0".repeat(40) },
     id: packageId,
     name: fixture.id,
@@ -506,6 +506,8 @@ try {
           ruleset((doc) => {
             delete doc.catalogs;
             delete doc.battle;
+            // Layers have a gate of their own, proven in the layers regression.
+            delete doc.layers;
           }),
         ),
       ),
@@ -553,6 +555,7 @@ try {
     const withoutScaled = JSON.parse(
       ruleset((doc) => {
         for (const entry of doc.catalogs[0].entries) for (const row of entry.rows) delete row.scaled;
+        delete doc.layers;
       }),
     );
     assert.equal(
@@ -563,6 +566,8 @@ try {
     // The install path holds the verified bytes of every declared asset, so the same gate reads a
     // scaled row out of a catalog FILE rather than only out of the ruleset.
     const assetRuleset = JSON.parse(packages[0]!.ruleset);
+    // Layers gate on 1.25 of their own accord, which these cases are not about.
+    delete assetRuleset.layers;
     const assetPath = rulesetCatalogAssetPath("knacks");
     const scaledFile = JSON.parse(packages[0]!.catalog);
     assert.match(
@@ -586,6 +591,8 @@ try {
     doc.id = "plain-roads";
     doc.name = "Plain Roads";
     delete doc.catalogs;
+    // The example's layer hides entries out of the catalog this one does not have.
+    delete doc.layers;
   });
   for (const definition of [
     ruleset(),

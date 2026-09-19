@@ -184,7 +184,9 @@ import {
   normalizeRpgStatPools,
   copyRulesetSheetForGame,
   isCommunityRulesetId,
+  rulesetLayerSelectionIssues,
   rulesetRefSchema,
+  RULESET_REF_MAX_OPTIONS,
   type RulesetDefinition,
   type RulesetRef,
   normalizeIllustratorImagesPerGeneration,
@@ -1821,8 +1823,14 @@ const gameSetupConfigSchema = z.object({
   /** Installed package that provides this game's experience. Same shape the manifest allows for an id,
    *  since this is matched against one to mount the surface. */
   gameExperienceId: z.string().regex(GAME_EXPERIENCE_ID_PATTERN).max(GAME_EXPERIENCE_ID_MAX_CHARS).optional(),
-  // Only the id is trusted; the pin itself is rebuilt from the server's own registry at creation.
-  ruleset: rulesetRefSchema.optional(),
+  // Only the id and the layer choices in `options` are trusted; the rest of the pin is rebuilt
+  // from the server's own registry at creation. The record is bounded here rather than on the pin
+  // schema, which also reads games that already exist and must stay readable.
+  ruleset: rulesetRefSchema
+    .refine((ref) => Object.keys(ref.options).length <= RULESET_REF_MAX_OPTIONS, {
+      message: `A ruleset choice carries at most ${RULESET_REF_MAX_OPTIONS} options`,
+    })
+    .optional(),
   /** Opaque config owned by that experience — persisted verbatim, never read by the host. */
   experienceConfig: z
     .record(z.string().max(120), z.unknown())
@@ -6503,7 +6511,16 @@ export async function gameRoutes(app: FastifyInstance) {
           code: "ruleset_not_installed",
         });
       }
-      gameRuleset = createRulesetRef(registered);
+      // The layer toggles are the player's choice and are frozen into the pin here, beside the
+      // version, so the rules of a game never move under it. A selection this definition cannot
+      // honour is refused rather than quietly dropped: the game would otherwise start on rules the
+      // player did not pick. Keys the Engine does not know are carried through untouched.
+      const requestedOptions = parsedCreateGameInput.setupConfig.ruleset.options;
+      const [layerIssue] = rulesetLayerSelectionIssues(registered.definition, requestedOptions);
+      if (layerIssue) {
+        return reply.status(400).send({ error: layerIssue.message, code: layerIssue.code });
+      }
+      gameRuleset = { ...createRulesetRef(registered), options: requestedOptions };
     }
     const setupConfig: GameSetupConfig = {
       ...parsedCreateGameInput.setupConfig,
@@ -6870,6 +6887,23 @@ export async function gameRoutes(app: FastifyInstance) {
       }
     }
 
+    // The pinned ruleset's world guidance, its active layers included. World generation is the one
+    // place a ruleset gets to shape the setting rather than the turn, and nothing else in this
+    // route loads the ruleset, so the pin is resolved here. A pin the install cannot honour simply
+    // contributes nothing: the world is still generated, on Marinara's own terms.
+    let rulesetWorldGuidance: string | null = null;
+    if (meta.gameRuleset != null) {
+      const pinnedForWorld = resolveGameRuleset(meta, await loadRulesetRegistry(app.db));
+      if (pinnedForWorld.status === "ok") {
+        rulesetWorldGuidance = pinnedForWorld.definition.gm.worldGuidance ?? null;
+      } else {
+        logger.warn(
+          "[game/setup] Chat %s pins a ruleset that is not available; world generation has no ruleset guidance",
+          chatId,
+        );
+      }
+    }
+
     const setupGameSystemPrompt =
       typeof meta.gameSystemPrompt === "string" ? meta.gameSystemPrompt : setupConfig.gameSystemPrompt;
     const setupGameSpecialInstructions =
@@ -6890,6 +6924,7 @@ export async function gameRoutes(app: FastifyInstance) {
           enableCustomWidgets: customHudWidgets.length > 0 ? false : setupConfig.enableCustomWidgets,
           customHudWidgets: customHudWidgets.length > 0 ? customHudWidgets : undefined,
           lorebookContext: setupLorebookContext,
+          rulesetWorldGuidance,
           language: setupConfig.language,
           gameSystemPrompt: setupGameSystemPrompt,
           gameSpecialInstructions: setupGameSpecialInstructions,

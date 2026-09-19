@@ -89,6 +89,9 @@ const d20Sum = parseExample("docs/examples/rulesets/ember-roads.json", (source) 
 function poolRuleset(resolution: Record<string, unknown>): RulesetDefinition {
   return parseExample("docs/examples/rulesets/gravewatch.json", (source) => {
     const base = source.resolution as Record<string, unknown>;
+    // The shipped layer swaps the shipped ladder, and these resolutions replace it, so the layer
+    // goes with the ladder it was written for.
+    delete source.layers;
     source.resolution = {
       kind: "dice-pool",
       abilityModifier: base.abilityModifier,

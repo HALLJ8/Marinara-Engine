@@ -76,9 +76,7 @@
         },
         "$comment": {}
       },
-      "required": [
-        "summary"
-      ],
+      "required": ["summary"],
       "additionalProperties": false
     },
     "resolution": {
@@ -105,10 +103,7 @@
                 },
                 "$comment": {}
               },
-              "required": [
-                "count",
-                "sides"
-              ],
+              "required": ["count", "sides"],
               "additionalProperties": false,
               "default": {
                 "count": 1,
@@ -126,9 +121,7 @@
                     },
                     "$comment": {}
                   },
-                  "required": [
-                    "op"
-                  ],
+                  "required": ["op"],
                   "additionalProperties": false
                 },
                 {
@@ -140,9 +133,7 @@
                     },
                     "$comment": {}
                   },
-                  "required": [
-                    "op"
-                  ],
+                  "required": ["op"],
                   "additionalProperties": false
                 },
                 {
@@ -172,10 +163,7 @@
                     },
                     "$comment": {}
                   },
-                  "required": [
-                    "op",
-                    "table"
-                  ],
+                  "required": ["op", "table"],
                   "additionalProperties": false
                 }
               ]
@@ -230,9 +218,7 @@
                 },
                 "$comment": {}
               },
-              "required": [
-                "bonus"
-              ],
+              "required": ["bonus"],
               "additionalProperties": false
             },
             "proficiencyTiers": {
@@ -258,11 +244,7 @@
                   },
                   "round": {
                     "type": "string",
-                    "enum": [
-                      "down",
-                      "up",
-                      "nearest"
-                    ],
+                    "enum": ["down", "up", "nearest"],
                     "default": "down"
                   },
                   "flat": {
@@ -273,10 +255,7 @@
                   },
                   "$comment": {}
                 },
-                "required": [
-                  "id",
-                  "label"
-                ],
+                "required": ["id", "label"],
                 "additionalProperties": false
               },
               "minItems": 1,
@@ -291,22 +270,12 @@
               "properties": {
                 "check": {
                   "type": "string",
-                  "enum": [
-                    "none",
-                    "both",
-                    "max-only",
-                    "min-only"
-                  ],
+                  "enum": ["none", "both", "max-only", "min-only"],
                   "default": "none"
                 },
                 "save": {
                   "type": "string",
-                  "enum": [
-                    "none",
-                    "both",
-                    "max-only",
-                    "min-only"
-                  ],
+                  "enum": ["none", "both", "max-only", "min-only"],
                   "default": "none"
                 },
                 "$comment": {}
@@ -331,10 +300,7 @@
                   },
                   "$comment": {}
                 },
-                "required": [
-                  "label",
-                  "dc"
-                ],
+                "required": ["label", "dc"],
                 "additionalProperties": false
               },
               "minItems": 1,
@@ -342,12 +308,7 @@
             },
             "$comment": {}
           },
-          "required": [
-            "kind",
-            "abilityModifier",
-            "proficiencyTiers",
-            "difficultyLadder"
-          ],
+          "required": ["kind", "abilityModifier", "proficiencyTiers", "difficultyLadder"],
           "additionalProperties": false
         },
         {
@@ -367,9 +328,7 @@
                 },
                 "$comment": {}
               },
-              "required": [
-                "sides"
-              ],
+              "required": ["sides"],
               "additionalProperties": false,
               "default": {
                 "sides": 10
@@ -386,9 +345,7 @@
                     },
                     "$comment": {}
                   },
-                  "required": [
-                    "op"
-                  ],
+                  "required": ["op"],
                   "additionalProperties": false
                 },
                 {
@@ -400,9 +357,7 @@
                     },
                     "$comment": {}
                   },
-                  "required": [
-                    "op"
-                  ],
+                  "required": ["op"],
                   "additionalProperties": false
                 },
                 {
@@ -432,10 +387,7 @@
                     },
                     "$comment": {}
                   },
-                  "required": [
-                    "op",
-                    "table"
-                  ],
+                  "required": ["op", "table"],
                   "additionalProperties": false
                 }
               ]
@@ -490,9 +442,7 @@
                 },
                 "$comment": {}
               },
-              "required": [
-                "bonus"
-              ],
+              "required": ["bonus"],
               "additionalProperties": false
             },
             "proficiencyTiers": {
@@ -518,11 +468,7 @@
                   },
                   "round": {
                     "type": "string",
-                    "enum": [
-                      "down",
-                      "up",
-                      "nearest"
-                    ],
+                    "enum": ["down", "up", "nearest"],
                     "default": "down"
                   },
                   "flat": {
@@ -533,10 +479,7 @@
                   },
                   "$comment": {}
                 },
-                "required": [
-                  "id",
-                  "label"
-                ],
+                "required": ["id", "label"],
                 "additionalProperties": false
               },
               "minItems": 1,
@@ -557,10 +500,7 @@
                 },
                 "$comment": {}
               },
-              "required": [
-                "min",
-                "max"
-              ],
+              "required": ["min", "max"],
               "additionalProperties": false,
               "default": {
                 "min": 1,
@@ -587,11 +527,7 @@
                 },
                 "$comment": {}
               },
-              "required": [
-                "default",
-                "min",
-                "max"
-              ],
+              "required": ["default", "min", "max"],
               "additionalProperties": false
             },
             "double": {
@@ -604,9 +540,7 @@
                 },
                 "$comment": {}
               },
-              "required": [
-                "from"
-              ],
+              "required": ["from"],
               "additionalProperties": false
             },
             "explode": {
@@ -619,9 +553,7 @@
                 },
                 "$comment": {}
               },
-              "required": [
-                "from"
-              ],
+              "required": ["from"],
               "additionalProperties": false
             },
             "cancel": {
@@ -634,9 +566,7 @@
                 },
                 "$comment": {}
               },
-              "required": [
-                "upTo"
-              ],
+              "required": ["upTo"],
               "additionalProperties": false
             },
             "botch": {
@@ -649,9 +579,7 @@
                 },
                 "$comment": {}
               },
-              "required": [
-                "upTo"
-              ],
+              "required": ["upTo"],
               "additionalProperties": false
             },
             "exceptional": {
@@ -664,9 +592,7 @@
                 },
                 "$comment": {}
               },
-              "required": [
-                "successes"
-              ],
+              "required": ["successes"],
               "additionalProperties": false
             },
             "situationalDice": {
@@ -684,10 +610,7 @@
                 },
                 "$comment": {}
               },
-              "required": [
-                "min",
-                "max"
-              ],
+              "required": ["min", "max"],
               "additionalProperties": false
             },
             "difficultyLadder": {
@@ -712,10 +635,7 @@
                   },
                   "$comment": {}
                 },
-                "required": [
-                  "label",
-                  "successes"
-                ],
+                "required": ["label", "successes"],
                 "additionalProperties": false
               },
               "minItems": 1,
@@ -723,13 +643,7 @@
             },
             "$comment": {}
           },
-          "required": [
-            "kind",
-            "abilityModifier",
-            "proficiencyTiers",
-            "target",
-            "difficultyLadder"
-          ],
+          "required": ["kind", "abilityModifier", "proficiencyTiers", "target", "difficultyLadder"],
           "additionalProperties": false
         }
       ]
@@ -758,10 +672,7 @@
               },
               "$comment": {}
             },
-            "required": [
-              "id",
-              "label"
-            ],
+            "required": ["id", "label"],
             "additionalProperties": false
           },
           "maxItems": 20,
@@ -798,13 +709,7 @@
               },
               "$comment": {}
             },
-            "required": [
-              "id",
-              "label",
-              "min",
-              "max",
-              "default"
-            ],
+            "required": ["id", "label", "min", "max", "default"],
             "additionalProperties": false
           },
           "maxItems": 20,
@@ -832,10 +737,7 @@
               },
               "$comment": {}
             },
-            "required": [
-              "id",
-              "label"
-            ],
+            "required": ["id", "label"],
             "additionalProperties": false
           },
           "maxItems": 120,
@@ -863,10 +765,7 @@
               },
               "$comment": {}
             },
-            "required": [
-              "id",
-              "label"
-            ],
+            "required": ["id", "label"],
             "additionalProperties": false
           },
           "maxItems": 40,
@@ -905,10 +804,7 @@
             },
             "$comment": {}
           },
-          "required": [
-            "min",
-            "max"
-          ],
+          "required": ["min", "max"],
           "additionalProperties": false,
           "default": {
             "min": -20,
@@ -961,10 +857,7 @@
                       },
                       "$comment": {}
                     },
-                    "required": [
-                      "field",
-                      "equals"
-                    ],
+                    "required": ["field", "equals"],
                     "additionalProperties": false
                   },
                   "type": {
@@ -986,13 +879,7 @@
                   },
                   "$comment": {}
                 },
-                "required": [
-                  "id",
-                  "label",
-                  "type",
-                  "min",
-                  "max"
-                ],
+                "required": ["id", "label", "type", "min", "max"],
                 "additionalProperties": false
               },
               {
@@ -1037,10 +924,7 @@
                       },
                       "$comment": {}
                     },
-                    "required": [
-                      "field",
-                      "equals"
-                    ],
+                    "required": ["field", "equals"],
                     "additionalProperties": false
                   },
                   "type": {
@@ -1058,12 +942,7 @@
                   },
                   "$comment": {}
                 },
-                "required": [
-                  "id",
-                  "label",
-                  "type",
-                  "maxLength"
-                ],
+                "required": ["id", "label", "type", "maxLength"],
                 "additionalProperties": false
               },
               {
@@ -1108,10 +987,7 @@
                       },
                       "$comment": {}
                     },
-                    "required": [
-                      "field",
-                      "equals"
-                    ],
+                    "required": ["field", "equals"],
                     "additionalProperties": false
                   },
                   "type": {
@@ -1129,12 +1005,7 @@
                   },
                   "$comment": {}
                 },
-                "required": [
-                  "id",
-                  "label",
-                  "type",
-                  "maxLength"
-                ],
+                "required": ["id", "label", "type", "maxLength"],
                 "additionalProperties": false
               },
               {
@@ -1179,10 +1050,7 @@
                       },
                       "$comment": {}
                     },
-                    "required": [
-                      "field",
-                      "equals"
-                    ],
+                    "required": ["field", "equals"],
                     "additionalProperties": false
                   },
                   "type": {
@@ -1194,11 +1062,7 @@
                   },
                   "$comment": {}
                 },
-                "required": [
-                  "id",
-                  "label",
-                  "type"
-                ],
+                "required": ["id", "label", "type"],
                 "additionalProperties": false
               },
               {
@@ -1243,10 +1107,7 @@
                       },
                       "$comment": {}
                     },
-                    "required": [
-                      "field",
-                      "equals"
-                    ],
+                    "required": ["field", "equals"],
                     "additionalProperties": false
                   },
                   "type": {
@@ -1280,12 +1141,7 @@
                   },
                   "$comment": {}
                 },
-                "required": [
-                  "id",
-                  "label",
-                  "type",
-                  "values"
-                ],
+                "required": ["id", "label", "type", "values"],
                 "additionalProperties": false
               },
               {
@@ -1330,10 +1186,7 @@
                       },
                       "$comment": {}
                     },
-                    "required": [
-                      "field",
-                      "equals"
-                    ],
+                    "required": ["field", "equals"],
                     "additionalProperties": false
                   },
                   "type": {
@@ -1350,11 +1203,7 @@
                   },
                   "$comment": {}
                 },
-                "required": [
-                  "id",
-                  "label",
-                  "type"
-                ],
+                "required": ["id", "label", "type"],
                 "additionalProperties": false
               }
             ]
@@ -1408,10 +1257,7 @@
                       },
                       "$comment": {}
                     },
-                    "required": [
-                      "field",
-                      "equals"
-                    ],
+                    "required": ["field", "equals"],
                     "additionalProperties": false
                   },
                   "op": {
@@ -1470,12 +1316,7 @@
                   },
                   "$comment": {}
                 },
-                "required": [
-                  "id",
-                  "label",
-                  "op",
-                  "of"
-                ],
+                "required": ["id", "label", "op", "of"],
                 "additionalProperties": false
               },
               {
@@ -1520,10 +1361,7 @@
                       },
                       "$comment": {}
                     },
-                    "required": [
-                      "field",
-                      "equals"
-                    ],
+                    "required": ["field", "equals"],
                     "additionalProperties": false
                   },
                   "op": {
@@ -1595,13 +1433,7 @@
                   },
                   "$comment": {}
                 },
-                "required": [
-                  "id",
-                  "label",
-                  "op",
-                  "from",
-                  "table"
-                ],
+                "required": ["id", "label", "op", "from", "table"],
                 "additionalProperties": false
               },
               {
@@ -1646,10 +1478,7 @@
                       },
                       "$comment": {}
                     },
-                    "required": [
-                      "field",
-                      "equals"
-                    ],
+                    "required": ["field", "equals"],
                     "additionalProperties": false
                   },
                   "op": {
@@ -1706,22 +1535,12 @@
                   },
                   "round": {
                     "type": "string",
-                    "enum": [
-                      "down",
-                      "up",
-                      "nearest"
-                    ],
+                    "enum": ["down", "up", "nearest"],
                     "default": "down"
                   },
                   "$comment": {}
                 },
-                "required": [
-                  "id",
-                  "label",
-                  "op",
-                  "of",
-                  "multiplier"
-                ],
+                "required": ["id", "label", "op", "of", "multiplier"],
                 "additionalProperties": false
               },
               {
@@ -1766,10 +1585,7 @@
                       },
                       "$comment": {}
                     },
-                    "required": [
-                      "field",
-                      "equals"
-                    ],
+                    "required": ["field", "equals"],
                     "additionalProperties": false
                   },
                   "op": {
@@ -1828,12 +1644,7 @@
                   },
                   "$comment": {}
                 },
-                "required": [
-                  "id",
-                  "label",
-                  "op",
-                  "of"
-                ],
+                "required": ["id", "label", "op", "of"],
                 "additionalProperties": false
               },
               {
@@ -1878,10 +1689,7 @@
                       },
                       "$comment": {}
                     },
-                    "required": [
-                      "field",
-                      "equals"
-                    ],
+                    "required": ["field", "equals"],
                     "additionalProperties": false
                   },
                   "op": {
@@ -1940,12 +1748,7 @@
                   },
                   "$comment": {}
                 },
-                "required": [
-                  "id",
-                  "label",
-                  "op",
-                  "of"
-                ],
+                "required": ["id", "label", "op", "of"],
                 "additionalProperties": false
               }
             ]
@@ -1997,10 +1800,7 @@
                   },
                   "$comment": {}
                 },
-                "required": [
-                  "field",
-                  "equals"
-                ],
+                "required": ["field", "equals"],
                 "additionalProperties": false
               },
               "maxItems": {
@@ -2048,13 +1848,7 @@
                         },
                         "$comment": {}
                       },
-                      "required": [
-                        "id",
-                        "label",
-                        "type",
-                        "min",
-                        "max"
-                      ],
+                      "required": ["id", "label", "type", "min", "max"],
                       "additionalProperties": false
                     },
                     {
@@ -2089,12 +1883,7 @@
                         },
                         "$comment": {}
                       },
-                      "required": [
-                        "id",
-                        "label",
-                        "type",
-                        "maxLength"
-                      ],
+                      "required": ["id", "label", "type", "maxLength"],
                       "additionalProperties": false
                     },
                     {
@@ -2129,12 +1918,7 @@
                         },
                         "$comment": {}
                       },
-                      "required": [
-                        "id",
-                        "label",
-                        "type",
-                        "maxLength"
-                      ],
+                      "required": ["id", "label", "type", "maxLength"],
                       "additionalProperties": false
                     },
                     {
@@ -2163,11 +1947,7 @@
                         },
                         "$comment": {}
                       },
-                      "required": [
-                        "id",
-                        "label",
-                        "type"
-                      ],
+                      "required": ["id", "label", "type"],
                       "additionalProperties": false
                     },
                     {
@@ -2218,12 +1998,7 @@
                         },
                         "$comment": {}
                       },
-                      "required": [
-                        "id",
-                        "label",
-                        "type",
-                        "values"
-                      ],
+                      "required": ["id", "label", "type", "values"],
                       "additionalProperties": false
                     },
                     {
@@ -2257,11 +2032,7 @@
                         },
                         "$comment": {}
                       },
-                      "required": [
-                        "id",
-                        "label",
-                        "type"
-                      ],
+                      "required": ["id", "label", "type"],
                       "additionalProperties": false
                     }
                   ]
@@ -2289,20 +2060,12 @@
                   },
                   "$comment": {}
                 },
-                "required": [
-                  "nameColumn",
-                  "maxColumn"
-                ],
+                "required": ["nameColumn", "maxColumn"],
                 "additionalProperties": false
               },
               "$comment": {}
             },
-            "required": [
-              "id",
-              "label",
-              "maxItems",
-              "columns"
-            ],
+            "required": ["id", "label", "maxItems", "columns"],
             "additionalProperties": false
           },
           "maxItems": 20,
@@ -2382,10 +2145,7 @@
                   },
                   "start": {
                     "type": "string",
-                    "enum": [
-                      "full",
-                      "empty"
-                    ],
+                    "enum": ["full", "empty"],
                     "default": "full"
                   },
                   "hideWhen": {
@@ -2412,19 +2172,12 @@
                       },
                       "$comment": {}
                     },
-                    "required": [
-                      "field",
-                      "equals"
-                    ],
+                    "required": ["field", "equals"],
                     "additionalProperties": false
                   },
                   "$comment": {}
                 },
-                "required": [
-                  "id",
-                  "label",
-                  "max"
-                ],
+                "required": ["id", "label", "max"],
                 "additionalProperties": false
               },
               "maxItems": 60,
@@ -2456,12 +2209,7 @@
                   },
                   "$comment": {}
                 },
-                "required": [
-                  "id",
-                  "label",
-                  "min",
-                  "max"
-                ],
+                "required": ["id", "label", "min", "max"],
                 "additionalProperties": false
               },
               "maxItems": 30,
@@ -2489,11 +2237,7 @@
                   },
                   "$comment": {}
                 },
-                "required": [
-                  "id",
-                  "label",
-                  "maxLength"
-                ],
+                "required": ["id", "label", "maxLength"],
                 "additionalProperties": false
               },
               "maxItems": 12,
@@ -2516,10 +2260,7 @@
                   },
                   "$comment": {}
                 },
-                "required": [
-                  "id",
-                  "label"
-                ],
+                "required": ["id", "label"],
                 "additionalProperties": false
               },
               "maxItems": 80,
@@ -2532,9 +2273,7 @@
         },
         "$comment": {}
       },
-      "required": [
-        "version"
-      ],
+      "required": ["version"],
       "additionalProperties": false
     },
     "rests": {
@@ -2612,9 +2351,7 @@
                         },
                         "$comment": {}
                       },
-                      "required": [
-                        "const"
-                      ],
+                      "required": ["const"],
                       "additionalProperties": false
                     },
                     {
@@ -2627,11 +2364,7 @@
                         },
                         "round": {
                           "type": "string",
-                          "enum": [
-                            "down",
-                            "up",
-                            "nearest"
-                          ],
+                          "enum": ["down", "up", "nearest"],
                           "default": "down"
                         },
                         "min": {
@@ -2641,9 +2374,7 @@
                         },
                         "$comment": {}
                       },
-                      "required": [
-                        "fractionOfMax"
-                      ],
+                      "required": ["fractionOfMax"],
                       "additionalProperties": false
                     }
                   ]
@@ -2693,10 +2424,7 @@
           },
           "$comment": {}
         },
-        "required": [
-          "id",
-          "label"
-        ],
+        "required": ["id", "label"],
         "additionalProperties": false
       },
       "maxItems": 12,
@@ -2711,6 +2439,11 @@
           "maxLength": 1500
         },
         "sheetGuidance": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1500
+        },
+        "worldGuidance": {
           "type": "string",
           "minLength": 1,
           "maxLength": 1500
@@ -2765,10 +2498,7 @@
                   },
                   "$comment": {}
                 },
-                "required": [
-                  "list",
-                  "nameColumn"
-                ],
+                "required": ["list", "nameColumn"],
                 "additionalProperties": false
               },
               "maxItems": 8,
@@ -2781,9 +2511,7 @@
         },
         "$comment": {}
       },
-      "required": [
-        "checkGuidance"
-      ],
+      "required": ["checkGuidance"],
       "additionalProperties": false
     },
     "catalogs": {
@@ -2828,11 +2556,7 @@
                 },
                 "type": {
                   "type": "string",
-                  "enum": [
-                    "number",
-                    "text",
-                    "tags"
-                  ]
+                  "enum": ["number", "text", "tags"]
                 },
                 "startFrom": {
                   "type": "object",
@@ -2844,18 +2568,12 @@
                     },
                     "$comment": {}
                   },
-                  "required": [
-                    "field"
-                  ],
+                  "required": ["field"],
                   "additionalProperties": false
                 },
                 "$comment": {}
               },
-              "required": [
-                "id",
-                "label",
-                "type"
-              ],
+              "required": ["id", "label", "type"],
               "additionalProperties": false
             },
             "maxItems": 8
@@ -2877,10 +2595,7 @@
                   },
                   "$comment": {}
                 },
-                "required": [
-                  "label",
-                  "perCell"
-                ],
+                "required": ["label", "perCell"],
                 "additionalProperties": false
               },
               "$comment": {}
@@ -3032,15 +2747,11 @@
                             },
                             "$comment": {}
                           },
-                          "required": [
-                            "from"
-                          ],
+                          "required": ["from"],
                           "additionalProperties": false
                         },
                         "if": {
-                          "required": [
-                            "$comment"
-                          ]
+                          "required": ["$comment"]
                         },
                         "then": {
                           "minProperties": 2,
@@ -3056,10 +2767,7 @@
                       },
                       "$comment": {}
                     },
-                    "required": [
-                      "list",
-                      "values"
-                    ],
+                    "required": ["list", "values"],
                     "additionalProperties": false
                   },
                   "minItems": 1,
@@ -3070,13 +2778,7 @@
                   "properties": {
                     "kind": {
                       "type": "string",
-                      "enum": [
-                        "attack",
-                        "heal",
-                        "buff",
-                        "debuff",
-                        "utility"
-                      ]
+                      "enum": ["attack", "heal", "buff", "debuff", "utility"]
                     },
                     "range": {
                       "type": "number",
@@ -3087,11 +2789,7 @@
                       "properties": {
                         "shape": {
                           "type": "string",
-                          "enum": [
-                            "burst",
-                            "cone",
-                            "line"
-                          ]
+                          "enum": ["burst", "cone", "line"]
                         },
                         "size": {
                           "type": "number",
@@ -3099,20 +2797,12 @@
                         },
                         "$comment": {}
                       },
-                      "required": [
-                        "shape",
-                        "size"
-                      ],
+                      "required": ["shape", "size"],
                       "additionalProperties": false
                     },
                     "targets": {
                       "type": "string",
-                      "enum": [
-                        "self",
-                        "ally",
-                        "enemy",
-                        "any"
-                      ]
+                      "enum": ["self", "ally", "enemy", "any"]
                     },
                     "friendlyFire": {
                       "type": "boolean"
@@ -3150,18 +2840,11 @@
                         },
                         "onSuccess": {
                           "type": "string",
-                          "enum": [
-                            "none",
-                            "half",
-                            "negates"
-                          ]
+                          "enum": ["none", "half", "negates"]
                         },
                         "$comment": {}
                       },
-                      "required": [
-                        "save",
-                        "onSuccess"
-                      ],
+                      "required": ["save", "onSuccess"],
                       "additionalProperties": false
                     },
                     "cost": {
@@ -3180,10 +2863,7 @@
                           },
                           "$comment": {}
                         },
-                        "required": [
-                          "pool",
-                          "amount"
-                        ],
+                        "required": ["pool", "amount"],
                         "additionalProperties": false
                       },
                       "maxItems": 4
@@ -3211,18 +2891,12 @@
                     },
                     "$comment": {}
                   },
-                  "required": [
-                    "kind"
-                  ],
+                  "required": ["kind"],
                   "additionalProperties": false
                 },
                 "$comment": {}
               },
-              "required": [
-                "id",
-                "label",
-                "rows"
-              ],
+              "required": ["id", "label", "rows"],
               "additionalProperties": false
             },
             "maxItems": 2000
@@ -3234,22 +2908,14 @@
           },
           "$comment": {}
         },
-        "required": [
-          "id",
-          "label",
-          "feeds"
-        ],
+        "required": ["id", "label", "feeds"],
         "additionalProperties": false,
         "oneOf": [
           {
-            "required": [
-              "entries"
-            ]
+            "required": ["entries"]
           },
           {
-            "required": [
-              "asset"
-            ]
+            "required": ["asset"]
           }
         ]
       },
@@ -3268,9 +2934,7 @@
             },
             "$comment": {}
           },
-          "required": [
-            "pool"
-          ],
+          "required": ["pool"],
           "additionalProperties": false
         },
         "energy": {
@@ -3283,9 +2947,7 @@
             },
             "$comment": {}
           },
-          "required": [
-            "pool"
-          ],
+          "required": ["pool"],
           "additionalProperties": false
         },
         "slots": {
@@ -3305,10 +2967,7 @@
               },
               "$comment": {}
             },
-            "required": [
-              "pool",
-              "level"
-            ],
+            "required": ["pool", "level"],
             "additionalProperties": false
           },
           "maxItems": 12
@@ -3352,40 +3011,212 @@
                   },
                   "$comment": {}
                 },
-                "required": [
-                  "column",
-                  "equals"
-                ],
+                "required": ["column", "equals"],
                 "additionalProperties": false
               },
               "$comment": {}
             },
-            "required": [
-              "list"
-            ],
+            "required": ["list"],
             "additionalProperties": false
           },
           "maxItems": 8
         },
         "$comment": {}
       },
-      "required": [
-        "health"
-      ],
+      "required": ["health"],
       "additionalProperties": false
+    },
+    "layers": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "maxLength": 40,
+            "pattern": "^[a-z][a-z0-9_]*$"
+          },
+          "label": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "summary": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 300
+          },
+          "conflicts": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "maxLength": 40,
+              "pattern": "^[a-z][a-z0-9_]*$"
+            },
+            "maxItems": 12
+          },
+          "gm": {
+            "type": "object",
+            "properties": {
+              "guidance": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 4000
+              },
+              "worldGuidance": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 4000
+              },
+              "$comment": {}
+            },
+            "additionalProperties": false
+          },
+          "fields": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "maxLength": 40,
+                  "pattern": "^[a-z][a-z0-9_]*$"
+                },
+                "removeValues": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 80
+                  },
+                  "minItems": 1,
+                  "maxItems": 40
+                },
+                "default": {
+                  "type": "string",
+                  "maxLength": 80
+                },
+                "$comment": {}
+              },
+              "required": ["id", "removeValues"],
+              "additionalProperties": false
+            },
+            "maxItems": 24
+          },
+          "difficultyLadder": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "label": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 80
+                    },
+                    "dc": {
+                      "type": "integer",
+                      "minimum": -100,
+                      "maximum": 1000
+                    },
+                    "$comment": {}
+                  },
+                  "required": ["label", "dc"],
+                  "additionalProperties": false
+                },
+                "minItems": 1,
+                "maxItems": 12
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "label": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 80
+                    },
+                    "successes": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 100
+                    },
+                    "target": {
+                      "type": "integer",
+                      "minimum": 2,
+                      "maximum": 100
+                    },
+                    "$comment": {}
+                  },
+                  "required": ["label", "successes"],
+                  "additionalProperties": false
+                },
+                "minItems": 1,
+                "maxItems": 12
+              }
+            ]
+          },
+          "catalogs": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "maxLength": 40,
+                  "pattern": "^[a-z][a-z0-9_]*$"
+                },
+                "hide": {
+                  "type": "object",
+                  "properties": {
+                    "filter": {
+                      "type": "string",
+                      "maxLength": 40,
+                      "pattern": "^[a-z][a-z0-9_]*$"
+                    },
+                    "above": {
+                      "type": "number"
+                    },
+                    "below": {
+                      "type": "number"
+                    },
+                    "equals": {
+                      "type": "string",
+                      "maxLength": 80
+                    },
+                    "notIn": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "maxLength": 80
+                      },
+                      "minItems": 1,
+                      "maxItems": 24
+                    },
+                    "$comment": {}
+                  },
+                  "required": ["filter"],
+                  "additionalProperties": false
+                },
+                "$comment": {}
+              },
+              "required": ["id", "hide"],
+              "additionalProperties": false
+            },
+            "maxItems": 24
+          },
+          "$comment": {}
+        },
+        "required": ["id", "label"],
+        "additionalProperties": false
+      },
+      "maxItems": 12
     },
     "$comment": {},
     "$schema": {}
   },
-  "required": [
-    "schemaVersion",
-    "id",
-    "version",
-    "name",
-    "coverage",
-    "resolution",
-    "sheet",
-    "gm"
-  ],
+  "required": ["schemaVersion", "id", "version", "name", "coverage", "resolution", "sheet", "gm"],
   "additionalProperties": false
 }
