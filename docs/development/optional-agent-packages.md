@@ -664,6 +664,32 @@ Desktop uses a browse list with an adjacent detail region. Mobile uses one pane 
 
 An extraction is complete only when the base production client and server bundles no longer contain the package implementation, a fresh install cannot activate it without downloading the package, an upgraded install retains it, and package install/update/uninstall passes on desktop, mobile, and Termux-compatible filesystems.
 
+### Capability API 1.25: ruleset layers and world guidance
+
+A ruleset may declare an optional top-level `layers` array: named variants of itself (Low magic, Hard
+winter) that a player turns on when a game is created, frozen into that game's pin for its lifetime.
+The same release gives the base `gm` block an optional `worldGuidance` string, which world generation
+reads once at setup so the setting suits the rules the party will play by.
+
+```json
+{
+  "capabilityApi": { "major": 1, "minor": 25 },
+  "kind": ["ruleset"],
+  "contributions": { "assets": { "paths": ["ruleset.json"] } }
+}
+```
+
+A layer's effects are a closed set and every one of them narrows or appends: guidance added after the
+ruleset's own, values removed from an enum field, the difficulty ladder replaced by one of the same
+resolution kind, and catalog entries hidden from the sheet editor's picker. Nothing is added, so a
+character sheet stays readable whichever layers a game chose, and a layer brings no package code and no
+extra model call. Layers shipped by someone other than the ruleset's author are a later addition.
+
+Not a soft seam, for the same reason as 1.20 through 1.24: an Engine that does not know `layers` or
+`gm.worldGuidance` refuses the whole ruleset file, so install reads the verified bytes of `ruleset.json`
+and refuses either one under an older declaration. No permission, and no change for a ruleset with
+neither.
+
 ### Capability API 1.24: the dice-pool resolution kind
 
 A ruleset's `resolution` may declare `"kind": "dice-pool"` instead of `"dice-sum"`. The check then throws
