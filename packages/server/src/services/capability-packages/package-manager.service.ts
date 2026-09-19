@@ -538,12 +538,15 @@ export function getCapabilityPackageInstallIssue(
     }
     // A catalog file the ruleset names but the package never declared would install fine and then
     // leave the picker with nothing to open. Said at install, where the author can still fix it.
-    const declaredPaths = new Set((manifest.contributions?.assets?.paths ?? []).map(tryNormalizeArchivePath));
+    const declaredPaths = new Set(
+      (manifest.contributions?.assets?.paths ?? []).map(tryNormalizeArchivePath).filter((path) => path !== null),
+    );
     for (const catalog of catalogs) {
       const asset = catalog && typeof catalog === "object" ? (catalog as { asset?: unknown }).asset : undefined;
-      // An unusable path normalizes to null on both sides, and two nulls must not count as a match.
-      const normalized = typeof asset === "string" ? tryNormalizeArchivePath(asset) : null;
-      if (typeof asset === "string" && (normalized === null || !declaredPaths.has(normalized))) {
+      if (typeof asset !== "string") continue;
+      // A path that does not normalize is never a declared one, whatever else failed to normalize.
+      const normalized = tryNormalizeArchivePath(asset);
+      if (!normalized || !declaredPaths.has(normalized)) {
         return `The ruleset names the catalog file ${asset}, which is not listed in contributions.assets.paths`;
       }
     }
