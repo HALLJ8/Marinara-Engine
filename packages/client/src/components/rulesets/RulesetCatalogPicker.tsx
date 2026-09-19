@@ -6,6 +6,7 @@
 // this sheet is being edited against.
 import { useMemo, useRef, useState } from "react";
 import { Loader2 } from "lucide-react";
+import type { TFunction } from "i18next";
 import { useTranslation as useUiTranslation } from "react-i18next";
 import {
   isRulesetItemHidden,
@@ -51,11 +52,16 @@ function describeCatalogError(error: unknown, fallback: string): { message: stri
 }
 
 /** The values one entry carries for the catalog's declared filters, as small chips. Deduplicated,
- *  because two filters may well name the same word and one chip says it once. */
-function entryChips(entry: RulesetCatalogEntry, catalog: RulesetCatalogHeaderView): string[] {
+ *  because two filters may well name the same word and one chip says it once. A bare number says
+ *  nothing on its own, so a number filter's chip carries the filter's label too. */
+function entryChips(entry: RulesetCatalogEntry, catalog: RulesetCatalogHeaderView, t: TFunction): string[] {
   const chips = new Set<string>();
   for (const filter of catalog.filters ?? []) {
-    for (const text of catalogEntryFilterTexts(entry, filter.id)) chips.add(text);
+    for (const text of catalogEntryFilterTexts(entry, filter.id)) {
+      chips.add(
+        filter.type === "number" ? t("game.ruleset.catalog.filterChip", { label: filter.label, value: text }) : text,
+      );
+    }
   }
   return [...chips];
 }
@@ -199,7 +205,7 @@ export function RulesetCatalogPicker({
             )}
             {visible.map((entry) => {
               const added = catalogEntryAlreadyAdded(catalog.id, entry, catalog.feeds, build.lists);
-              const chips = entryChips(entry, catalog);
+              const chips = entryChips(entry, catalog, t);
               return (
                 <label
                   key={entry.id}
