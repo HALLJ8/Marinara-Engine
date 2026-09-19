@@ -122,7 +122,9 @@ import { normalizeGameSegmentEdit, serializeGameSegmentEdit, type GameSegmentEdi
 import { findReplayStoryboardKeyframe } from "../../lib/game-storyboard-keyframes";
 import {
   applyRulesetBattleResult,
+  isRulesetCombatFight,
   rulesetBattleCatalogIds,
+  rulesetCombatRecapLines,
   seedRulesetBattleParty,
   type RulesetCombatSeeds,
 } from "../../lib/ruleset-combat-bridge";
@@ -1144,6 +1146,12 @@ export function generatedEnemyToCombatant(enemy: CombatEnemy, index: number, fal
     element,
     combatClass,
     movementMode,
+    // The ruleset's own terms for this opponent, carried as the blueprint wrote them. The server is
+    // what looks a creature up, clamps a proposal onto a tier and decides which of the three it
+    // uses; a fight on any other style never reads them.
+    ...(typeof enemy.creature === "string" && enemy.creature.trim() ? { creature: enemy.creature.trim() } : {}),
+    ...(typeof enemy.tier === "string" && enemy.tier.trim() ? { tier: enemy.tier.trim() } : {}),
+    ...(enemy.proposed !== undefined ? { proposed: enemy.proposed } : {}),
   };
 }
 
@@ -8527,6 +8535,19 @@ function GameSurfaceComponent({
     rulesetBattleSeedsRef.current = null;
   }, [activeChatId]);
 
+  /** The rules THIS fight is resolved by, or null when it is one of Marinara's own. Read from the
+   *  blocks the ruleset declares rather than from what its coverage flag claims, because what
+   *  resolves a fight has to be what the file really says. */
+  const rulesetFightDefinition =
+    gameRuleset.status === "ok" &&
+    isRulesetCombatFight({
+      combatDirector: combatSetupConfig?.combatDirector === true,
+      definition: gameRuleset.definition,
+      anchor: combatStartMessageId,
+    })
+      ? gameRuleset.definition
+      : null;
+
   // The catalogs a bridged battle reads are fetched as soon as the game is open, so that starting a
   // battle finds them in the cache and seeds the party in the same tick a game without a ruleset
   // sets it. Nothing is fetched for a game whose ruleset has no `battle` block.
@@ -8539,9 +8560,20 @@ function GameSurfaceComponent({
   }, [battleDefinition, queryClient]);
 
   const startBattleParty = useCallback(
-    (party: Combatant[], apply: (party: Combatant[]) => void) => {
+    (party: Combatant[], apply: (party: Combatant[]) => void, anchor: string | null) => {
       const definition = gameRuleset.status === "ok" ? gameRuleset.definition : null;
-      if (!definition?.battle) {
+      // A fight the ruleset resolves reads the sheets on the server and writes every accepted step
+      // to them as it goes, so lending it a share of the Engine's hit points would be a second,
+      // disagreeing copy of the same numbers. The bridge stands aside for exactly that fight, and
+      // for nothing else: a ruleset with only a `battle` block still seeds here.
+      if (
+        !definition?.battle ||
+        isRulesetCombatFight({
+          combatDirector: combatSetupConfig?.combatDirector === true,
+          definition,
+          anchor,
+        })
+      ) {
         apply(party);
         return;
       }
@@ -8630,7 +8662,14 @@ function GameSurfaceComponent({
         if (applied || rulesetBattleSeedsRef.current === pending) setCombatGenerationPending(false);
       });
     },
-    [chatMeta.gameCharacterCards, gameRuleset, localizeUi, personaInfo?.name, queryClient],
+    [
+      chatMeta.gameCharacterCards,
+      combatSetupConfig?.combatDirector,
+      gameRuleset,
+      localizeUi,
+      personaInfo?.name,
+      queryClient,
+    ],
   );
 
   const hydrateGeneratedCombatState = useCallback(
@@ -8976,7 +9015,9 @@ function GameSurfaceComponent({
     if (isStreaming || scenePreparing || assetGenerationBlocksScene || directionsPlaying) return;
     if (latestNarrationText && !narrationDone) return;
 
-    startBattleParty(preparedCombatState.party, setCombatParty);
+    // The anchor this fight is about to hang off, set a few lines below: it is what decides whether
+    // the fight is the ruleset's own, so the seeding has to be told it before the state catches up.
+    startBattleParty(preparedCombatState.party, setCombatParty, preparedCombatState.messageId);
     setCombatEnemies(preparedCombatState.enemies);
     setCombatItemEffects(preparedCombatState.itemEffects);
     setCombatMechanics(preparedCombatState.mechanics);
@@ -9498,9 +9539,12 @@ function GameSurfaceComponent({
       return;
     }
 
+    // The `[combat:]` tag path set the anchor before it queued this encounter, so it is already in
+    // hand here.
     startBattleParty(
       partyCombatants.map((c) => ({ ...c, tactics: assignCombatTactics(c, Math.floor(Math.random() * 0x100000000)) })),
       setCombatParty,
+      combatStartMessageId,
     );
   }, [
     pendingEncounter,
@@ -9511,6 +9555,7 @@ function GameSurfaceComponent({
     chatMeta.gameNpcs,
     characters,
     characterMap,
+    combatStartMessageId,
     npcs,
     startBattleParty,
     transitionGameState,
@@ -10562,9 +10607,14 @@ function GameSurfaceComponent({
       // (the empty-party guard, deleting the turn that started it) never reaches here and writes
       // nothing back, because that fight did not happen.
       const rulesetDefinition = gameRuleset.status === "ok" ? gameRuleset.definition : null;
+      // A fight the ruleset resolved already wrote every accepted step to the sheets as it happened,
+      // so there is nothing to write back here and nothing to measure against a seed: its own lines
+      // below say what it ended on, in its own pool and its own condition names.
+      const fought =
+        rulesetDefinition && summary.ruleset ? { definition: rulesetDefinition, ruleset: summary.ruleset } : null;
       // Plain English, like every other line of the recap: it is a prompt, not UI copy.
       let sheetRecapLine: string | null = null;
-      if (rulesetDefinition?.battle) {
+      if (rulesetDefinition?.battle && !fought) {
         const current = useGameStateStore.getState().current;
         // The patch replaces the WHOLE live object, so a snapshot that is missing or belongs to
         // another chat would wipe every character's state. `handleRulesetLiveChange` refuses on
@@ -10618,18 +10668,22 @@ function GameSurfaceComponent({
           : "";
 
       // Flee on round 1 means no round actually resolved — phrase it accordingly.
+      const rounds = fought ? fought.ruleset.rounds : summary.rounds;
       const roundsPhrase =
-        outcome === "flee" && summary.rounds <= 1
+        outcome === "flee" && rounds <= 1
           ? "before combat began"
-          : `after ${summary.rounds} round${summary.rounds === 1 ? "" : "s"}`;
+          : `after ${rounds} round${rounds === 1 ? "" : "s"}`;
 
       const recapLines: string[] = [];
       recapLines.push(`OUTCOME: ${outcome.toUpperCase()} (${roundsPhrase})`);
       if (defeatedEnemies.length > 0) recapLines.push(`Defeated: ${defeatedEnemies.join(", ")}`);
-      if (survivingEnemies.length > 0) {
+      if (survivingEnemies.length > 0 && !fought) {
         recapLines.push(`Survived: ${survivingEnemies.map((e) => `${e.name} (${e.hp}/${e.maxHp} HP)`).join(", ")}`);
       }
-      recapLines.push(`Party: ${partyStatus.join("; ")}`);
+      // The ruleset's own numbers in place of the percentage lines: the fight was not fought on a
+      // share of a maximum, so the Game Master is never shown one.
+      if (fought) recapLines.push(...rulesetCombatRecapLines(fought.definition, fought.ruleset));
+      else recapLines.push(`Party: ${partyStatus.join("; ")}`);
       if (sheetRecapLine) recapLines.push(sheetRecapLine);
       if (summary.battlefieldSummary?.trim()) recapLines.push(`Battlefield: ${summary.battlefieldSummary.trim()}`);
       if (lootText) recapLines.push(`Loot: ${lootText}`);
@@ -12999,7 +13053,8 @@ function GameSurfaceComponent({
                               key={`${activeChatId}:${combatStartMessageId}`}
                               chatId={activeChatId}
                               anchor={combatStartMessageId}
-                              style={effectiveCombatStyle}
+                              style={rulesetFightDefinition ? "ruleset" : effectiveCombatStyle}
+                              rulesetDefinition={rulesetFightDefinition ?? undefined}
                               battlefield={combatSceneMeta?.battlefield ?? undefined}
                               party={combatParty}
                               enemies={combatEnemies}

@@ -1,17 +1,21 @@
 import { CombatWeatherSummary } from "./CombatWeatherSummary";
-import { useEffect, useRef, type ComponentProps } from "react";
-import type { CombatDecisionOption, TacticalBattlefieldBrief } from "@marinara-engine/shared";
+import { useEffect, useMemo, useRef, type ComponentProps } from "react";
+import type { CombatDecisionOption, RulesetDefinition, TacticalBattlefieldBrief } from "@marinara-engine/shared";
 import { useTranslation } from "react-i18next";
 import { useDirectedCombat } from "../../hooks/use-directed-combat";
 import { GameCombatUI } from "./GameCombatUI";
+import { RulesetCombatStatus } from "./RulesetCombatStatus";
 import { TacticalCombatUI } from "./TacticalCombatUI";
 
 type Props = ComponentProps<typeof GameCombatUI> & {
   anchor: string;
-  style: "classic" | "tactical";
+  style: "classic" | "tactical" | "ruleset";
   environment?: string;
   formation?: string;
   battlefield?: TacticalBattlefieldBrief;
+  /** The rules the game is pinned to, for a fight the ruleset resolves. It is what names budgets,
+   *  conditions, saves and tiers on screen, so the fight reads in the ruleset's own words. */
+  rulesetDefinition?: RulesetDefinition;
 };
 export function DirectedCombatUI(props: Props) {
   const { t } = useTranslation();
@@ -39,6 +43,11 @@ export function DirectedCombatUI(props: Props) {
   useEffect(() => {
     if (s?.window?.controller === "manual") firstChoice.current?.focus();
   }, [s?.window?.id, s?.window?.controller]);
+  const definition = props.rulesetDefinition;
+  const budgetLabel = useMemo(() => {
+    const labels = new Map((definition?.combat?.economy.budgets ?? []).map((budget) => [budget.id, budget.label]));
+    return (id: string) => labels.get(id) ?? id;
+  }, [definition]);
   if (loading || !s)
     return (
       <div className="flex h-full items-center justify-center p-4 text-[var(--foreground)]" role="status">
@@ -59,10 +68,17 @@ export function DirectedCombatUI(props: Props) {
       y: c.to?.y ?? 0,
     });
   const finish = () => {
-    if (s.summary) props.onCombatEnd(s.summary.outcome, s.summary);
-    else send({ type: "flee" });
+    // A ruleset fight hands over its OWN summary beside the Engine's: the recap is written from the
+    // ruleset's pools, its conditions and its rounds, not from a share of a maximum.
+    if (s.summary) {
+      const fought = s.ruleset?.summary;
+      props.onCombatEnd(s.summary.outcome, fought ? { ...s.summary, ruleset: fought } : s.summary);
+    } else send({ type: "flee" });
   };
   const canAct = s.stage === "action" && !s.window && !busy;
+  // A ruleset fight only reads as one when the rules it was started on can still be read here, which
+  // is exactly when the server sends its view. Without either, the shell is the Classic one.
+  const fight = s.style === "ruleset" && definition ? s.ruleset : undefined;
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="relative min-h-0 flex-1 overflow-hidden">
@@ -106,6 +122,18 @@ export function DirectedCombatUI(props: Props) {
               outcome: s.outcome,
               onAction: (action) => send(action.type === "flee" ? { type: "flee" } : { type: "classic", action }),
               onControl: (unitId, controller) => send({ type: "control", unitId, controller }),
+              ...(fight
+                ? {
+                    ruleset: {
+                      view: fight,
+                      budgetLabel,
+                      busy,
+                      onChoose: (optionId: string, targetIds: string[], payWith?: string) =>
+                        send({ type: "ruleset", optionId, targetIds, ...(payWith ? { payWith } : {}) }),
+                      onFlee: () => send({ type: "flee" }),
+                    },
+                  }
+                : {}),
             }}
           />
         )}
@@ -123,27 +151,32 @@ export function DirectedCombatUI(props: Props) {
             </button>
           </div>
         )}
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-[var(--muted-foreground)]">
-          {s.enemies
-            .filter((u) => u.boss)
-            .map((u) => (
-              <span key={u.id}>
-                {t("game.combat.director.budget", {
-                  name: u.name,
-                  points: s.budgets[u.id]?.legendary ?? 0,
-                  max: u.boss!.points,
-                })}
-              </span>
-            ))}
-          {s.party
-            .filter((u) => u.hp > 0 && u.skills?.some((k) => k.reaction))
-            .map((u) => (
-              <span key={u.id}>
-                {t("game.combat.director.reactions", { name: u.name, count: s.budgets[u.id]?.reaction ?? 0 })}
-              </span>
-            ))}
-          {s.actorId && <span>{t("game.combat.director.active", { name: name(s.actorId) })}</span>}
-        </div>
+        {/* The Engine's own legendary points and reactions belong to the other two styles: a fight
+            the ruleset resolves spends the ruleset's budgets, which the panel below reports. */}
+        {!fight && (
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-[var(--muted-foreground)]">
+            {s.enemies
+              .filter((u) => u.boss)
+              .map((u) => (
+                <span key={u.id}>
+                  {t("game.combat.director.budget", {
+                    name: u.name,
+                    points: s.budgets[u.id]?.legendary ?? 0,
+                    max: u.boss!.points,
+                  })}
+                </span>
+              ))}
+            {s.party
+              .filter((u) => u.hp > 0 && u.skills?.some((k) => k.reaction))
+              .map((u) => (
+                <span key={u.id}>
+                  {t("game.combat.director.reactions", { name: u.name, count: s.budgets[u.id]?.reaction ?? 0 })}
+                </span>
+              ))}
+            {s.actorId && <span>{t("game.combat.director.active", { name: name(s.actorId) })}</span>}
+          </div>
+        )}
+        {fight && definition && <RulesetCombatStatus definition={definition} view={fight} />}
         {s.stage === "select" && s.style === "classic" && (
           <button
             disabled={busy}
