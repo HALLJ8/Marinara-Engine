@@ -13,8 +13,11 @@
 // the `/create` handler), and must never break a game that already pinned one.
 // ──────────────────────────────────────────────
 import {
+  activeRulesetLayers,
+  resolveRulesetLayers,
   isCommunityRulesetId,
   parseRulesetDefinition,
+  rulesetLayerOptionKey,
   rulesetRefSchema,
   RULESET_MAX_BYTES,
   type CommunityRulesetSource,
@@ -146,7 +149,19 @@ export function buildRulesetRegistry(
 
 export type ResolvedGameRuleset =
   | { status: "legacy" }
-  | { status: "ok"; ref: RulesetRef; definition: RulesetDefinition; packageId: string | null }
+  | {
+      status: "ok";
+      ref: RulesetRef;
+      /** The rules this game actually plays by: the registered definition with the layers the pin
+       *  turned on. Every caller reads this, so the prompt, the resolver, the sheet block, the
+       *  editor and the battle bridge all see the layered ruleset with no change of their own. */
+      definition: RulesetDefinition;
+      /** The ruleset as its author shipped it, for the rare caller that wants the unlayered file. */
+      baseDefinition: RulesetDefinition;
+      /** The active layers, in declaration order, for a UI that names what this game turned on. */
+      layers: { id: string; label: string }[];
+      packageId: string | null;
+    }
   | {
       status: "unavailable";
       /** `unreadable-pin`: the stored pin is malformed. `missing`: nothing installed provides the id.
@@ -157,6 +172,58 @@ export type ResolvedGameRuleset =
       ref: RulesetRef | null;
       installedVersion: number | null;
     };
+
+/** The effective ruleset for a pin: the registered definition with the layers the pin froze in.
+ *  Layers are applied HERE, in the one place every caller already goes through, and never throw: a
+ *  layer the Engine could not apply is left out and the game keeps its rules. A chosen layer the
+ *  file does not have, or the later of a conflicting pair, is a debug line rather than a warning,
+ *  because this runs on every turn and the same pin would repeat it for the life of the game. */
+function resolvedWithLayers(
+  ref: RulesetRef,
+  definition: RulesetDefinition,
+  packageId: string | null,
+): ResolvedGameRuleset {
+  const active = activeRulesetLayers(definition, ref.options);
+  if (active.length > 0 || Object.keys(ref.options).length > 0) {
+    const declared = new Set((definition.layers ?? []).map((layer) => layer.id));
+    const chosen = Object.keys(ref.options).filter((key) => ref.options[key] === true);
+    const applied = new Set(active.map((layer) => rulesetLayerOptionKey(layer.id)));
+    for (const key of chosen) {
+      if (applied.has(key)) continue;
+      const id = key.startsWith("layer.") ? key.slice("layer.".length) : null;
+      if (id === null) continue;
+      logger.debug(
+        '[game/rulesets] Ruleset "%s" %s the layer "%s" this game pinned; it was not applied',
+        definition.id,
+        declared.has(id) ? "drops a conflicting choice of" : "no longer declares",
+        id,
+      );
+    }
+  }
+  // ponytail: no cache. With a layer on, this re-validates one definition per resolution, which
+  // is what `buildRulesetRegistry` already does for EVERY installed ruleset on every call, because
+  // the registry is deliberately re-read so install, update and import need no invalidation. A
+  // cache here would have nothing stable to key on (the registry and its definitions are new
+  // objects each time) until the registry itself is cached, and that is the upgrade path.
+  const layered = resolveRulesetLayers(definition, ref.options);
+  for (const layer of active) {
+    if (layered.applied.includes(layer)) continue;
+    logger.debug(
+      '[game/rulesets] The layer "%s" of ruleset "%s" does not validate with the layers before it; it was not applied',
+      layer.id,
+      definition.id,
+    );
+  }
+  return {
+    status: "ok",
+    ref,
+    definition: layered.definition,
+    baseDefinition: definition,
+    // The layers whose rules are REALLY on, so a name is never shown for a layer that was skipped.
+    layers: layered.applied.map((layer) => ({ id: layer.id, label: layer.label })),
+    packageId,
+  };
+}
 
 /** Resolve a game's pinned ruleset, matched on id AND supplying package. An installed definition NEWER than the pin is accepted, because
  *  sheets are read tolerantly against the current schema; an OLDER one is not, because the game may
@@ -182,12 +249,12 @@ export function resolveGameRuleset(metadata: Record<string, unknown>, registry: 
     if (!exact) {
       return { status: "unavailable", reason: "version-missing", ref, installedVersion: registered.definition.version };
     }
-    return { status: "ok", ref, definition: exact, packageId: null };
+    return resolvedWithLayers(ref, exact, null);
   }
   if (registered.definition.version < ref.version) {
     return { status: "unavailable", reason: "older-installed", ref, installedVersion: registered.definition.version };
   }
-  return { status: "ok", ref, definition: registered.definition, packageId: registered.packageId };
+  return resolvedWithLayers(ref, registered.definition, registered.packageId);
 }
 
 /** The pin for a new game on the given registered ruleset. A community ruleset also records where

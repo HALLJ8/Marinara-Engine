@@ -18,6 +18,7 @@ import {
   type RulesetCatalogPayload,
   type RulesetDefinition,
   type RulesetField,
+  type RulesetLayerOptions,
   type RulesetListColumn,
   type RulesetSheetBuild,
   type RulesetSheetEnvelope,
@@ -250,10 +251,15 @@ function TrainedRows({
 
 export function RulesetSheetEditor({
   definition,
+  layerOptions,
   envelope,
   onChange,
 }: {
   definition: RulesetDefinition;
+  /** The pinned game's layer choices, which the catalog picker leaves hidden entries out by. The
+   *  character and persona editors edit a sheet outside any game, so they pass nothing and the
+   *  picker offers the ruleset's whole catalog. */
+  layerOptions?: RulesetLayerOptions;
   envelope: RulesetSheetEnvelope | undefined;
   onChange: (envelope: RulesetSheetEnvelope) => void;
 }) {
@@ -605,6 +611,7 @@ export function RulesetSheetEditor({
           open
           onClose={() => setPickerId(null)}
           definition={definition}
+          layerOptions={layerOptions}
           catalog={openPicker}
           build={build}
           // Every list the pick touches moves in ONE envelope change, so a two-list entry can never

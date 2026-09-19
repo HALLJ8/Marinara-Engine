@@ -9870,6 +9870,10 @@ function GameSurfaceComponent({
     return {
       status: "ok",
       definition: gameRuleset.definition,
+      // What the pin turned on: the names the sheet heads itself with, and the record the catalog
+      // picker leaves hidden entries out by.
+      layers: gameRuleset.layers,
+      layerOptions: gameRuleset.layerOptions,
       envelope: parsed?.success ? parsed.data : undefined,
       live: gameSnapshot?.rulesetLive?.[normalizeCharacterLookupName(cardTitle)],
       onLiveChange: (next) => handleRulesetLiveChange(cardTitle, next),

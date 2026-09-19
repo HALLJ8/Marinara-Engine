@@ -13,6 +13,7 @@ import {
   type RulesetCatalogEntry,
   type RulesetCatalogHeader,
   type RulesetDefinition,
+  type RulesetLayerOptions,
   type RulesetSheetBuild,
 } from "@marinara-engine/shared";
 import { rulesetBattleCatalogIds } from "../../lib/ruleset-combat-bridge";
@@ -28,6 +29,7 @@ import {
   filterCatalogEntries,
   formatCatalogMechanics,
   planCatalogAddition,
+  visibleCatalogEntries,
   type CatalogListRow,
 } from "../../lib/ruleset-catalog";
 import { Modal } from "../ui/Modal";
@@ -71,6 +73,7 @@ export function RulesetCatalogPicker({
   open,
   onClose,
   definition,
+  layerOptions,
   catalog,
   build,
   onAdd,
@@ -78,6 +81,9 @@ export function RulesetCatalogPicker({
   open: boolean;
   onClose: () => void;
   definition: RulesetDefinition;
+  /** The pinned game's layer choices. A layer may declare that a catalog's entries are out of play
+   *  under it, and those are not offered here. Nothing is hidden when no game is pinned. */
+  layerOptions?: RulesetLayerOptions;
   catalog: RulesetCatalogHeaderView;
   build: RulesetSheetBuild;
   /** The lists that change, each with its full new rows, for one commit. */
@@ -91,7 +97,13 @@ export function RulesetCatalogPicker({
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
 
   const query = useRulesetCatalog(definition.id, catalog.id, definition.version, open);
-  const entries = useMemo(() => query.data?.entries ?? [], [query.data]);
+  // Narrowed before anything else reads them, so a filter never offers a value only a hidden entry
+  // carries and the match count is the count of entries that can really be picked. The query itself
+  // is untouched, which is what keeps Refresh from ruleset and the scaled columns whole.
+  const entries = useMemo(
+    () => visibleCatalogEntries(definition, layerOptions, catalog.id, query.data?.entries ?? []),
+    [catalog.id, definition, layerOptions, query.data],
+  );
 
   const views = useMemo(
     () => catalogFilterViews(catalog, entries, definition, build),

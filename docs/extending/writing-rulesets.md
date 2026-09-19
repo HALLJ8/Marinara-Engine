@@ -51,6 +51,7 @@ You may add a `"$comment": "..."` line to any object in the file to leave yourse
 | `gm`            | The text the Game Master model is given, and which sheet values it sees for each character.       |
 | `catalogs`      | Optional. Ready-made entries the sheet editor offers, so players do not type long lists by hand.  |
 | `battle`        | Optional. What a battle may read from the sheet, and what it writes back afterwards.              |
+| `layers`        | Optional. Variants of your ruleset a player turns on when a game is created.                      |
 
 The file may be up to 256 KB. Text that ends up in a prompt (names, labels, Game Master text) cannot contain line breaks, square brackets, or double curly braces.
 
@@ -179,6 +180,7 @@ A rest is a list of restore steps and things to clear. Each step names one targe
 
 - `checkGuidance` replaces the built-in paragraph that tells the Game Master how to ask for a check. Say which system this is and when to call for a roll. The Game Master only names the skill and the difficulty. The Engine rolls the dice and does the arithmetic from the sheet, so do not ask the model to do math.
 - `sheetGuidance` introduces the character sheets in the prompt. Use it to say which resources matter and when to spend them.
+- `worldGuidance` is optional and is read once, when the world is generated, so the setting the Game Master invents suits your rules: no gunpowder, magic is rare, the dead walk. It never reaches a turn.
 - `sheetSummary` chooses which fields, derived values, and list rows the Game Master sees for each character. The Engine always shows ability modifiers, trained skills and saves, and live values. Keep the rest short, because it is sent on every turn.
 
 ## Catalogs: ready-made entries for the sheet's lists
@@ -454,6 +456,74 @@ A catalog entry's `mechanics` block is read like this:
 
 `coverage.combat` is separate and still means what it meant: set it only when battles really do
 follow your system's rules, which no ruleset can do from a file today.
+
+## Layers: variants of your own ruleset
+
+A layer is a named variant of your ruleset that the player turns on when they create a game: Low
+magic, Hard winter, a grittier difficulty. Layers live in the ruleset file, in an optional
+`layers` array, so they travel with it and can never go missing from a game that used them. The
+wizard shows them as toggles under your ruleset, and the choice is fixed for that game's lifetime,
+exactly like the ruleset itself.
+
+```json
+"layers": [
+  {
+    "id": "hard_winter",
+    "label": "Hard winter",
+    "summary": "Cold, hunger and short days. Everything is harder.",
+    "conflicts": ["mud_season"],
+    "gm": {
+      "guidance": "Hard winter is on. Let a failed check cost warmth, food or daylight as well as progress.",
+      "worldGuidance": "Hard winter is on. Build a world of closed roads, thin stores and rationed settlements."
+    },
+    "fields": [{ "id": "calling", "removeValues": ["Sailor"], "default": "Hauler" }],
+    "difficultyLadder": [{ "label": "Easy", "dc": 7 }],
+    "catalogs": [{ "id": "knacks", "hide": { "filter": "grit", "above": 0 } }]
+  },
+  {
+    "id": "mud_season",
+    "label": "Mud season",
+    "summary": "Thaw, flooded roads and slow going."
+  }
+]
+```
+
+**What a layer can do.** The list is closed, and every effect either narrows something or adds text:
+
+- `gm.guidance` is appended to your `gm.checkGuidance`, after your own text and after any earlier
+  layer's. `gm.worldGuidance` is appended to `gm.worldGuidance` the same way.
+- `fields` takes values out of an **enum** field. `removeValues` names values the field already
+  has, at least one has to survive, and if the field's `default` is one of them the layer names a
+  `default` that survives instead.
+- `difficultyLadder` replaces your ladder with another one, in the shape of your own resolution
+  kind: `{label, dc}` for `dice-sum` and `{label, successes, target?}` for `dice-pool`. It is held
+  to exactly the checks your own ladder is held to. When several active layers declare one, the
+  last of them wins.
+- `catalogs` hides entries from the sheet editor's picker. Each rule names one of that catalog's
+  declared `filters` and exactly one comparison: `above` or `below` for a `number` filter,
+  `equals` or `notIn` for a `text` or `tags` one. An entry that does not set that filter at all is
+  never hidden.
+
+**What a layer cannot do.** It cannot add an enum value, add a field, a skill, a pool or a rest,
+change the resolution kind, touch live state or combat numbers, or add a model call. A value a
+layer _added_ would be unknown to every other reader of the sheet, so values only ever go away.
+Anything beyond this list is a change to the ruleset itself, or a second ruleset.
+
+**Conflicts.** `conflicts` names layers that cannot be on together. Naming one side of the pair is
+enough. The wizard disables the other toggle, and if a saved choice somehow has both, the one
+declared **later** is dropped, so the same two choices always give the same rules.
+
+**A sheet that already holds a removed value keeps it.** Nothing rewrites a character. The editor
+simply stops offering the value, and a character who already had it shows it as what it is. Turn
+the layer off in a new game and the value is offered again. The same is true of a hidden catalog
+entry: it is left out of the picker, and a row a player already picked stays on the sheet.
+
+**Limits.** 12 layers per ruleset, and 4000 characters of guidance per layer counting both strings
+together. A packaged ruleset that declares `layers`, or a base `gm.worldGuidance`, needs Capability
+API 1.25. A ruleset you import is validated by the Engine that reads it, so it needs nothing.
+
+**Layers written by somebody else** (a Low Magic layer for a ruleset you did not write, shipped in
+its own file) are a later addition. Today a layer ships inside the ruleset it belongs to.
 
 ## Trying your ruleset
 

@@ -58,9 +58,22 @@ function boundScaledColumns(node) {
   }
 }
 
+// A layer's `hide` compares a catalog filter exactly one way. That too is a refinement, so the
+// editor is told here. The node is found by its shape: `filter` beside the four comparisons.
+function requireOneHideComparison(node) {
+  if (Array.isArray(node)) return node.forEach(requireOneHideComparison);
+  if (!node || typeof node !== "object") return;
+  Object.values(node).forEach(requireOneHideComparison);
+  const keys = ["above", "below", "equals", "notIn"];
+  if (node.type === "object" && node.properties?.filter && keys.every((key) => node.properties[key])) {
+    node.oneOf = keys.map((key) => ({ required: [key] }));
+  }
+}
+
 const schema = zodToJsonSchema(rulesetDefinitionSchema, { $refStrategy: "none", target: "jsonSchema7" });
 requireOneCatalogSource(schema);
 boundScaledColumns(schema);
+requireOneHideComparison(schema);
 allowAnnotations(schema);
 const text = `${JSON.stringify(
   {

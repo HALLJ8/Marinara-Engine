@@ -576,7 +576,10 @@ export function resolveGameSetupImport(
           id: installedRuleset.definition.id,
           version: installedRuleset.definition.version,
           packageId: installedRuleset.packageId,
-          options: {},
+          // The layer choices ride along as the file wrote them. The wizard checks them against the
+          // definition installed here and drops anything it no longer has, so nothing that reaches
+          // the create call can name a layer this ruleset does not offer.
+          options: sourceConfig.ruleset?.options ?? {},
         },
       }
     : {};

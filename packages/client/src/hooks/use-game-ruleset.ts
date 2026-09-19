@@ -13,6 +13,7 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
+  resolveRulesetLayers,
   rulesetRefSchema,
   type InstalledRuleset,
   type RulesetDefinition,
@@ -24,7 +25,20 @@ import { capabilityPackageKeys, useInstalledRulesets } from "./use-capability-pa
 export type ResolvedGameRulesetClient =
   | { status: "none" }
   | { status: "loading"; ref: RulesetRef }
-  | { status: "ok"; ref: RulesetRef; definition: RulesetDefinition }
+  | {
+      status: "ok";
+      ref: RulesetRef;
+      /** The rules this game actually plays by: the installed definition with the pin's layers on
+       *  it. Every reader wants this one, which is why it keeps the plain name. */
+      definition: RulesetDefinition;
+      /** The definition as the package ships it, before any layer. */
+      baseDefinition: RulesetDefinition;
+      /** The layers the pin turned on, in the order they applied, for naming them on screen. */
+      layers: Array<{ id: string; label: string }>;
+      /** The option record of the APPLIED layers only. The catalog picker hides entries by this,
+       *  never by the pin's own record, so a skipped layer hides nothing. */
+      layerOptions: RulesetRef["options"];
+    }
   /** The pin cannot be honoured here: unreadable, not installed, another package's, or older. */
   | { status: "unavailable"; ref: RulesetRef | null };
 
@@ -63,6 +77,24 @@ export function useGameRuleset(chatMeta: Record<string, unknown> | null | undefi
   const exactFailed = exact.isError;
 
   return useMemo<ResolvedGameRulesetClient>(() => {
+    // The server resolves the pin the same way, in `resolveGameRuleset`: the layers the game chose
+    // are applied once, here, so the in-game sheet, the battle bridge and the sheet editor all read
+    // the rules the Game Master is playing by. `applyRulesetLayers` hands back the SAME object when
+    // no layer is on, and this memo is the only thing that builds it, so the reference downstream
+    // memos key on is stable as long as neither the definition nor the pin moves.
+    const resolved = (definition: RulesetDefinition): ResolvedGameRulesetClient => {
+      const layered = resolveRulesetLayers(definition, ref!.options);
+      return {
+        status: "ok",
+        ref: ref!,
+        definition: layered.definition,
+        baseDefinition: definition,
+        // Only the layers whose rules are really on: a layer that was skipped shows no name and
+        // hides nothing in the picker.
+        layers: layered.applied.map((layer) => ({ id: layer.id, label: layer.label })),
+        layerOptions: layered.options,
+      };
+    };
     if (!hasPin) return { status: "none" };
     if (!ref) return { status: "unavailable", ref: null };
     // A failed lookup says nothing about what is installed, but the consequence for this game is
@@ -73,13 +105,13 @@ export function useGameRuleset(chatMeta: Record<string, unknown> | null | undefi
     if (!match) return { status: "unavailable", ref };
     if (match.versions) {
       // Imported: the exact pinned version or nothing, like the server.
-      if (match.definition.version === ref.version) return { status: "ok", ref, definition: match.definition };
+      if (match.definition.version === ref.version) return resolved(match.definition);
       if (!match.versions.includes(ref.version) || exactFailed) return { status: "unavailable", ref };
-      return exactDefinition ? { status: "ok", ref, definition: exactDefinition } : { status: "loading", ref };
+      return exactDefinition ? resolved(exactDefinition) : { status: "loading", ref };
     }
     // A NEWER installed package definition is fine — sheets are read tolerantly against the current
     // schema. An OLDER one is not: the game may depend on something it does not declare.
     if (match.definition.version < ref.version) return { status: "unavailable", ref };
-    return { status: "ok", ref, definition: match.definition };
+    return resolved(match.definition);
   }, [exactDefinition, exactFailed, hasPin, isError, isSuccess, match, ref]);
 }

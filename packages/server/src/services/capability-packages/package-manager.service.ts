@@ -547,7 +547,13 @@ export function getCapabilityPackageInstallIssue(
   }
   const ruleset =
     rulesetDocument && typeof rulesetDocument === "object"
-      ? (rulesetDocument as { catalogs?: unknown; battle?: unknown; resolution?: unknown })
+      ? (rulesetDocument as {
+          catalogs?: unknown;
+          battle?: unknown;
+          resolution?: unknown;
+          layers?: unknown;
+          gm?: unknown;
+        })
       : undefined;
   const api = manifest.schemaVersion === 2 ? manifest.capabilityApi : null;
   const declaresApi = (minor: number) => !!api && (api.major > 1 || (api.major === 1 && api.minor >= minor));
@@ -593,6 +599,16 @@ export function getCapabilityPackageInstallIssue(
       : undefined;
   if (resolution?.kind === "dice-pool" && !declaresApi(24)) {
     return "A ruleset with a dice-pool resolution requires schemaVersion 2 and capabilityApi 1.24 or newer";
+  }
+  // Layers and the base world-generation slot are new keys in the same strict file, so they are
+  // read the same way and for the same reason as everything above: an Engine that does not know
+  // the key refuses the whole file, and the package would install with no rules at all.
+  if (Array.isArray(ruleset?.layers) && ruleset.layers.length > 0 && !declaresApi(25)) {
+    return "A ruleset with layers requires schemaVersion 2 and capabilityApi 1.25 or newer";
+  }
+  const gm = ruleset?.gm && typeof ruleset.gm === "object" ? (ruleset.gm as { worldGuidance?: unknown }) : undefined;
+  if (gm?.worldGuidance !== undefined && !declaresApi(25)) {
+    return "A ruleset with gm.worldGuidance requires schemaVersion 2 and capabilityApi 1.25 or newer";
   }
   return null;
 }

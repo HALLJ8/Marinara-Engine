@@ -1166,6 +1166,10 @@ export interface SetupPromptContext {
   customHudWidgets?: HudWidget[];
   /** Selected constant lorebook canon to bake into world generation */
   lorebookContext?: string | null;
+  /** `gm.worldGuidance` from the game's pinned ruleset, with its active layers appended. The only
+   *  ruleset text world generation reads: everything else a ruleset says reaches the per-turn
+   *  reminder instead, because the world is designed once and the sheets change every turn. */
+  rulesetWorldGuidance?: string | null;
   /** Language for natural-language JSON values */
   language?: string;
   /** User-overridable GM instruction body that will be used after setup. */
@@ -1235,6 +1239,15 @@ export function buildSetupPrompt(ctx: SetupPromptContext = {}): string {
       `Selected constant lorebook canon that MUST be treated as true for this world:`,
       ctx.lorebookContext.trim(),
       `</lorebook_context>`,
+    );
+  }
+  const rulesetWorldGuidance = normalizePromptText(ctx.rulesetWorldGuidance);
+  if (rulesetWorldGuidance) {
+    contextSections.push(
+      `<ruleset_world>`,
+      `This game runs on a rules system its author wrote. Design the world so it fits these rules:`,
+      rulesetWorldGuidance,
+      `</ruleset_world>`,
     );
   }
   if (ctx.customHudWidgets?.length) {

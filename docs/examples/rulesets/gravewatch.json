@@ -103,5 +103,23 @@
       "fields": ["post"],
       "derived": ["resolve_max"]
     }
-  }
+  },
+  "layers": [
+    {
+      "$comment": "A layer replaces the ladder in the shape of its OWN resolution kind, so a pool ruleset swaps counts of successes and per-step targets, never a DC.",
+      "id": "long_night",
+      "label": "The long night",
+      "summary": "The sun does not come back. Every difficulty asks for more.",
+      "gm": {
+        "guidance": "The long night is on. The dark presses on everything a warden tries, so use the harsher ladder and let failure leave a mark that lasts past the scene.",
+        "worldGuidance": "The long night is on. Build a world without daylight: lantern oil is currency, the barrow roads are open all hours, and every settlement is a ring of light with something outside it."
+      },
+      "difficultyLadder": [
+        { "label": "Plain work", "successes": 1, "target": 7 },
+        { "label": "Awkward", "successes": 2, "target": 8 },
+        { "label": "Grim", "successes": 4, "target": 9 },
+        { "label": "Hopeless", "successes": 6, "target": 9 }
+      ]
+    }
+  ]
 }
