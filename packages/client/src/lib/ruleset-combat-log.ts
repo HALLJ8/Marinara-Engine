@@ -14,6 +14,7 @@ import type {
   DirectedRulesetView,
   RulesetCombatRollMode,
   RulesetDefinition,
+  RulesetValueRef,
 } from "@marinara-engine/shared";
 import type { TFunction } from "i18next";
 
@@ -27,6 +28,9 @@ export interface RulesetCombatNames {
   /** The label of one of the two tracks the ruleset's dying rule counts on. */
   track: (id: string) => string;
   tier: (id: string) => string;
+  /** What this ruleset calls the number an attack is rolled against: "AC", "Guard", whatever the
+   *  file named it. Empty when the ruleset points at something with no label of its own. */
+  defense: string;
 }
 
 function lookup(entries: Array<{ id: string; label: string }> | undefined) {
@@ -34,6 +38,23 @@ function lookup(entries: Array<{ id: string; label: string }> | undefined) {
   // An id the ruleset does not declare prints as itself rather than as nothing: a fight is still
   // readable when a layer or an edit took a row away.
   return (id: string) => byId.get(id) ?? id;
+}
+
+/** The label of whatever a value reference points at, for the few places a screen has to NAME the
+ *  number rather than print it. A reference to a plain constant has no name to give. */
+export function rulesetValueLabel(definition: RulesetDefinition, ref: RulesetValueRef | undefined): string {
+  if (!ref) return "";
+  const sheet = definition.sheet;
+  const find = (entries: Array<{ id: string; label: string }>, id: string | undefined) =>
+    id ? (entries.find((entry) => entry.id === id)?.label ?? id) : "";
+  if (ref.field) return find(sheet.fields, ref.field);
+  if (ref.derived) return find(sheet.derived, ref.derived);
+  if (ref.abilityScore ?? ref.abilityMod ?? ref.abilityModFromField) {
+    return find(sheet.abilities, ref.abilityScore ?? ref.abilityMod ?? ref.abilityModFromField);
+  }
+  if (ref.skillMod) return find(sheet.skills, ref.skillMod);
+  if (ref.saveMod) return find(sheet.saves, ref.saveMod);
+  return "";
 }
 
 export function rulesetCombatNames(definition: RulesetDefinition, view: DirectedRulesetView): RulesetCombatNames {
@@ -45,6 +66,7 @@ export function rulesetCombatNames(definition: RulesetDefinition, view: Directed
     save: lookup(definition.sheet.saves),
     track: lookup(definition.sheet.live.tracks),
     tier: lookup(definition.combat?.threat?.tiers),
+    defense: rulesetValueLabel(definition, definition.combat?.defense),
   };
 }
 
@@ -128,7 +150,8 @@ export function rulesetCombatEventLine(
           target: names.combatant(event.targetId),
           label: event.label,
           roll: rulesetRollText(event, t),
-          defense: event.defense,
+          // The ruleset's own word for what it was rolled against, when the file gave it one.
+          defense: names.defense ? `${names.defense} ${event.defense}` : String(event.defense),
         },
       );
     case "save":

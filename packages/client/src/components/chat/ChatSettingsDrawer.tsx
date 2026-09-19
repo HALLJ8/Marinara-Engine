@@ -79,6 +79,8 @@ import { ActiveChatBackgroundPicker } from "../panels/settings/BackgroundPicker"
 import { AdvancedParametersSection } from "../../features/chat-settings/sections/AdvancedParametersSection";
 import { ChatNameSection } from "../../features/chat-settings/sections/ChatNameSection";
 import { CombatStyleSection } from "../../features/chat-settings/sections/CombatStyleSection";
+import { useGameRuleset } from "../../hooks/use-game-ruleset";
+import { isRulesetCombatFight } from "../../lib/ruleset-combat-bridge";
 import { ConnectionSection } from "../../features/chat-settings/sections/ConnectionSection";
 import { ConversationPromptSection } from "../../features/chat-settings/sections/ConversationPromptSection";
 import { DiscordMirrorControls } from "../../features/chat-settings/sections/DiscordMirrorSection";
@@ -1884,6 +1886,18 @@ export function ChatSettingsDrawer({
     (metadata.gameCombatStyle as GameCombatStyle | undefined) ??
     (metadata.gameSetupConfig?.combatStyle as GameCombatStyle | undefined) ??
     "classic";
+  // Whether this game's battles are the ruleset's own. Read from the block the file declares and
+  // from the director being on, never from the coverage flag the file claims.
+  const gameRuleset = useGameRuleset(isGame ? metadata : null);
+  const rulesetResolvesFights =
+    gameRuleset.status === "ok" &&
+    isRulesetCombatFight({
+      combatDirector: (metadata.gameSetupConfig as Record<string, unknown> | undefined)?.combatDirector === true,
+      definition: gameRuleset.definition,
+      // The preference is settled before any fight, so there is no anchor to read here: what this
+      // line says is what will happen the next time a battle starts.
+      anchor: "settings",
+    });
   const gameSceneVideosEnabled =
     metadata.gameSceneVideosEnabled === true ||
     (metadata.gameSceneVideosEnabled !== false &&
@@ -5096,6 +5110,7 @@ export function ChatSettingsDrawer({
             <CombatStyleSection
               style={{ order: CHAT_SETTINGS_ORDER.combatStyle }}
               combatStyle={effectiveCombatStyle}
+              rulesetResolvesFights={rulesetResolvesFights}
               onCombatStyleChange={(gameCombatStyle) => updateMeta.mutate({ id: chat.id, gameCombatStyle })}
             />
           )}

@@ -93,7 +93,10 @@ export function RulesetCombatStatus({
                   </span>
                 )}
                 <span className="text-[var(--muted-foreground)]">
-                  {t("game.combat.ruleset.status.defense", { value: combatant.defense })}
+                  {t("game.combat.ruleset.status.defense", {
+                    label: names.defense || t("game.combat.ruleset.status.defenseFallback"),
+                    value: combatant.defense,
+                  })}
                 </span>
                 {onTurn && <span className="text-[var(--primary)]">{t("game.combat.ruleset.status.turn")}</span>}
               </span>
