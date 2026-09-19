@@ -3,7 +3,7 @@
 //
 // Nothing is applied here. The chosen rows go back to the editor, which writes them in one change,
 // so a review the user cancels leaves the sheet exactly as it was.
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useTranslation as useUiTranslation } from "react-i18next";
 import type { CatalogRefreshRow } from "../../lib/ruleset-catalog";
 import { Modal } from "../ui/Modal";
@@ -30,6 +30,11 @@ export function RulesetCatalogRefreshModal({
   // inside one list, and this modal only ever shows one list.
   const [skipped, setSkipped] = useState<ReadonlySet<number>>(new Set());
   const chosen = rows.filter((row) => !skipped.has(row.index));
+
+  // The rows can change under an open review (a catalog that finishes loading, another list). An
+  // index the user unticked then means a different row, so the choice starts over with the rows.
+  const reviewed = `${listLabel}:${rows.map((row) => row.index).join(",")}`;
+  useEffect(() => setSkipped(new Set()), [reviewed]);
 
   const toggle = (index: number) =>
     setSkipped((current) => {

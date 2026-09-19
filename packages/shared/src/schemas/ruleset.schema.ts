@@ -1389,6 +1389,12 @@ export function rulesetCatalogEntryIssues(
         const column = list.columns.find((candidate) => candidate.id === columnId);
         if (!column) add([...path, "scaled", columnId], `Unknown column "${columnId}"`);
         else if (column.type !== "number") add([...path, "scaled", columnId], `Column "${columnId}" is not a number`);
+        // `values` holds what the row starts as, because an entry is picked before anything knows
+        // which sheet it lands on. Without it a picked row would sit incomplete until the first
+        // recompute, and a reader without the catalog would never see a number at all.
+        else if (!Object.prototype.hasOwnProperty.call(row.values, columnId)) {
+          add([...path, "values"], `Scaled column "${columnId}" needs a starting value in values`);
+        }
         // A scaled column reads the sheet exactly as a live pool's maximum does, so any declared
         // derived value is fair game: there is no top-to-bottom order to sit inside out here.
         for (const refIssue of rulesetValueRefIssues(scaled.from, names, names.derived)) {

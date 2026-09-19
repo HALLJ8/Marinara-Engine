@@ -104,6 +104,14 @@ const emberBuild = (heart: number, uses = 1) =>
   assert.match(refusedWith({}), /scaled names at least one column, or is left out/);
   assert.match(refusedWith({ "Not An Id": { from: { const: 1 } } }), /An id is lowercase letters/);
 
+  // The row has to hold a starting number for a column it scales: an entry is picked before any
+  // sheet is known, and a reader without the catalog never sees the recompute.
+  const noStart = issuesOf(emberText, (doc) => {
+    const entry = doc.catalogs[0].entries.find((candidate: any) => candidate.id === "last-ember");
+    delete entry.rows.find((row: any) => row.list === "tricks").values.uses;
+  }).join("; ");
+  assert.match(noStart, /Scaled column "uses" needs a starting value in values/);
+
   // Two rows for one list, so a marked row on a sheet could not be matched to its spec.
   const twoRows = issuesOf(emberText, (doc) => {
     const entry = doc.catalogs[0].entries.find((candidate: any) => candidate.id === "last-ember");

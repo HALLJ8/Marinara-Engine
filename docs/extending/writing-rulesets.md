@@ -195,8 +195,8 @@ keeps those cells right.
   (`"from": { "derived": "lay_on_hands_max" }`). No new arithmetic is added here.
 - `table` is optional. With it, the reference's value is looked up in a step table, which is how a
   level gives a number: `"scaled": { "max": { "from": { "field": "level" }, "table": [[1, 2], [3, 3], [6, 4]] } }`.
-- `values` still holds a plain number for the column. That is what the row is before any sheet is
-  known, and what a sheet with no such reference keeps.
+- `values` must still hold a plain number for the column, and a row that leaves it out is refused.
+  That is what the row is before any sheet is known, and what a sheet with no such reference keeps.
 - A row with `scaled` must be the entry's only row for that list, so a marked row on a sheet always
   matches one spec.
 
