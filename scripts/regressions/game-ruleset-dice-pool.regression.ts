@@ -532,6 +532,16 @@ try {
     assert.ok(result.rolls.length >= 8, "the sheet's own pool, not one d20 face");
     assert.doesNotMatch(blind.content, /pool="d20/, "no slot was recorded against a roll it did not decide");
     assert.deepEqual(session.pool.values.d20, before, "and no pool value was spent");
+
+    // This is the one path that reaches the resolver with an unbounded difficulty, because the
+    // pool bounds a written DC before any ruleset is loaded. The ruleset's own ceiling holds.
+    const wild = await resolveSkillCheckTagsInContent(`[skill_check: skill="Ward" dc="30" pool="d20:1"]`, {
+      loadContext: async () => context,
+      rulesetPinned: true,
+      pool: session,
+    });
+    assert.equal(wild.results![0]!.dc, 15, "clamped to the pool's maximum, not to the d20 bound of 40");
+    assert.match(wild.content, /dc="15"/);
   }
 
   // ── The Game Master line ──
