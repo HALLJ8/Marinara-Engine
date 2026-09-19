@@ -827,7 +827,18 @@ function resolveStand(ctx: RulesetCombatContext, actor: RulesetCombatant, option
   actor.movementLeft = Math.max(0, (actor.movementLeft ?? 0) - cost);
   const condition = rulesetProneCondition(ctx.definition, ctx.combat, actor);
   if (condition) removeCondition(ctx, actor, condition, "expired");
-  ctx.events.push({ type: "standard", actorId: actor.id, action: "stand" });
+  // Movement spent and nowhere gone: the condition lifting is its own event, and this is the price
+  // of it, said in the same words every other spent cell is said in.
+  const at = { x: actor.x!, y: actor.y! };
+  ctx.events.push({
+    type: "move",
+    actorId: actor.id,
+    from: at,
+    to: { ...at },
+    path: [],
+    cost,
+    left: actor.movementLeft,
+  });
 }
 
 /**

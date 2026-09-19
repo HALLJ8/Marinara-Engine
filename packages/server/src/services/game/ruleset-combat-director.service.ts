@@ -19,22 +19,33 @@ import {
   clampRulesetStatBlock,
   createRulesetEncounter,
   currentRulesetActor,
+  deterministicRng,
   findRulesetCreature,
+  generateTacticalBattlefield,
   normalizeCharacterLookupName,
   normalizeGameDifficulty,
+  normalizeTacticalEnvironment,
+  normalizeTacticalFormation,
+  placeSpawns,
   readRulesetLive,
+  rulesetAimCells,
+  rulesetCellDistance,
   rulesetCombatant,
   rulesetCombatConditions,
   rulesetCombatHealth,
   rulesetCombatOptions,
   rulesetCombatRoller,
+  rulesetCombatStanding,
   rulesetCreatureSchema,
   rulesetEncounterOutcome,
   rulesetEncounterSummary,
   rulesetOptionTargets,
+  rulesetPositionOf,
+  rulesetReachableCells,
   rulesetSheetBuildsByName,
   rulesetStatBlockFromCreature,
   rulesetTierStatBlock,
+  RULESET_MOVE_OPTION,
   type CombatAiCandidate,
   type Combatant,
   type CombatDecisionOption,
@@ -52,6 +63,8 @@ import {
   type RulesetEncounterState,
   type RulesetLiveState,
   type RulesetLiveStates,
+  type TacticalBattlefieldBrief,
+  type TacticalGrid,
 } from "@marinara-engine/shared";
 import { logger } from "../../lib/logger.js";
 import { combatDirectorView, type CombatDirectorState } from "./combat-director.service.js";
@@ -129,6 +142,14 @@ export interface RulesetFightSeed {
   seed: number;
   party: Array<{ id: string; name: string }>;
   enemies: RulesetFightOpponent[];
+  /** Whether this fight is fought on a board. The ruleset still has to say what a cell is worth:
+   *  one that does not stays theatre of the mind whatever the game asked for. */
+  positioned?: boolean;
+  /** What the tactical style's own generator is handed, unchanged: this fight has no second
+   *  generator, no second terrain table and no board sizes of its own. */
+  environment?: string | null;
+  formation?: string | null;
+  battlefield?: TacticalBattlefieldBrief;
   /** The chat's own party cards, which is where a sheet build lives. */
   cards: unknown;
   playerName: string | null;
@@ -221,11 +242,14 @@ export function createRulesetFight(input: RulesetFightSeed): RulesetFightSeedRes
     combatants.push({ id: opponent.id, name: opponent.name, side: "enemy", block: built.block });
   }
 
+  const board = buildRulesetBoard(input, combatants);
+  if (board && "error" in board) return { ok: false, error: board.error };
   const encounter = createRulesetEncounter({
     definition,
     seed: input.seed,
     combatants,
     bestiary: input.bestiary,
+    ...(board ? { board } : {}),
   });
   const fight: RulesetFightState = {
     encounter,
@@ -238,6 +262,49 @@ export function createRulesetFight(input: RulesetFightSeed): RulesetFightSeedRes
   record(fight, encounter.opening);
   for (const line of fight.adjustments) logger.info("[game/combat:ruleset] %s", line);
   return { ok: true, fight };
+}
+
+/**
+ * The board, from the tactical style's OWN path: its generator, its terrain, its board sizes, its
+ * formations and the same bounded brief the Game Master may propose. Nothing here draws a grid.
+ *
+ * The units it places are stand-ins. A ruleset fight has no tactical units at all, because the
+ * tactical engine's stats and arithmetic are the Engine's own and this fight runs on the ruleset's;
+ * what placement reads off a unit is its side, whether it anchors the group and the tile it lands
+ * on, and a stand-in carries exactly that.
+ *
+ * Null is a fight that stays theatre of the mind: the game did not ask for a board, or the ruleset
+ * says nothing about what a cell is worth.
+ */
+function buildRulesetBoard(
+  input: RulesetFightSeed,
+  combatants: readonly RulesetCombatantInput[],
+): { grid: TacticalGrid; placements: Record<string, { x: number; y: number }>; battlefield?: unknown } | { error: string } | null {
+  if (!input.positioned || !input.definition.combat?.distance) return null;
+  const bosses = new Set(input.enemies.filter((opponent) => opponent.boss).map((opponent) => opponent.id));
+  const stands = combatants.map((entry) => ({
+    id: entry.id,
+    side: entry.side,
+    ...(bosses.has(entry.id) ? { isBoss: true } : {}),
+    x: 0,
+    y: 0,
+  }));
+  // The same cursor the tactical style reserves for setup, from the same seed, so the two styles
+  // generate the same board for the same fight.
+  const rng = deterministicRng(input.seed >>> 0, 0);
+  const generated = generateTacticalBattlefield(
+    stands.length,
+    rng,
+    normalizeTacticalEnvironment(input.environment ?? undefined),
+    input.battlefield,
+  );
+  if (!generated.ok) return { error: generated.error };
+  const { grid } = generated;
+  if (!placeSpawns(grid, stands, normalizeTacticalFormation(input.formation ?? undefined), rng, generated.protectedTiles))
+    return { error: "Battlefield features prevent a connected deployment." };
+  const placements: Record<string, { x: number; y: number }> = {};
+  for (const stand of stands) placements[stand.id] = { x: stand.x, y: stand.y };
+  return { grid, placements, battlefield: generated.battlefield };
 }
 
 // ── Reading the fight ──
@@ -362,19 +429,35 @@ function projectCombatant(definition: RulesetDefinition, combatant: RulesetComba
     ...(combatant.concentrating ? { concentrating: combatant.concentrating.label } : {}),
     ...(combatant.block?.tier ? { tier: combatant.block.tier } : {}),
     ...(combatant.block?.traits?.length ? { traits: combatant.block.traits.map((trait) => ({ ...trait })) } : {}),
+    ...(typeof combatant.x === "number" && typeof combatant.y === "number" ? { x: combatant.x, y: combatant.y } : {}),
+    ...(combatant.movement !== undefined
+      ? { movement: combatant.movement, movementLeft: combatant.movementLeft ?? 0 }
+      : {}),
   };
 }
 
-/** Every option of the legal menu, with the combatants each one may be pointed at right now. */
+/** How many cells one area option may be offered aimed at. A board is at most 14 by 10 and a shape
+ *  reaches a handful of cells, so this is the belt beside the braces: the payload a screen is sent
+ *  stays small however far a ruleset says something carries.
+ *  ponytail: the nearest legal aims, cut at a fixed number. The upgrade path is to send the shape
+ *  and let the board work the cells out, which is what slice C4b may prefer once it draws one. */
+const RULESET_AIM_LIMIT = 120;
+
+/** Every option of the legal menu, with the combatants each one may be pointed at right now, and,
+ *  for a shape, the cells it may be aimed at and who each aim would catch. */
 export function rulesetMenu(
   definition: RulesetDefinition,
   encounter: RulesetEncounterState,
   actorId: string,
 ): DirectedRulesetOption[] {
-  return rulesetCombatOptions(definition, encounter, actorId).map((option) => ({
-    ...option,
-    targetIds: rulesetOptionTargets(encounter, actorId, option),
-  }));
+  return rulesetCombatOptions(definition, encounter, actorId).map((option) => {
+    const aim = option.area ? rulesetAimCells(encounter, actorId, option.id).slice(0, RULESET_AIM_LIMIT) : [];
+    return {
+      ...option,
+      targetIds: rulesetOptionTargets(encounter, actorId, option),
+      ...(aim.length > 0 ? { aim } : {}),
+    };
+  });
 }
 
 /** The fight as a screen reads it. A projection: no sheet build, no live blob and no catalogs. */
@@ -388,10 +471,22 @@ export function directedRulesetView(
   const actor = currentRulesetActor(encounter);
   const controller = rulesetController(state, fight, actor);
   const over = !!state.outcome || rulesetEncounterOutcome(encounter) !== "ongoing";
+  const distance = definition.combat.distance;
+  const grid = encounter.board?.grid;
   return {
     ruleset: { ...encounter.ruleset },
     round: encounter.round,
     order: [...encounter.order],
+    ...(grid && distance
+      ? {
+          grid: {
+            width: grid.width,
+            height: grid.height,
+            tiles: grid.tiles.map((row) => [...row]),
+            distance: { ...distance },
+          },
+        }
+      : {}),
     ...(actor && !over ? { actorId: actor.id } : {}),
     controller,
     combatants: encounter.combatants.map((combatant) => projectCombatant(definition, combatant)),
@@ -410,7 +505,21 @@ interface RulesetCandidate {
   choice: RulesetCombatChoice;
   option: RulesetCombatOption;
   targetId?: string;
+  /** Where the actor walks to before doing it, on a board. The move is its own step, resolved
+   *  through the same menu a player's would be. */
+  to?: { x: number; y: number };
 }
+
+/** How many cells a turn is weighed from. The board is small and a turn is short, so this is a
+ *  ceiling on the enumeration rather than a rule anybody can feel.
+ *  ponytail: the cheapest cells, cut at a fixed number. The upgrade path is to rank them by what
+ *  they open up before cutting, which needs a scoring pass this slice does not have. */
+const RULESET_MOVE_CANDIDATE_CELLS = 48;
+
+/** What one strike on the way is worth against doing the thing at all: enough that a creature will
+ *  not walk through three people's reach for a marginally better target, and not so much that it
+ *  will stand still rather than take one hit to reach the only enemy it can fight. */
+const RULESET_PROVOKE_PENALTY = 0.25;
 
 /**
  * Everything the actor could do, scored the way every other combat AI in the Engine is scored.
@@ -424,11 +533,76 @@ function rulesetCandidates(
   /** The Game Master's window is shown everything; the Engine's own picker is not (see the end). */
   everything = false,
 ): Array<CombatAiCandidate<RulesetCandidate>> {
+  const here = rulesetCandidatesFrom(definition, encounter, actorId, null, everything);
+  const moved = rulesetCandidatesAfterMoving(definition, encounter, actorId, everything);
+  if (moved.length === 0) return here;
+  // Standing still is preferred when it can already do its best from where it is: a candidate that
+  // walks first has to be strictly better than every one that does not, not merely as good.
+  const best = (list: ReadonlyArray<CombatAiCandidate<RulesetCandidate>>) =>
+    list.reduce((most, candidate) => Math.max(most, (candidate.damage ?? 0) + (candidate.healing ?? 0)), 0);
+  const staying = best(here);
+  return [...here, ...moved.filter((candidate) => (candidate.damage ?? 0) + (candidate.healing ?? 0) > staying)];
+}
+
+/**
+ * Everything the actor could do from the cells it can walk to, each candidate carrying the walk
+ * that gets it there. The walk's own price is the strikes it would be met with on the way, taken
+ * off the candidate's score, so a creature will not dance through three people's reach for a
+ * slightly better target.
+ */
+function rulesetCandidatesAfterMoving(
+  definition: RulesetDefinition,
+  encounter: RulesetEncounterState,
+  actorId: string,
+  everything: boolean,
+): Array<CombatAiCandidate<RulesetCandidate>> {
+  const actor = rulesetCombatant(encounter, actorId);
+  if (!encounter.board?.grid || !actor || typeof actor.x !== "number" || typeof actor.y !== "number") return [];
+  const cells = rulesetReachableCells(definition, encounter, actorId).slice(0, RULESET_MOVE_CANDIDATE_CELLS);
+  if (cells.length === 0) return [];
+  const home = { x: actor.x, y: actor.y };
+  const candidates: Array<CombatAiCandidate<RulesetCandidate>> = [];
+  for (const cell of cells) {
+    // Standing the actor in the cell for exactly as long as the menu is read from it. Nothing else
+    // is touched, and the position is put straight back, so the fight is the one it was.
+    actor.x = cell.x;
+    actor.y = cell.y;
+    let from: Array<CombatAiCandidate<RulesetCandidate>> = [];
+    try {
+      from = rulesetCandidatesFrom(definition, encounter, actorId, cell, everything);
+    } finally {
+      actor.x = home.x;
+      actor.y = home.y;
+    }
+    const penalty = cell.provokes.length * RULESET_PROVOKE_PENALTY;
+    for (const candidate of from) {
+      if (candidate.damage !== undefined) candidate.damage = Math.max(0, candidate.damage - penalty);
+      if (candidate.healing !== undefined) candidate.healing = Math.max(0, candidate.healing - penalty);
+      candidates.push(candidate);
+    }
+  }
+  return candidates;
+}
+
+function rulesetCandidatesFrom(
+  definition: RulesetDefinition,
+  encounter: RulesetEncounterState,
+  actorId: string,
+  /** The cell the actor is standing in for this pass, or null for the one they are really in. */
+  standing: { x: number; y: number } | null,
+  everything: boolean,
+): Array<CombatAiCandidate<RulesetCandidate>> {
   const combat = definition.combat;
   const actor = rulesetCombatant(encounter, actorId);
   if (!combat || !actor) return [];
   const candidates: Array<CombatAiCandidate<RulesetCandidate>> = [];
   for (const option of rulesetCombatOptions(definition, encounter, actorId)) {
+    // Walking is not a candidate of its own: it is what a candidate does before it acts, and a turn
+    // with nothing to act on closes the distance instead (see `rulesetClosingMove`).
+    if (option.kind === "move") continue;
+    // From another cell, only what the actor would do THERE is worth enumerating: everything it
+    // could do without moving is already on the list.
+    if (standing && option.targets.count <= 0 && !option.area) continue;
     const price = (option.cost ?? []).reduce((total, entry) => total + entry.amount, 0) + (option.signature?.cost ?? 0);
     if (option.kind === "end-turn") {
       candidates.push({ action: { choice: { actorId, optionId: option.id, targetIds: [] }, option }, hold: true });
@@ -442,6 +616,12 @@ function rulesetCandidates(
         setup: option.kind === "standard" ? 0.05 : 0.4,
         cost: price,
       });
+      continue;
+    }
+    // A shape lands on a cell, so the aims are the candidates: each one is worth what it catches,
+    // and the actor's own side counts against it.
+    if (option.area) {
+      candidates.push(...areaCandidates(definition, combat, encounter, actor, option, standing));
       continue;
     }
     const legal = rulesetOptionTargets(encounter, actorId, option);
@@ -490,15 +670,122 @@ function rulesetCandidates(
       candidates.push(candidate);
     }
   }
+  if (standing) for (const candidate of candidates) candidate.action.to = { ...standing };
   // Somebody who can hurt an opponent or help a friend does that. The scoring weighs a blow by the
   // share of the target's health it takes, so against a sturdy target a careful creature would score
   // a standard action (dodging, say) above every attack it has and stand there all fight. A
   // standard action or an empty turn is what is left when there is nothing better, never a rival.
+  // Walking is priced the same way: a step that opens nothing up is not a rival to a blow either.
   const useful = candidates.filter((candidate) => (candidate.damage ?? 0) > 0 || (candidate.healing ?? 0) > 0);
   if (useful.length > 0 && !everything) {
     return candidates.filter((candidate) => !candidate.hold && candidate.action.option.kind !== "standard");
   }
   return candidates;
+}
+
+/**
+ * One candidate per cell a shape may be aimed at, worth what it would catch.
+ *
+ * Its own side counts AGAINST it, so a creature does not drop a blast on its friends to reach one
+ * more enemy, and an aim that would catch nobody but friends is left off the list entirely.
+ */
+function areaCandidates(
+  definition: RulesetDefinition,
+  combat: NonNullable<RulesetDefinition["combat"]>,
+  encounter: RulesetEncounterState,
+  actor: RulesetCombatant,
+  option: RulesetCombatOption,
+  standing: { x: number; y: number } | null,
+): Array<CombatAiCandidate<RulesetCandidate>> {
+  const price = (option.cost ?? []).reduce((total, entry) => total + entry.amount, 0) + (option.signature?.cost ?? 0);
+  const average = option.forecast?.averageDamage ?? 0;
+  const chance = option.forecast?.hitChance ?? 1;
+  const candidates: Array<CombatAiCandidate<RulesetCandidate>> = [];
+  for (const aim of rulesetAimCells(encounter, actor.id, option.id)) {
+    const caught = aim.targetIds
+      .map((id) => rulesetCombatant(encounter, id))
+      .filter((target): target is RulesetCombatant => !!target);
+    const foes = caught.filter((target) => target.side !== actor.side && !target.down);
+    const friends = caught.filter((target) => target.side === actor.side);
+    const candidate: CombatAiCandidate<RulesetCandidate> = {
+      action: {
+        choice: { actorId: actor.id, optionId: option.id, targetIds: [], at: { x: aim.x, y: aim.y } },
+        option,
+        ...(foes[0] ? { targetId: foes[0].id } : {}),
+        ...(standing ? { to: { ...standing } } : {}),
+      },
+      ...(foes[0] ? { targetId: foes[0].id } : {}),
+      cost: price,
+    };
+    if (option.heals) {
+      const helped = friends.filter((target) => {
+        const health = rulesetCombatHealth(definition, combat, target);
+        return target.down || health.value < health.max;
+      });
+      if (helped.length === 0) continue;
+      candidate.healing = helped.reduce((total, target) => {
+        const health = rulesetCombatHealth(definition, combat, target);
+        return total + Math.min(1, average / Math.max(1, health.max)) + (target.down ? 1 : 0);
+      }, 0);
+    } else if (average > 0) {
+      if (foes.length === 0) continue;
+      const share = foes.reduce((total, target) => {
+        const health = rulesetCombatHealth(definition, combat, target);
+        return total + average / Math.max(1, health.value + health.temp);
+      }, 0);
+      const hurt = friends.reduce((total, target) => {
+        const health = rulesetCombatHealth(definition, combat, target);
+        return total + average / Math.max(1, health.value + health.temp);
+      }, 0);
+      candidate.damage = Math.max(0, Math.min(2, share - hurt)) * chance;
+      if (candidate.damage <= 0) continue;
+    } else if (foes.length > 0) candidate.setup = 0.4;
+    else candidate.support = 0.4;
+    candidates.push(candidate);
+  }
+  return candidates;
+}
+
+/**
+ * The walk a turn with nothing in reach takes: the reachable cell that ends up nearest an opponent,
+ * cheapest first, and never one that would be struck at on the way when a quieter cell gets as
+ * close. Null when nothing is worth walking to, which is what keeps a cornered creature from
+ * shuffling on the spot for the rest of the fight.
+ */
+function rulesetClosingMove(
+  definition: RulesetDefinition,
+  encounter: RulesetEncounterState,
+  actorId: string,
+): RulesetCandidate | null {
+  const actor = rulesetCombatant(encounter, actorId);
+  const from = rulesetPositionOf(actor);
+  if (!actor || !from || !encounter.board?.grid) return null;
+  const foes = encounter.combatants
+    .filter((combatant) => combatant.side !== actor.side && rulesetCombatStanding(combatant))
+    .map((combatant) => rulesetPositionOf(combatant))
+    .filter((cell): cell is { x: number; y: number } => !!cell);
+  if (foes.length === 0) return null;
+  const nearest = (cell: { x: number; y: number }) =>
+    foes.reduce((closest, foe) => Math.min(closest, rulesetCellDistance(cell, foe)), Infinity);
+  const already = nearest(from);
+  let best: { cell: { x: number; y: number; cost: number; provokes: string[] }; away: number } | null = null;
+  for (const cell of rulesetReachableCells(definition, encounter, actorId).slice(0, RULESET_MOVE_CANDIDATE_CELLS)) {
+    const away = nearest(cell);
+    if (away >= already) continue;
+    const better =
+      !best ||
+      away < best.away ||
+      (away === best.away &&
+        (cell.provokes.length < best.cell.provokes.length ||
+          (cell.provokes.length === best.cell.provokes.length && cell.cost < best.cell.cost)));
+    if (better) best = { cell, away };
+  }
+  if (!best) return null;
+  return {
+    choice: { actorId, optionId: RULESET_MOVE_OPTION, targetIds: [], to: { x: best.cell.x, y: best.cell.y } },
+    option: { id: RULESET_MOVE_OPTION, kind: "move", label: "Move", targets: { side: "self", count: 0 } },
+    to: { x: best.cell.x, y: best.cell.y },
+  };
 }
 
 /** The choice the picker would make, or null when the actor has nothing at all to pick from. */
@@ -545,7 +832,14 @@ function advanceTurn(definition: RulesetDefinition, state: CombatDirectorState, 
   syncRulesetCombatants(definition, state);
 }
 
-/** One whole turn of an actor no human plays: every action it takes, and then the end of its turn. */
+/**
+ * One whole turn of an actor no human plays: every action it takes, and then the end of its turn.
+ *
+ * On a board, a candidate may be "walk here, then do this", and the walk is its own step through the
+ * same menu a player's would be, so the strikes it is met with on the way land exactly as they would
+ * for anybody. With nothing to do at all, it closes the distance instead, and takes the ruleset's
+ * own sprint first when the ruleset has one.
+ */
 function playRulesetTurn(
   definition: RulesetDefinition,
   state: CombatDirectorState,
@@ -555,7 +849,12 @@ function playRulesetTurn(
   for (let action = 0; action < RULESET_TURN_ACTION_LIMIT; action++) {
     if (rulesetEncounterOutcome(fight.encounter) !== "ongoing") break;
     const picked = pickRulesetChoice(definition, state, fight.encounter, actorId);
-    if (!picked || picked.option.kind === "end-turn") break;
+    const idle = !picked || picked.option.kind === "end-turn";
+    if (idle) {
+      if (!walkTowardsTrouble(definition, state, fight, actorId)) break;
+      continue;
+    }
+    if (picked.to && !stepBefore(definition, state, fight, actorId, picked.to)) break;
     // A refusal here would be an Engine bug rather than a player's mistake, so the turn ends
     // instead of asking again with the same state and looping.
     if (applyChoice(definition, state, fight, picked.choice).refused) break;
@@ -563,19 +862,89 @@ function playRulesetTurn(
   advanceTurn(definition, state, fight);
 }
 
+/** The walk a candidate does before it acts, refused exactly as a player's would be. */
+function stepBefore(
+  definition: RulesetDefinition,
+  state: CombatDirectorState,
+  fight: RulesetFightState,
+  actorId: string,
+  to: { x: number; y: number },
+): boolean {
+  const moved = applyChoice(definition, state, fight, { actorId, optionId: RULESET_MOVE_OPTION, targetIds: [], to });
+  if (moved.refused) return false;
+  // A strike on the way may have dropped it, or left it short of where it meant to be, and then the
+  // thing it meant to do from there is no longer the thing it can do.
+  const after = rulesetCombatant(fight.encounter, actorId);
+  return !!after && rulesetCombatStanding(after) && after.x === to.x && after.y === to.y;
+}
+
+/** Nothing in reach: close the distance, sprinting first when the ruleset has a sprint and the
+ *  actor has nothing else to spend its turn on. False when there is nowhere better to stand, which
+ *  is what ends the turn rather than shuffling on the spot. */
+function walkTowardsTrouble(
+  definition: RulesetDefinition,
+  state: CombatDirectorState,
+  fight: RulesetFightState,
+  actorId: string,
+): boolean {
+  if (!fight.encounter.board?.grid) return false;
+  const actor = rulesetCombatant(fight.encounter, actorId);
+  if (!actor || (actor.movementLeft ?? 0) < 1) return false;
+  const closing = rulesetClosingMove(definition, fight.encounter, actorId);
+  if (!closing) return false;
+  const sprint = (definition.combat?.standard ?? []).includes("dash") && !actor.flags.dashed;
+  if (sprint) {
+    const sprinted = applyChoice(definition, state, fight, {
+      actorId,
+      optionId: "standard:dash",
+      targetIds: [],
+    });
+    // A sprint the rules refused costs nothing: the walk below happens either way.
+    if (!sprinted.refused) {
+      const again = rulesetClosingMove(definition, fight.encounter, actorId);
+      return !!again && !applyChoice(definition, state, fight, again.choice).refused;
+    }
+  }
+  return !applyChoice(definition, state, fight, closing.choice).refused;
+}
+
 // ── The Game Master's window ──
 
 const windowKind = (kind: RulesetCombatOption["kind"]): CombatDecisionOption["kind"] =>
-  kind === "ability" ? "skill" : kind === "standard" ? "defend" : kind === "end-turn" ? "wait" : "attack";
+  kind === "ability"
+    ? "skill"
+    : kind === "standard"
+      ? "defend"
+      : kind === "end-turn"
+        ? "wait"
+        : kind === "move"
+          ? "move"
+          : "attack";
+
+/** How many candidates one boss decision may hold. A positioned turn enumerates every cell the
+ *  opponent could walk to against every option from there, which is a list no model should be asked
+ *  to read: the best by the picker's own score, and the end of the turn beside them.
+ *  ponytail: a fixed number, cut by score. The upgrade path is to group them by what they do rather
+ *  than by what they score, which needs a summariser this slice does not have. */
+const RULESET_WINDOW_CANDIDATE_LIMIT = 24;
 
 /** One `CombatDecisionOption` per candidate, carrying the ruleset's own id, targets and label so the
- *  answer the Game Master picks resolves straight back through the menu. */
+ *  answer the Game Master picks resolves straight back through the menu. A positioned candidate may
+ *  be "walk here, then do this", and carries the cell it walks to and the cell a shape is aimed at. */
 function windowOptions(
   definition: RulesetDefinition,
   encounter: RulesetEncounterState,
   actorId: string,
 ): CombatDecisionOption[] {
-  return rulesetCandidates(definition, encounter, actorId, true).map((candidate, index) => ({
+  const candidates = rulesetCandidates(definition, encounter, actorId, true);
+  const worth = (candidate: (typeof candidates)[number]) =>
+    (candidate.damage ?? 0) + (candidate.healing ?? 0) + (candidate.support ?? 0) + (candidate.setup ?? 0);
+  const ending = candidates.filter((candidate) => candidate.action.option.kind === "end-turn");
+  const rest = candidates
+    .filter((candidate) => candidate.action.option.kind !== "end-turn")
+    .sort((a, b) => worth(b) - worth(a))
+    .slice(0, Math.max(0, RULESET_WINDOW_CANDIDATE_LIMIT - ending.length));
+  return [...rest, ...ending].map((candidate, index) => ({
     id: String(index),
     kind: windowKind(candidate.action.option.kind),
     actorId,
@@ -585,6 +954,8 @@ function windowOptions(
     optionId: candidate.action.option.id,
     targetIds: [...candidate.action.choice.targetIds],
     label: candidate.action.option.label,
+    ...(candidate.action.to ? { to: { ...candidate.action.to } } : {}),
+    ...(candidate.action.choice.at ? { at: { ...candidate.action.choice.at } } : {}),
   }));
 }
 
@@ -683,6 +1054,8 @@ export function commandRulesetCombatDirector(
       optionId: command.optionId,
       targetIds: command.targetIds,
       ...(command.payWith !== undefined ? { payWith: command.payWith } : {}),
+      ...(command.to ? { to: command.to } : {}),
+      ...(command.at ? { at: command.at } : {}),
     });
     if (step.refused && step.refused.type === "refused") {
       return refuse(rulesetRefusalMessage(step.refused.reason), `ruleset_combat_${step.refused.reason}`);
@@ -700,16 +1073,25 @@ export function commandRulesetCombatDirector(
     }
     const actorId = open.actorId;
     closeWindow(state);
+    const picked = chosen ? null : pickRulesetChoice(definition, state, fight.encounter, actorId);
+    const walkTo = chosen ? chosen.to : picked?.to;
     const choice: RulesetCombatChoice | null = chosen
       ? {
           actorId,
           optionId: chosen.optionId ?? "end-turn",
           targetIds: [...(chosen.targetIds ?? [])],
           ...(chosen.payWith !== undefined ? { payWith: chosen.payWith } : {}),
+          ...(chosen.at ? { at: { ...chosen.at } } : {}),
         }
       : // The local picker is the fallback, so a Game Master that answered nothing usable costs the
         // fight nothing but the model call.
-        (pickRulesetChoice(definition, state, fight.encounter, actorId)?.choice ?? null);
+        (picked?.choice ?? null);
+    // A candidate that walks first walks first, exactly as the local picker's would: one step, one
+    // refusal of its own, and the strikes on the way land before the thing it walked to do.
+    if (choice && walkTo && !stepBefore(definition, state, fight, actorId, walkTo)) {
+      if (currentRulesetActor(fight.encounter)?.id === actorId) advanceTurn(definition, state, fight);
+      return settled(state);
+    }
     // The menu's own "end turn" IS the end of the turn, exactly as the local picker reads it. Asking
     // again would reopen the same window with the same list, and the fight would stand on this actor
     // for as long as the answer stayed the same.
