@@ -4,6 +4,7 @@ This file is the release-notes source of truth for Marinara Engine. Reuse these 
 
 ## [Unreleased]
 
+- Inline code in documentation follows the reader's theme so paths and settings remain readable in light mode (#6371).
 - Scene summaries explicitly use a narrator's point of view and attribute thoughts and feelings to the participant they belong to (#6379).
 - Conversation Presence keeps the activity editor open when a mobile keyboard resizes or pans the viewport (#6380).
 - Roleplay Visual Novel paragraphs follow speech playback, with optional timed autoplay and a paragraph delay in Appearance settings (#6373).

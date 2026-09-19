@@ -3869,6 +3869,12 @@ strong {
   unicode-bidi: isolate;
 }
 
+.docs-reader-content .mari-md-inline-code {
+  color: var(--foreground);
+  background: var(--secondary);
+  border-color: var(--border);
+}
+
 /* Mixed-direction defence, docs viewer only: links and bold runs frequently
    hold LTR text (English UI labels, URLs) inside RTL prose; isolating them
    keeps the bidi algorithm from dragging sentence punctuation around.
