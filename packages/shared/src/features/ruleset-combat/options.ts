@@ -192,6 +192,15 @@ export function rulesetAreaTargets(
     .filter((combatant) => {
       if (combatant.defeated) return false;
       if (action.area?.friendlyFire === false && combatant.side === actor.side) return false;
+      // Something that MENDS lands only on whom its author pointed it at. A blast catches everybody
+      // in its cells because fire does not ask; a healing word that also closed the enemy's wounds
+      // would be the rules being read by a machine rather than by a table.
+      if (action.heal) {
+        const sameSide = combatant.side === actor.side;
+        if (action.targets.side === "self" && combatant.id !== actor.id) return false;
+        if (action.targets.side === "ally" && !sameSide) return false;
+        if (action.targets.side === "enemy" && sameSide) return false;
+      }
       const cell = rulesetPositionOf(combatant);
       return !!cell && covered.has(`${cell.x},${cell.y}`);
     })

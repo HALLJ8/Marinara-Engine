@@ -162,6 +162,19 @@ const spellEntries = [
     },
   },
   {
+    id: "mending-circle",
+    label: "Mending Circle",
+    rows: [{ list: "spells", values: { name: "Mending Circle", level: 1, prepared: true } }],
+    mechanics: {
+      kind: "heal",
+      targets: "ally",
+      amount: { dice: "1d4" },
+      range: 30,
+      area: { shape: "burst", size: 10 },
+      cost: [{ pool: "slots_1", amount: 1 }],
+    },
+  },
+  {
     id: "scouring-breath",
     label: "Scouring Breath",
     rows: [{ list: "spells", values: { name: "Scouring Breath", level: 1, prepared: true } }],
@@ -724,6 +737,12 @@ const cellsOf = (cells: Array<{ x: number; y: number }>) =>
   const line = optionNamed(fiveE, state, "corwin", "Searing Line");
   assert.deepEqual(line.area, { shape: "line", size: 6, range: 6 });
   assert.deepEqual(rulesetAreaTargets(state, "corwin", line.id, { x: 5, y: 1 }).sort(), ["mote", "pike", "snag"]);
+
+  // Something that mends lands only on whom its author pointed it at: the same circle drawn over
+  // the same five people closes the wounds of the two friends in it and nobody else's.
+  const circle = optionNamed(fiveE, state, "corwin", "Mending Circle");
+  assert.equal(circle.heals, true);
+  assert.deepEqual(rulesetAreaTargets(state, "corwin", circle.id, { x: 3, y: 1 }).sort(), ["brenna", "corwin"]);
 
   // And it really resolves on everybody it caught: one budget, one set of dice, a save each.
   const step = act(
