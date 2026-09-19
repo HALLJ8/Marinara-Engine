@@ -1474,6 +1474,21 @@ function refineRulesetDefinition(def: RulesetDefinitionBase, ctx: z.RefinementCt
             issue([...at, "removeValues", valueIndex], `"${value}" is not one of the values of "${entry.id}"`);
           }
         });
+        // Something on the sheet shows or hides on one of this field's values. With that value gone
+        // the rule could never match again, the layered ruleset would not validate, and the layer
+        // would be skipped in play with nobody told. Said here, while the author is looking.
+        const watched = [...sheet.fields, ...sheet.derived, ...sheet.lists, ...sheet.live.pools].flatMap((item) =>
+          item.hideWhen?.field === entry.id && typeof item.hideWhen.equals === "string" ? [item] : [],
+        );
+        entry.removeValues.forEach((value, valueIndex) => {
+          const user = watched.find((item) => item.hideWhen!.equals === value);
+          if (user) {
+            issue(
+              [...at, "removeValues", valueIndex],
+              `"${user.id}" is hidden when "${entry.id}" is "${value}", so a layer cannot remove that value`,
+            );
+          }
+        });
         const remaining = field.values.filter((value) => !entry.removeValues.includes(value));
         if (remaining.length === 0) {
           return issue([...at, "removeValues"], `A layer must leave "${entry.id}" at least one value`);
@@ -1525,9 +1540,10 @@ export const rulesetDefinitionSchema = rulesetDefinitionBaseSchema.superRefine(r
 
 /** How long guidance may be once the layers a game turned on have been appended to it. A layer
  *  ADDS to the ruleset's own text, so the merged string routinely passes the 1500 characters one
- *  file may declare, and it stays bounded all the same: the base plus every layer's own ceiling.
+ *  file may declare, and it stays bounded all the same: the base plus every layer's own ceiling
+ *  and the one separator each appended layer brings.
  *  The file schema keeps the tighter cap, because nothing writes an effective definition back. */
-export const RULESET_EFFECTIVE_GUIDANCE_MAX = 1500 + RULESET_LAYERS_MAX * RULESET_LAYER_GUIDANCE_MAX;
+export const RULESET_EFFECTIVE_GUIDANCE_MAX = 1500 + RULESET_LAYERS_MAX * (RULESET_LAYER_GUIDANCE_MAX + 1);
 
 /** The definition as the Engine HOLDS it rather than as an author wrote it: a `ruleset.json` with
  *  the game's active layers applied, and, for a community ruleset, re-keyed under its namespaced

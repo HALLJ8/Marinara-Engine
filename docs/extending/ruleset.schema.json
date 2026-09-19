@@ -3562,7 +3562,29 @@
                   "required": [
                     "filter"
                   ],
-                  "additionalProperties": false
+                  "additionalProperties": false,
+                  "oneOf": [
+                    {
+                      "required": [
+                        "above"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "below"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "equals"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "notIn"
+                      ]
+                    }
+                  ]
                 },
                 "$comment": {}
               },

@@ -176,6 +176,14 @@ const on = (...ids: string[]) => Object.fromEntries(ids.map((id) => [rulesetLaye
     /layers\.0\.fields\.0\.removeValues: Removing "none" takes the default of "spellcasting_ability" away/,
     "a default the layer removes leaves every sheet on a value the field no longer lists",
   );
+  // The sheet hides its spell fields while the ability is "none". With that value gone the rule
+  // could never match, the layered ruleset would not validate, and the layer would be skipped in
+  // play with nobody told, so the file is refused instead.
+  fiveEdit(
+    (doc) => (doc.layers[0].fields[0] = { id: "spellcasting_ability", removeValues: ["none"], default: "wis" }),
+    /layers\.0\.fields\.0\.removeValues\.0: ".+" is hidden when "spellcasting_ability" is "none", so a layer cannot remove that value/,
+    "a value a hideWhen rule reads cannot be removed",
+  );
   fiveEdit(
     (doc) => (doc.layers[0].fields[0] = { id: "spellcasting_ability", removeValues: ["none"], default: "none" }),
     /layers\.0\.fields\.0\.default: default "none" is not one of the values this layer leaves/,
