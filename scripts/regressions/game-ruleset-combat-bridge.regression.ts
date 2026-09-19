@@ -6,6 +6,9 @@
  *   - Nothing is 5e-shaped. Every pool, list, column and word comes from the ruleset that declares
  *     it, and the ruleset used for the skills half rolls 2d6 and has no slots at all.
  *   - A ruleset with no `battle` block gets nothing: no seed, no skills, no operations.
+ *   - Health crosses as a SHARE of the maximum, both ways, on the Engine's own scale: a fight that
+ *     did not move the combatant writes nothing, nobody above zero is rounded out of a fight or off
+ *     a sheet, and zero stays zero. Energy and slots stay absolute counts.
  *   - Every name inside `battle` points at something that exists, and a pool cannot be two things.
  *   - Only a row a catalog wrote, whose entry carries `mechanics`, becomes a combat skill, and a
  *     cost the Engine cannot spend takes the skill away rather than making it free.
@@ -20,6 +23,7 @@ import { fileURLToPath } from "node:url";
 import {
   applyCombatResultToLive,
   buildTacticalSummary,
+  carryHealthShare,
   combatSkillsFromSheet,
   createTacticalCombat,
   parseRulesetDefinition,
@@ -52,6 +56,11 @@ const build = (input: Record<string, unknown>): RulesetSheetBuild => rulesetShee
 
 const ember = parsed(emberText);
 const fiveE = parsed(fiveText);
+
+/** What the Engine itself builds a low-level combatant with, measured in a real battle: around 60
+ *  hit points against 11 to 15 damage a hit. Every sheet in this file is an order of magnitude
+ *  smaller, which is the whole reason health crosses as a share. */
+const ENGINE_MAX_HP = 60;
 
 // ── Both shipped examples opt in, and neither block is shaped like the other ──
 {
@@ -160,34 +169,63 @@ const fiveE = parsed(fiveText);
   );
 }
 
+// ── Health crosses as a share of the maximum, and never rounds anybody out ──
+{
+  // The headline case: a 5-of-9 sheet on a combatant the Engine gave 60 hit points.
+  assert.equal(carryHealthShare(5, 9, 60), 33, "a sheet at 56 per cent starts 56 per cent up the Engine's bar");
+  assert.equal(carryHealthShare(33, 60, 9), 5, "and reads straight back onto the sheet's own scale");
+
+  assert.equal(carryHealthShare(0, 9, 60), 0, "down is down on either scale");
+  assert.equal(carryHealthShare(-4, 9, 60), 0, "and so is a sheet somehow below zero");
+  assert.equal(carryHealthShare(9, 9, 60), 60, "full is full");
+  assert.equal(carryHealthShare(1, 60, 9), 1, "a combatant on one hit point of sixty is not rounded off the sheet");
+  assert.equal(carryHealthShare(1, 9, 60), 7, "and the smallest sliver of a sheet is still a real health bar");
+  // A maximum of zero cannot say what share anything is, so the whole amount crosses rather than a
+  // division by nothing. No live pool reaches the seed this way (`listRulesetLivePools` drops a pool
+  // whose maximum is not above zero), so this is the guard behind that, not a reachable sheet.
+  assert.equal(carryHealthShare(0, 0, 60), 60, "a sheet with no maximum seeds the Engine's full hit points");
+  assert.equal(carryHealthShare(30, 0, 9), 9);
+}
+
 // ── Seeding: the 5e example, with damaged hit points and a spent slot ──
 {
   const caster = build({
     fields: { hp_max: 24, spellcasting_ability: "wis", slots_max_1: 4, slots_max_2: 3, slots_max_3: 2 },
   });
   const live = { pools: { hp: { value: 9 }, slots_1: { value: 1 }, slots_3: { value: 0 } } };
-  assert.deepEqual(seedCombatantFromSheet(fiveE, caster, live), {
-    hp: 9,
-    maxHp: 24,
+  assert.deepEqual(seedCombatantFromSheet(fiveE, caster, live, ENGINE_MAX_HP), {
+    // 9 of the sheet's 24 hit points, on the 60 the Engine built this combatant with. The maximum
+    // is the Engine's and is handed back untouched; the sheet's own numbers ride along for the
+    // write-back to measure against.
+    hp: 23,
+    maxHp: 60,
+    sheetHp: 9,
+    sheetMaxHp: 24,
     // Levels 4 to 9 are absent, not zero: a character with no such slots must read as "no such
     // thing" rather than "none left", which is what stops the Engine from offering the spell.
     spellSlots: { "1": 1, "2": 3, "3": 0 },
   });
 
-  const untouched = seedCombatantFromSheet(fiveE, caster, undefined);
-  assert.deepEqual(untouched, { hp: 24, maxHp: 24, spellSlots: { "1": 4, "2": 3, "3": 2 } });
+  const untouched = seedCombatantFromSheet(fiveE, caster, undefined, ENGINE_MAX_HP);
+  assert.deepEqual(untouched, {
+    hp: 60,
+    maxHp: 60,
+    sheetHp: 24,
+    sheetMaxHp: 24,
+    spellSlots: { "1": 4, "2": 3, "3": 2 },
+  });
   assert.equal(untouched!.mp, undefined, "this ruleset has no energy pool, so the combatant gets none");
 
   const fighter = build({ fields: { hp_max: 30 } });
   assert.deepEqual(
-    seedCombatantFromSheet(fiveE, fighter, undefined),
-    { hp: 30, maxHp: 30 },
+    seedCombatantFromSheet(fiveE, fighter, undefined, ENGINE_MAX_HP),
+    { hp: 60, maxHp: 60, sheetHp: 30, sheetMaxHp: 30 },
     "slots hidden from a character who casts nothing are not seeded",
   );
 
   // A temporary buffer stays where it is stored. The Engine has no temporary hit points, and the
   // write-back's `damage` drains the buffer first, so it still absorbs the fight's first hits.
-  assert.equal(seedCombatantFromSheet(fiveE, fighter, { pools: { hp: { value: 30, temp: 5 } } })!.hp, 30);
+  assert.equal(seedCombatantFromSheet(fiveE, fighter, { pools: { hp: { value: 30, temp: 5 } } }, 60)!.hp, 60);
 }
 
 // ── Seeding: Ember Roads, whose hit points are Grit and whose energy is Luck ──
@@ -200,32 +238,40 @@ const fiveE = parsed(fiveText);
       ["luck", 3],
     ],
   );
-  assert.deepEqual(seedCombatantFromSheet(ember, traveller, { pools: { grit: { value: 4 }, luck: { value: 1 } } }), {
-    hp: 4,
-    maxHp: 6,
-    mp: 1,
-    maxMp: 3,
-  });
+  assert.deepEqual(
+    seedCombatantFromSheet(ember, traveller, { pools: { grit: { value: 4 }, luck: { value: 1 } } }, ENGINE_MAX_HP),
+    {
+      // 4 Grit of 6, on the Engine's own 60.
+      hp: 40,
+      maxHp: 60,
+      sheetHp: 4,
+      sheetMaxHp: 6,
+      // Energy is an absolute count, not a share: it is small, its costs come off the same sheet,
+      // and the Engine spends it one point at a time.
+      mp: 1,
+      maxMp: 3,
+    },
+  );
 
   // Zero hit points is the real number. Every engine reads `hp > 0` for who may act and who is
   // still standing, so the member starts the fight down, exactly as a member knocked out inside one
   // is down. Inventing a hit point here would put a character into a fight they cannot be in.
-  assert.equal(seedCombatantFromSheet(ember, traveller, { pools: { grit: { value: 0 } } })!.hp, 0);
+  assert.equal(seedCombatantFromSheet(ember, traveller, { pools: { grit: { value: 0 } } }, ENGINE_MAX_HP)!.hp, 0);
 
   // A pool the sheet does not have right now is not a resource to lend.
   const hidden = parsed(emberText, (doc) => {
     doc.sheet.live.pools[0].hideWhen = { field: "calling", equals: "ghost" };
   });
-  assert.equal(seedCombatantFromSheet(hidden, build({ fields: { calling: "ghost" } }), undefined), null);
+  assert.equal(seedCombatantFromSheet(hidden, build({ fields: { calling: "ghost" } }), undefined, ENGINE_MAX_HP), null);
 }
 
 // ── No battle block: the bridge does nothing at all ──
 {
   const plain = parsed(emberText, (doc) => delete doc.battle);
   assert.equal(plain.battle, undefined);
-  assert.equal(seedCombatantFromSheet(plain, build({}), { pools: { grit: { value: 1 } } }), null);
+  assert.equal(seedCombatantFromSheet(plain, build({}), { pools: { grit: { value: 1 } } }, ENGINE_MAX_HP), null);
   assert.deepEqual(combatSkillsFromSheet(plain, build({}), {}), []);
-  assert.deepEqual(sheetOpsFromCombatResult(plain, { hp: 6, maxHp: 6 }, { hp: 1 }), []);
+  assert.deepEqual(sheetOpsFromCombatResult(plain, { hp: 60, maxHp: 60, sheetHp: 6, sheetMaxHp: 6 }, { hp: 1 }), []);
 }
 
 // ── Catalog-marked rows become combat skills ──
@@ -387,28 +433,54 @@ const fiveE = parsed(fiveText);
 {
   const traveller = build({ fields: { toughness: 2 } });
   const stored = { pools: { grit: { value: 4 }, luck: { value: 2 } } };
-  const before = seedCombatantFromSheet(ember, traveller, stored)!;
+  const before = seedCombatantFromSheet(ember, traveller, stored, ENGINE_MAX_HP)!;
+  assert.equal(before.hp, 40, "4 Grit of 6 is two thirds of the way up a 60-point health bar");
 
   assert.deepEqual(sheetOpsFromCombatResult(ember, before, { hp: 1, mp: 0 }), [
+    // One hit point of sixty is a sliver of the bar, and a sliver of the bar is one Grit, never
+    // zero: only a combatant who is actually down writes the sheet down.
     { op: "damage", pool: "grit", amount: 3 },
     { op: "spend", pool: "luck", amount: 2 },
   ]);
   assert.deepEqual(
-    sheetOpsFromCombatResult(ember, before, { hp: 6, mp: 2 }),
+    sheetOpsFromCombatResult(ember, before, { hp: 0, mp: 2 }),
+    [{ op: "damage", pool: "grit", amount: 4 }],
+    "a combatant who went down puts the sheet at zero",
+  );
+  assert.deepEqual(
+    sheetOpsFromCombatResult(ember, before, { hp: 60, mp: 2 }),
     [{ op: "restore", pool: "grit", amount: 2 }],
     "a battle that ended better than it started gives the sheet back what it healed",
   );
-  assert.deepEqual(sheetOpsFromCombatResult(ember, before, { hp: 4, mp: 2 }), [], "an untouched member writes nothing");
-  assert.deepEqual(sheetOpsFromCombatResult(ember, before, { hp: 4 }), [], "and neither does a summary without mp");
+  assert.deepEqual(
+    sheetOpsFromCombatResult(ember, before, { hp: 40, mp: 2 }),
+    [],
+    "an untouched member writes nothing",
+  );
+  assert.deepEqual(sheetOpsFromCombatResult(ember, before, { hp: 40 }), [], "and neither does a summary without mp");
+  // The share is deliberately not recomputed for a fight that did not move the combatant: 40 of 60
+  // reads back as 4 Grit here, but a sheet whose share rounds the other way must not be nudged by
+  // the conversion alone, so an unchanged hit point count writes no health operation at all.
+  const rounded = seedCombatantFromSheet(
+    ember,
+    build({ fields: { toughness: 5 } }),
+    { pools: { grit: { value: 5 } } },
+    ENGINE_MAX_HP,
+  )!;
+  assert.equal(rounded.hp, 33, "5 Grit of 9, on the Engine's 60");
+  assert.deepEqual(sheetOpsFromCombatResult(ember, rounded, { hp: 33 }), [], "a fight nobody was touched in is free");
+  assert.deepEqual(sheetOpsFromCombatResult(ember, rounded, { hp: 0 }), [{ op: "damage", pool: "grit", amount: 5 }]);
+  assert.deepEqual(sheetOpsFromCombatResult(ember, rounded, { hp: 1 }), [{ op: "damage", pool: "grit", amount: 4 }]);
+  assert.deepEqual(sheetOpsFromCombatResult(ember, rounded, { hp: 60 }), [{ op: "restore", pool: "grit", amount: 4 }]);
 
   const caster = build({ fields: { hp_max: 24, spellcasting_ability: "wis", slots_max_1: 4, slots_max_3: 2 } });
-  const casterBefore = seedCombatantFromSheet(fiveE, caster, undefined)!;
-  assert.deepEqual(sheetOpsFromCombatResult(fiveE, casterBefore, { hp: 24, spellSlots: { "1": 3, "3": 0 } }), [
+  const casterBefore = seedCombatantFromSheet(fiveE, caster, undefined, ENGINE_MAX_HP)!;
+  assert.deepEqual(sheetOpsFromCombatResult(fiveE, casterBefore, { hp: 60, spellSlots: { "1": 3, "3": 0 } }), [
     { op: "spend", pool: "slots_1", amount: 1 },
     { op: "spend", pool: "slots_3", amount: 2 },
   ]);
   assert.deepEqual(
-    sheetOpsFromCombatResult(fiveE, casterBefore, { hp: 24, spellSlots: { "9": 0 } }),
+    sheetOpsFromCombatResult(fiveE, casterBefore, { hp: 60, spellSlots: { "9": 0 } }),
     [],
     "a level the seed never carried is a level the battle could not spend",
   );
@@ -418,13 +490,17 @@ const fiveE = parsed(fiveText);
 {
   const traveller = build({ fields: { toughness: 2 } });
   const stored = { pools: { grit: { value: 4 }, luck: { value: 2 } } };
-  const before = seedCombatantFromSheet(ember, traveller, stored)!;
+  const before = seedCombatantFromSheet(ember, traveller, stored, ENGINE_MAX_HP)!;
   const after = { hp: 1, mp: 0 };
 
   const written = applyCombatResultToLive(ember, traveller, stored, sheetOpsFromCombatResult(ember, before, after));
   assert.deepEqual(written.refused, []);
-  const seededAgain = seedCombatantFromSheet(ember, traveller, written.live);
-  assert.deepEqual(seededAgain, { hp: 1, maxHp: 6, mp: 0, maxMp: 3 } satisfies RulesetCombatSeed);
+  const seededAgain = seedCombatantFromSheet(ember, traveller, written.live, ENGINE_MAX_HP);
+  assert.deepEqual(
+    seededAgain,
+    { hp: 10, maxHp: 60, sheetHp: 1, sheetMaxHp: 6, mp: 0, maxMp: 3 } satisfies RulesetCombatSeed,
+    "the fight left one Grit of six, so the next fight starts a sixth of the way up the bar",
+  );
   assert.deepEqual(stored, { pools: { grit: { value: 4 }, luck: { value: 2 } } }, "the input blob is never touched");
 
   assert.deepEqual(

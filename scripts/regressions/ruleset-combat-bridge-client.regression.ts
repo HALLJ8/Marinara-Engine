@@ -3,11 +3,12 @@
 // the REAL example rulesets, so nothing here can agree with a mistake the client also makes.
 //
 // What it pins: seeding replaces only what the sheet owns and adds its skills without duplicating
-// one; a member with no readable sheet, an enemy, and every member of a game whose ruleset has no
-// `battle` block come back untouched, array reference included; a card is found by the SAME
-// normalized key live state is stored under, with the persona winning a name it shares; write-back
-// merges several members into one live object, leaves everybody else's entry alone, and gives back
-// what a battle healed rather than taking it.
+// one; the combatant keeps the maximum hit points the Engine gave it and starts at the share of it
+// the sheet is at, both on the way in and on the way back; a member with no readable sheet, an
+// enemy, and every member of a game whose ruleset has no `battle` block come back untouched, array
+// reference included; a card is found by the SAME normalized key live state is stored under, with
+// the persona winning a name it shares; write-back merges several members into one live object,
+// leaves everybody else's entry alone, and gives back what a battle healed rather than taking it.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
@@ -78,10 +79,12 @@ const combatant = (name: string, over: Partial<Combatant> = {}): Combatant => ({
   ...over,
 });
 
+/** A member as the Engine's summary reports them: on the ENGINE's scale, untouched by default, so
+ *  every fight below says what it did to somebody by overriding it. */
 const summaryMember = (
   name: string,
   over: Partial<CombatSummary["party"][number]> = {},
-): CombatSummary["party"][number] => ({ name, hp: 1, maxHp: 6, ko: false, statusEffects: [], ...over });
+): CombatSummary["party"][number] => ({ name, hp: 80, maxHp: 80, ko: false, statusEffects: [], ...over });
 
 // ── Only the catalogs a battle actually reads are asked for ──
 
@@ -103,7 +106,9 @@ assert.deepEqual(
   const after = seeded.party[0]!;
   assert.deepEqual(
     { hp: after.hp, maxHp: after.maxHp, mp: after.mp, maxMp: after.maxMp },
-    { hp: 4, maxHp: 6, mp: 1, maxMp: 3 },
+    // 4 Grit of 6, on the 80 hit points the Engine built this combatant with. The maximum is the
+    // Engine's, because the damage the fight deals is the Engine's; energy is an absolute count.
+    { hp: 53, maxHp: 80, mp: 1, maxMp: 3 },
   );
   assert.deepEqual(
     { attack: after.attack, defense: after.defense, speed: after.speed, level: after.level, id: after.id },
@@ -115,7 +120,7 @@ assert.deepEqual(
     after.skills!.map((skill) => skill.id),
     ["cleave-0", "knacks/coldfire-toss"],
   );
-  assert.deepEqual(seeded.seeds, { sable: { hp: 4, maxHp: 6, mp: 1, maxMp: 3 } });
+  assert.deepEqual(seeded.seeds, { sable: { hp: 53, maxHp: 80, sheetHp: 4, sheetMaxHp: 6, mp: 1, maxMp: 3 } });
   assert.equal(before.hp, 80, "the combatant handed in is never mutated");
 
   // A skill the combatant already carries is not added a second time.
@@ -131,7 +136,7 @@ assert.deepEqual(
 
   // A catalog that would not load costs the skills it holds and nothing else.
   const noCatalog = seedRulesetBattleParty(ember, cards, live, {}, [combatant("Sable")]);
-  assert.equal(noCatalog.party[0]!.hp, 4);
+  assert.equal(noCatalog.party[0]!.hp, 53);
   assert.deepEqual(
     noCatalog.party[0]!.skills!.map((skill) => skill.id),
     ["cleave-0"],
@@ -191,12 +196,15 @@ assert.deepEqual(
     7,
   );
 
+  // Which card answered shows in the seed's own numbers, not on the combatant: maximum hit points
+  // are the Engine's whichever sheet was read.
   const anybody = seedRulesetBattleParty(ember, cards, undefined, emberCatalogs, [combatant("  SABLE  ")]);
-  assert.equal(anybody.party[0]!.maxHp, 7, "with no player named, the first card holding that name answers");
+  assert.equal(anybody.party[0]!.maxHp, 80, "the Engine's maximum is never replaced by a sheet's");
+  assert.equal(anybody.seeds.sable!.sheetMaxHp, 7, "with no player named, the first card holding that name answers");
   assert.deepEqual(Object.keys(anybody.seeds), ["sable"], "and it is stored under the key live state uses");
 
   const player = seedRulesetBattleParty(ember, cards, undefined, emberCatalogs, [combatant("Sable")], "Sable");
-  assert.equal(player.party[0]!.maxHp, 5, "the persona's own card wins the name it shares with a party member");
+  assert.equal(player.seeds.sable!.sheetMaxHp, 5, "the persona's own card wins the name it shares with a party member");
 }
 
 // ── Write-back: one live object for the whole game ──
@@ -214,8 +222,9 @@ assert.deepEqual(
   ]).seeds;
 
   const written = applyRulesetBattleResult(ember, cards, live, seeds, [
-    summaryMember("Sable", { hp: 1, maxHp: 6, mp: 0, maxMp: 3 }),
-    summaryMember("Rook", { hp: 6, maxHp: 6 }),
+    // 13 hit points of 80 is a sliver of the bar, and a sliver of six Grit is one, never zero.
+    summaryMember("Sable", { hp: 13, mp: 0, maxMp: 3 }),
+    summaryMember("Rook"),
     // In the fight, but nobody the sheets know.
     summaryMember("Ash", { hp: 3, maxHp: 40 }),
   ]);
@@ -231,8 +240,9 @@ assert.deepEqual(
 
   // Several members at once merge into ONE object, each against their own sheet.
   const both = applyRulesetBattleResult(ember, cards, live, seeds, [
-    summaryMember("Sable", { hp: 2, maxHp: 6, mp: 2, maxMp: 3 }),
-    summaryMember("Rook", { hp: 3, maxHp: 6 }),
+    // 27 of 80 reads back as 2 Grit of 6, and 40 of 80 as 3.
+    summaryMember("Sable", { hp: 27, mp: 2, maxMp: 3 }),
+    summaryMember("Rook", { hp: 40 }),
   ]);
   assert.deepEqual(both.updated, ["Sable", "Rook"]);
   assert.deepEqual(both.live!.sable!.pools, { grit: { value: 2 }, luck: { value: 2 } });
@@ -245,7 +255,9 @@ assert.deepEqual(
   const cards = [card("Sable", { fields: { toughness: 2 } })];
   const live: RulesetLiveStates = { sable: { pools: { grit: { value: 2 } } } };
   const seeds = seedRulesetBattleParty(ember, cards, live, emberCatalogs, [combatant("Sable")]).seeds;
-  const healed = applyRulesetBattleResult(ember, cards, live, seeds, [summaryMember("Sable", { hp: 5, maxHp: 6 })]);
+  // The fight began on 2 Grit of 6, which is 27 of the Engine's 80, and ended on 67 of them.
+  assert.equal(seeds.sable!.hp, 27);
+  const healed = applyRulesetBattleResult(ember, cards, live, seeds, [summaryMember("Sable", { hp: 67 })]);
   assert.deepEqual(healed.live!.sable!.pools, { grit: { value: 5 } });
 }
 
@@ -253,22 +265,23 @@ assert.deepEqual(
 {
   // What a battle restored after a reload looks like: nothing was remembered, and the sheet has not
   // moved since the fight began, so what it holds now is what the fight started from.
+  // With nothing remembered, the share the fight began on is recomputed against the maximum the
+  // summary still reports for the combatant, so the conversion back has the same scale it went in
+  // on: 20 of the sheet's 24 was 50 of the Engine's 60, and 27 of 60 reads back as 11 of 24.
   const cards = [card("Vex", { fields: { hp_max: 24, spellcasting_ability: "wis", slots_max_1: 4, slots_max_2: 2 } })];
   const live: RulesetLiveStates = { vex: { pools: { hp: { value: 20 }, slots_1: { value: 3 } } } };
-  const restored = applyRulesetBattleResult(fiveE, cards, live, null, [
-    summaryMember("Vex", { hp: 11, maxHp: 24, spellSlots: { "1": 1, "2": 2 } }),
-  ]);
+  const ended = summaryMember("Vex", { hp: 27, maxHp: 60, spellSlots: { "1": 1, "2": 2 } });
+  const restored = applyRulesetBattleResult(fiveE, cards, live, null, [ended]);
   assert.deepEqual(restored.updated, ["Vex"]);
   assert.deepEqual(restored.live!.vex!.pools, { hp: { value: 11 }, slots_1: { value: 1 } });
 
   // A battle this session DID start but seeded nobody in (the live state was not ready) writes
   // nothing at all, rather than measuring the Engine's own numbers against a sheet.
-  assert.deepEqual(
-    applyRulesetBattleResult(fiveE, cards, live, {}, [
-      summaryMember("Vex", { hp: 11, maxHp: 24, spellSlots: { "1": 1, "2": 2 } }),
-    ]),
-    { live: null, updated: [], refused: [] },
-  );
+  assert.deepEqual(applyRulesetBattleResult(fiveE, cards, live, {}, [ended]), {
+    live: null,
+    updated: [],
+    refused: [],
+  });
 
   // The remembered seed still wins when there is one: a sheet edited mid-fight keeps that edit, and
   // only the battle's own delta is written on top of it.
@@ -277,8 +290,8 @@ assert.deepEqual(
     fiveE,
     cards,
     edited,
-    { vex: { hp: 20, maxHp: 24, spellSlots: { "1": 3, "2": 2 } } },
-    [summaryMember("Vex", { hp: 11, maxHp: 24, spellSlots: { "1": 1, "2": 2 } })],
+    { vex: { hp: 50, maxHp: 60, sheetHp: 20, sheetMaxHp: 24, spellSlots: { "1": 3, "2": 2 } } },
+    [ended],
   );
   assert.deepEqual(remembered.live!.vex!.pools, { hp: { value: 7 }, slots_1: { value: 1 } });
 }

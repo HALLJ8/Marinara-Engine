@@ -211,7 +211,10 @@ a character can walk out of a fight with their hit points on the sheet untouched
 
 An optional `battle` block changes that, in one direction only: it lends the fight the sheet's
 numbers, and writes the fight's outcome back. **It does not make combat follow your rules.** The
-dice math is still Marinara's, and so is who hits whom and for how much.
+dice math is still Marinara's, and so is who hits whom and for how much. Because of that, health is
+carried as a share of the maximum rather than as your own number: a character at half health on the
+sheet starts the fight at half of the health bar Marinara built for them. Your 9-point health pool
+is never dropped into a fight where one blow does 12.
 
 ```json
 "battle": {
@@ -235,14 +238,19 @@ dice math is still Marinara's, and so is who hits whom and for how much.
 
 ### What is carried in, and what is carried out
 
-**In**, for each party member whose sheet the game has: the health pool's current value and maximum
-become hit points, the energy pool becomes MP, each slot pool becomes that level's slots, and the
-marked rows become skills. Attack, defense, speed and level stay Marinara's own numbers. A character
-at zero in the health pool starts the fight down, because that is what the sheet says.
+**In**, for each party member whose sheet the game has: the health pool's share of its maximum sets
+where the fighter starts on Marinara's own health bar, the energy pool becomes MP, each slot pool
+becomes that level's slots, and the marked rows become skills. Maximum hit points, attack, defense,
+speed and level stay Marinara's own numbers. A character at zero in the health pool starts the fight
+down, because that is what the sheet says, and a character above zero never starts below one hit
+point, so a small share cannot knock somebody out by rounding.
 
-**Out**, once the fight is over: the hit points lost or regained, the energy spent, and the slots
-spent are applied back to the live sheet, through the same rules the sheet's own buttons follow. A
-change the sheet refuses is skipped and reported rather than forced.
+**Out**, once the fight is over: the share of the health bar the fighter ended on is read back onto
+the health pool's own scale, and the difference from where the fight began is applied as damage or
+healing. Energy and slots are counts, not shares, so they are written back as they are. Everything
+goes through the same rules the sheet's own buttons follow, and a change the sheet refuses is
+skipped and reported rather than forced. A fight that did not move a fighter's hit points writes no
+health change at all, so the two conversions can never move a sheet by themselves.
 
 **Neither**: attack rolls, saving throws, concentration, and what a higher cost would add. Those are
 in the `mechanics` block for a real combat system to read one day; this bridge does not apply them,

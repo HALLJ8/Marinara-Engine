@@ -8502,10 +8502,11 @@ function GameSurfaceComponent({
   }, [combatEnemies, combatParty]);
 
   // ── Battles on a ruleset sheet ──
-  // A ruleset that opted in with a `battle` block lends the fight the sheet's own hit points,
-  // energy and slots, and turns the catalog rows the sheet carries into skills. Nothing else about
-  // the battle changes: the damage is still Marinara's, which is what the notice says out loud. A
-  // game with no ruleset, or one whose ruleset has no block, never reaches any of this.
+  // A ruleset that opted in with a `battle` block lends the fight the sheet's own health, energy
+  // and slots, and turns the catalog rows the sheet carries into skills. Health travels as a share
+  // of the maximum, because the damage is still Marinara's and the two scales are nothing alike,
+  // which is what the notice says out loud. A game with no ruleset, or one whose ruleset has no
+  // block, never reaches any of this.
   const gameRuleset = useGameRuleset(chatMeta);
   /** What each seeded member started this battle with, keyed the way live state is. Null while this
    *  session has not seeded a battle, which is what a battle restored after a reload looks like. */

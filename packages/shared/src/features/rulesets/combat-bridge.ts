@@ -3,6 +3,8 @@
 // This is NOT a combat adapter. It adds no attack rolls, no saving throws and no concentration, and
 // it changes no damage arithmetic: a fight still runs on the Engine's own combat model. All it does
 // is move numbers across the seam, both ways, for a ruleset that opted in with a `battle` block.
+// Because the damage stays the Engine's, hit points cross as a SHARE of the maximum rather than as
+// raw numbers; energy and slots are small counts spent one at a time, so they cross as they are.
 //
 // Everything here is pure, reads only the definition, the build and the stored live blob, and never
 // throws. A ruleset with no `battle` block gets nothing from any of it, so a battle in that game is
@@ -26,17 +28,25 @@ import {
 } from "./live-state.js";
 
 /** What a party combatant takes from the sheet at the start of a battle. `attack`, `defense`,
- *  `speed` and `level` are deliberately absent: they stay the Engine's own numbers. */
+ *  `speed` and `level` are deliberately absent: they stay the Engine's own numbers, and so does the
+ *  maximum hit points the fight is fought on. */
 export interface RulesetCombatSeed {
+  /** Combat scale: the share of the Engine's own maximum that the sheet's health pool is at. */
   hp: number;
+  /** The Engine's own maximum, carried through untouched. It is the scale the share was taken
+   *  against, and the one the write-back converts back from. */
   maxHp: number;
+  /** Sheet scale: the health pool when the fight began, and the maximum it is measured against. */
+  sheetHp: number;
+  sheetMaxHp: number;
   mp?: number;
   maxMp?: number;
   /** Keyed by level as a string, which is how `Combatant.spellSlots` is keyed. */
   spellSlots?: Record<string, number>;
 }
 
-/** The same member's numbers when the battle ended, as the Engine's summary reports them. */
+/** The same member's numbers when the battle ended, as the Engine's summary reports them, so `hp`
+ *  is on the Engine's scale and `mp` and the slots are the sheet's own counts. */
 export interface RulesetCombatOutcome {
   hp: number;
   mp?: number;
@@ -77,14 +87,34 @@ function livePool(live: ReturnType<typeof readRulesetLive>, id: string) {
 }
 
 /**
+ * The same health, read on the other scale: `value` out of `fromMax`, as a number out of `toMax`.
+ *
+ * Hit points cross this seam as a SHARE, never as raw numbers. The Engine gives a level 1 combatant
+ * around 60 hit points and deals 11 to 15 damage a hit, while a sheet's health pool is on its own
+ * scale (9 Grit, 8 hit points for a level 1 wizard). The damage arithmetic stays the Engine's, so
+ * lending the raw number would kill a bridged character with the first blow of every fight.
+ *
+ * Nobody is rounded out of a fight or off a sheet: anything above zero stays above zero, zero stays
+ * zero, and a scale with no maximum at all carries the whole amount rather than dividing by nothing.
+ */
+export function carryHealthShare(value: number, fromMax: number, toMax: number): number {
+  if (!(fromMax > 0)) return toMax;
+  if (!(value > 0)) return 0;
+  return Math.max(1, Math.round((toMax * value) / fromMax));
+}
+
+/**
  * What the party combatant for this sheet starts the battle with, or null when the ruleset has no
  * `battle` block or the sheet has no health pool to read.
  *
- * Hit points are the pool's own value, zero included. A member at zero starts the fight down, which
- * is the state a knocked-out member is in for the rest of it: every engine reads `hp > 0` for who
- * may act and who is still standing, and a party whose members are all at zero ends in an immediate
- * defeat. Clamping to 1 would invent a hit point the sheet does not have, and the player would win a
- * fight their character was in no state to be in.
+ * The combatant keeps the maximum hit points the Engine gave it and starts at the share of it the
+ * sheet's health pool is at. A member at zero starts the fight down, which is the state a
+ * knocked-out member is in for the rest of it: every engine reads `hp > 0` for who may act and who
+ * is still standing, and a party whose members are all at zero ends in an immediate defeat. A member
+ * above zero never starts below one hit point, so a low share cannot knock somebody out by rounding.
+ *
+ * Energy and slots are ABSOLUTE, not shares: they are small counts, their costs come off the same
+ * sheet, and the Engine spends them one at a time.
  *
  * A temporary buffer is deliberately left behind rather than added on top: the Engine has no
  * temporary hit points, and the write-back's `damage` operation drains the buffer first anyway, so
@@ -94,6 +124,9 @@ export function seedCombatantFromSheet(
   definition: RulesetDefinition,
   build: RulesetSheetBuild,
   storedLive: unknown,
+  /** The maximum the Engine built this combatant with. It stays the combatant's own; the sheet
+   *  decides only what share of it the fight starts on. */
+  engineMaxHp: number,
 ): RulesetCombatSeed | null {
   const battle = definition.battle;
   if (!battle) return null;
@@ -101,7 +134,12 @@ export function seedCombatantFromSheet(
   const health = livePool(live, battle.health.pool);
   if (!health) return null;
 
-  const seed: RulesetCombatSeed = { hp: health.value, maxHp: health.max };
+  const seed: RulesetCombatSeed = {
+    hp: carryHealthShare(health.value, health.max, engineMaxHp),
+    maxHp: engineMaxHp,
+    sheetHp: health.value,
+    sheetMaxHp: health.max,
+  };
   const energy = battle.energy ? livePool(live, battle.energy.pool) : undefined;
   if (energy) {
     seed.mp = energy.value;
@@ -283,6 +321,12 @@ function poolOp(pool: string, delta: number, drain: "damage" | "spend"): Ruleset
  * The sheet operations that turn the live state the battle started from into the one it ended with.
  * A member whose numbers did not move produces nothing, and so does a battle the caller never
  * seeded. Nothing here is applied: the caller decides whether the fight counts.
+ *
+ * Hit points went in as a share of the Engine's maximum, so they come back as one. A fight that did
+ * not move the combatant's hit points writes no health operation at all, which is what keeps the two
+ * roundings from ever moving a sheet on their own. A combatant at zero puts the sheet at zero, and a
+ * combatant still standing never puts it below one. Healing past the share the fight began on comes
+ * back as `restore`, which `applyRulesetSheetOp` caps at the pool's own maximum.
  */
 export function sheetOpsFromCombatResult(
   definition: RulesetDefinition,
@@ -296,7 +340,10 @@ export function sheetOpsFromCombatResult(
   const push = (op: RulesetSheetOp | null) => {
     if (op) ops.push(op);
   };
-  push(poolOp(battle.health.pool, after.hp - before.hp, "damage"));
+  if (after.hp !== before.hp) {
+    const ended = carryHealthShare(after.hp, before.maxHp, before.sheetMaxHp);
+    push(poolOp(battle.health.pool, ended - before.sheetHp, "damage"));
+  }
   if (battle.energy && before.mp !== undefined && after.mp !== undefined) {
     push(poolOp(battle.energy.pool, after.mp - before.mp, "spend"));
   }

@@ -75,10 +75,11 @@ export function rulesetBattleCatalogIds(definition: RulesetDefinition): string[]
 }
 
 /** Hit points, energy and slots come from the sheet; everything else on the combatant is the
- *  Engine's and stays. The sheet's skills are ADDED to the ones the card already generated, so a
- *  battle never loses an ability it used to offer. */
+ *  Engine's and stays, `maxHp` included: the sheet sets only what share of that maximum the fight
+ *  starts on. The sheet's skills are ADDED to the ones the card already generated, so a battle never
+ *  loses an ability it used to offer. */
 function combatantFromSheet(combatant: Combatant, seed: RulesetCombatSeed, skills: CombatSkill[]): Combatant {
-  const next: Combatant = { ...combatant, hp: seed.hp, maxHp: seed.maxHp };
+  const next: Combatant = { ...combatant, hp: seed.hp };
   if (seed.mp !== undefined) next.mp = seed.mp;
   if (seed.maxMp !== undefined) next.maxMp = seed.maxMp;
   if (seed.spellSlots) next.spellSlots = seed.spellSlots;
@@ -113,7 +114,9 @@ export function seedRulesetBattleParty(
     const key = normalizeCharacterLookupName(combatant.name);
     const build = builds.get(key);
     if (!build) return combatant;
-    const seed = seedCombatantFromSheet(definition, build, live?.[key]);
+    // The Engine's own maximum is what the sheet's share is measured against, so the fight is
+    // fought on the numbers the damage arithmetic was built for.
+    const seed = seedCombatantFromSheet(definition, build, live?.[key], combatant.maxHp);
     if (!seed) return combatant;
     seeds[key] = seed;
     seeded = true;
@@ -149,10 +152,11 @@ export function applyRulesetBattleResult(
     if (!build) continue;
     const current = merged?.[key] ?? live?.[key];
     // Nothing else moves a pool while a battle is on screen, so a fight this session did not seed
-    // started from exactly what the sheet holds now. A fight it DID seed is measured against the
-    // seed, which is what keeps a sheet edited mid-battle from being counted twice, and keeps a
-    // member the battle never seeded out of the write-back entirely.
-    const before = seeds ? seeds[key] : seedCombatantFromSheet(definition, build, current);
+    // started from exactly what the sheet holds now, at the share of the maximum the summary still
+    // reports for it. A fight it DID seed is measured against the seed, which is what keeps a sheet
+    // edited mid-battle from being counted twice, and keeps a member the battle never seeded out of
+    // the write-back entirely.
+    const before = seeds ? seeds[key] : seedCombatantFromSheet(definition, build, current, member.maxHp);
     if (!before) continue;
     const ops = sheetOpsFromCombatResult(definition, before, {
       hp: member.hp,
