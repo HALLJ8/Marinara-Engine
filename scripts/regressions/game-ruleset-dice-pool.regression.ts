@@ -517,13 +517,15 @@ try {
     poolFaces(invented.results![0]!);
     assert.match(invented.content, /mode="normal"/, "the pool has no advantage to keep");
 
-    // The difficulty is a count of successes, so its ceiling is the pool's, not the d20's.
-    const tooMany = await resolveSkillCheckTagsInContent(`[skill_check: skill="Ward" dc="16"]`, {
+    // The difficulty is a count of successes, so its ceiling is what the largest roll could count
+    // (15 dice and as many again exploded), not the d20's, and the same number the schema allows a
+    // ladder step to ask for.
+    const tooMany = await resolveSkillCheckTagsInContent(`[skill_check: skill="Ward" dc="31"]`, {
       loadContext: async () => context,
       rulesetPinned: true,
     });
-    assert.equal(tooMany.resolved, 0, "more successes than the pool can hold dice is not a check");
-    const atTheCeiling = await resolveSkillCheckTagsInContent(`[skill_check: skill="Ward" dc="15"]`, {
+    assert.equal(tooMany.resolved, 0, "more successes than any roll could count is not a check");
+    const atTheCeiling = await resolveSkillCheckTagsInContent(`[skill_check: skill="Ward" dc="30"]`, {
       loadContext: async () => context,
       rulesetPinned: true,
     });
@@ -591,13 +593,13 @@ try {
 
     // This is the one path that reaches the resolver with an unbounded difficulty, because the
     // pool bounds a written DC before any ruleset is loaded. The ruleset's own ceiling holds.
-    const wild = await resolveSkillCheckTagsInContent(`[skill_check: skill="Ward" dc="30" pool="d20:1"]`, {
+    const wild = await resolveSkillCheckTagsInContent(`[skill_check: skill="Ward" dc="40" pool="d20:1"]`, {
       loadContext: async () => context,
       rulesetPinned: true,
       pool: session,
     });
-    assert.equal(wild.results![0]!.dc, 15, "clamped to the pool's maximum, not to the d20 bound of 40");
-    assert.match(wild.content, /dc="15"/);
+    assert.equal(wild.results![0]!.dc, 30, "clamped to what this pool could count, not to the d20 bound of 40");
+    assert.match(wild.content, /dc="30"/);
   }
 
   // ── The Game Master line ──

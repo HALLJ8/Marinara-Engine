@@ -1128,9 +1128,8 @@ function refineRulesetDefinition(def: RulesetDefinitionBase, ctx: z.RefinementCt
         issue(["resolution", key, "upTo"], `A ${key} face must be below the lowest target (${target.min})`);
       }
     }
-    // The most a roll can ever count: the largest pool, as many exploded dice again (the roller's
-    // cap), every one of them doubled. A number above it could never be reached at the table.
-    const reachable = (pool.max + (resolution.explode ? pool.max : 0)) * (resolution.double ? 2 : 1);
+    // A number above what the largest roll can count could never be reached at the table.
+    const reachable = rulesetPoolMaxSuccesses(resolution);
     if (resolution.exceptional && resolution.exceptional.successes > reachable) {
       issue(["resolution", "exceptional", "successes"], `The largest pool can count ${reachable} at most`);
     }
@@ -1337,6 +1336,16 @@ export type RulesetResolution = RulesetDefinition["resolution"];
  *  compiler finds the readers a third kind would break. */
 export type RulesetDiceSumResolution = Extract<RulesetResolution, { kind: "dice-sum" }>;
 export type RulesetDicePoolResolution = Extract<RulesetResolution, { kind: "dice-pool" }>;
+
+/** The most successes one roll of this pool can ever count: the largest pool, as many exploded dice
+ *  again (the roller's own cap), every one of them doubled. One answer for the schema's "could this
+ *  ever be reached" check and for the ceiling of a check's difficulty, so the two cannot disagree
+ *  about a ladder step the file was allowed to declare. */
+export function rulesetPoolMaxSuccesses(
+  resolution: Pick<RulesetDicePoolResolution, "pool" | "explode" | "double">,
+): number {
+  return (resolution.pool.max + (resolution.explode ? resolution.pool.max : 0)) * (resolution.double ? 2 : 1);
+}
 export type RulesetSheetSchema = RulesetDefinition["sheet"];
 export type RulesetField = z.infer<typeof rulesetFieldSchema>;
 export type RulesetListColumn = z.infer<typeof rulesetListColumnSchema>;

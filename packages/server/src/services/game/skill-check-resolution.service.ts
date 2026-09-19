@@ -25,6 +25,7 @@ import {
   matchRulesetCheckTarget,
   parseDiceNotation,
   rollDicePoolCheck,
+  rulesetPoolMaxSuccesses,
   rollDiceSumCheck,
   rulesetCheckModifier,
   rulesetSheetEnvelopeSchema,
@@ -335,10 +336,11 @@ function resolveRulesetSkillCheck(
   const isSave = target?.type === "save";
 
   if (resolution.kind === "dice-pool") {
-    // The DC is a count of successes, so its ceiling is the pool's. Clamped rather than refused:
+    // The DC is a count of successes, so its ceiling is what the largest roll could count. Clamped
+    // rather than refused:
     // the sighted pool's own bound is applied before any ruleset is loaded, so this is the only
     // place that knows what this ruleset's ceiling is.
-    const dc = Math.min(resolution.pool.max, Math.max(1, Math.round(request.dc)));
+    const dc = Math.min(rulesetPoolMaxSuccesses(resolution), Math.max(1, Math.round(request.dc)));
     const rolled = rollDicePoolCheck(
       definition,
       { modifier, required: dc, isSave, threshold: request.threshold, bonusDice: request.bonusDice },
@@ -489,9 +491,9 @@ export function isResolvableSkillCheckRequest(request: SkillCheckRequest, defini
   if (!request.skill || request.skill.length > SKILL_CHECK_MAX_SKILL_LENGTH) return false;
   const resolution = definition?.resolution;
   // A pool check's difficulty is a count of successes, not a target number, so the d20 bounds say
-  // nothing about it: it can never need more successes than the pool can hold dice.
+  // nothing about it: it can never need more successes than the largest roll could count.
   if (resolution?.kind === "dice-pool") {
-    return Number.isInteger(request.dc) && request.dc >= 1 && request.dc <= resolution.pool.max;
+    return Number.isInteger(request.dc) && request.dc >= 1 && request.dc <= rulesetPoolMaxSuccesses(resolution);
   }
   // A ruleset's own difficulty ladder may reach past the Engine's d20 bounds in either direction.
   const ladder = resolution?.difficultyLadder.map((step) => step.dc) ?? [];

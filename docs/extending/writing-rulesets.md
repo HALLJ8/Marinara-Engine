@@ -118,10 +118,10 @@ The sheet's number is the **size of the pool**, not a bonus on top of it. A rati
 ```
 
 - `die`: how many sides one die of the pool has, from 2 to 100.
-- `pool`: the range the sheet's number is held to. A `min` of 0 lets an empty pool fail with no roll at all. The Engine throws at most 100 dice for one check whatever you write here.
+- `pool`: the range the sheet's number is held to before anything explodes. A `min` of 0 lets an empty pool fail with no roll at all, and `max` can be 100 at most.
 - `target`: the face a die has to reach to count. Write `min` below `max` to let the Game Master move it per check with `threshold=`; write all three the same to fix it.
 - `double`: optional. A face at or above `from` counts twice.
-- `explode`: optional. A face at or above `from` rolls one more die, and a die added that way can explode in turn. The extra dice are capped at the pool's own maximum, so a low `from` cannot roll forever.
+- `explode`: optional. A face at or above `from` rolls one more die, and a die added that way can explode in turn. The extra dice are capped at `pool.max` on top of the pool itself, so one check throws at most twice `pool.max` dice and a low `from` cannot roll forever.
 - `cancel`: optional. A face at or below `upTo` takes one success away. The count never goes below zero.
 - `botch`: optional. When **no** die succeeded and a face at or below `upTo` showed, the check is a critical failure. A pool whose one success was cancelled away has failed, not botched.
 - `exceptional`: optional. This many net successes or more, on a check that succeeded, is a critical success.
@@ -138,7 +138,7 @@ A pool ruleset is Capability API 1.24 for a packaged ruleset. A community rulese
 [skill_check: skill="Ward" dc="2" who="Bram the Quiet" threshold="8" bonus="-2" with="Sinew"]
 ```
 
-- `dc` is the number of **successes** needed, not a target number. It may be anything from 1 up to the pool's maximum.
+- `dc` is the number of **successes** needed, not a target number. It may be anything from 1 up to the most one roll could ever count: the pool's maximum, doubled when dice can explode, and doubled again when faces count twice.
 - `threshold=` moves the per-die target, and is only offered while `target.min` is below `target.max`.
 - `bonus=` adds or takes dice, and is only offered while `situationalDice` is declared.
 - `with=` rolls a skill or save with another ability than its own. It works on both kinds, so a 5e ruleset gets "Strength (Intimidation)" from the same attribute.
