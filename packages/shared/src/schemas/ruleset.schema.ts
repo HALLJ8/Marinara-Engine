@@ -655,11 +655,16 @@ const catalogText = (max: number) =>
     .regex(/^[^\u0000-\u001F\u007F-\u009F\u2028\u2029]*$/, "Text cannot contain line breaks or control characters");
 
 /** A count, a die and one optional flat adjustment (`2d6`, `8d6`, `1d8+3`). Deliberately narrow:
- *  the later combat bridge has to read this, not just print it. */
+ *  the later combat bridge has to read this, not just print it. At least one die of at least two
+ *  sides, because `0d6` and `1d0` are dice nobody can throw: a fight would roll nothing for them and
+ *  call it a result. Said in the pattern itself so the generated JSON Schema says it too. */
 const catalogDice = z
   .string()
   .max(40)
-  .regex(/^\d{1,3}d\d{1,4}(?:[+-]\d{1,4})?$/, "Dice look like 2d6 or 1d8+3");
+  .regex(
+    /^[1-9]\d{0,2}d(?:[2-9]|[1-9]\d{1,3})(?:[+-]\d{1,4})?$/,
+    "Dice look like 2d6 or 1d8+3: at least one die, of at least two sides",
+  );
 
 const catalogAmountShape = { dice: catalogDice.optional(), flat: z.number().int().optional() };
 
@@ -894,6 +899,15 @@ const creatureActionSchema = z
         message: "This action has a save of its own, and that save's difficulty is what a save-ends uses",
       });
     }
+    // A recharge nothing on its dice can reach is an action that is used once and never again, which
+    // is what `uses` is for.
+    if (action.recharge && action.recharge.from > action.recharge.dice.count * action.recharge.dice.sides) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["recharge", "from"],
+        message: `These dice roll ${action.recharge.dice.count * action.recharge.dice.sides} at most, so the action would never come back`,
+      });
+    }
     // A save with nothing to be rolled against is a save everybody passes, so it is refused here
     // rather than rolled for nothing in the middle of a turn.
     if (!action.save && action.saveDifficulty === undefined && action.applies?.some((entry) => entry.saveEnds)) {
@@ -944,6 +958,20 @@ const creatureSchema = z
         message: "An action bought with points needs signaturePoints for it to be bought from",
       });
     }
+    // The points only ever come back to their maximum, so a price above it is never affordable.
+    creature.actions.forEach((action, index) => {
+      if (
+        action.signature &&
+        creature.signaturePoints !== undefined &&
+        action.signature.cost > creature.signaturePoints
+      ) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["actions", index, "signature", "cost"],
+          message: `This costs ${action.signature.cost} and the creature only ever has ${creature.signaturePoints}`,
+        });
+      }
+    });
   });
 
 const catalogEntrySchema = z

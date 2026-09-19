@@ -168,12 +168,25 @@ function forecastFor(
   const forecast: NonNullable<RulesetCombatOption["forecast"]> = {};
   if (action.sequence) {
     const byId = new Map(actor.actions.map((entry) => [entry.id, entry]));
+    // A part that has no use left, or is waiting for its dice, will not happen, so it is not
+    // promised either. Counted strike by strike, the way the sequence will resolve: a part with one
+    // use left that is named twice lands once, and a part that recharges lands once and is spent.
+    const usesLeft = new Map<string, number>();
+    const spent = new Set<string>();
     const total = action.sequence.reduce((sum, step) => {
       const part = byId.get(step.actionId);
-      // A part that has no use left, or is waiting for its dice, will not happen, so it is not
-      // promised either.
-      if (!part?.damage || !rulesetActionAvailable(actor, part)) return sum;
-      return sum + step.times * rulesetAverageAmount(part.damage);
+      if (!part || !rulesetActionAvailable(actor, part) || spent.has(part.id)) return sum;
+      let strikes = step.times;
+      if (part.uses) {
+        const uses = usesLeft.get(part.id) ?? actor.uses[part.id] ?? 0;
+        strikes = Math.min(strikes, uses);
+        usesLeft.set(part.id, uses - strikes);
+      }
+      if (part.recharge && strikes > 0) {
+        strikes = 1;
+        spent.add(part.id);
+      }
+      return sum + (part.damage ? strikes * rulesetAverageAmount(part.damage) : 0);
     }, 0);
     if (total > 0) forecast.averageDamage = Math.round(total * 100) / 100;
     return forecast.averageDamage === undefined ? undefined : forecast;

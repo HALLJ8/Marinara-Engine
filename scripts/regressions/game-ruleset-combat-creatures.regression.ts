@@ -240,6 +240,28 @@ const track = (definition: RulesetDefinition, state: RulesetEncounterState, id: 
     /Duplicate action id/,
   );
 
+  // Numbers nothing could ever reach are refused where they are written, not found out mid-fight.
+  for (const dice of ["0d6", "1d0", "1d1", "02d6"]) {
+    assert.match(
+      refusal(beastly((creature) => (creature.actions[0].damage.dice = dice))),
+      /at least one die, of at least two sides/,
+      `${dice} is not dice anybody can throw`,
+    );
+  }
+  assert.match(
+    refusal(beastly((creature) => (creature.actions[0].recharge = { dice: { count: 1, sides: 6 }, from: 7 }))),
+    /roll 6 at most, so the action would never come back/,
+  );
+  assert.match(
+    refusal(
+      beastly((creature) => {
+        creature.signaturePoints = 1;
+        creature.actions[0].signature = { cost: 2 };
+      }),
+    ),
+    /costs 2 and the creature only ever has 1/,
+  );
+
   // A sequence names another action of the same block, and never another sequence.
   assert.match(
     refusal(beastly((creature) => (creature.actions[2].sequence[0].action = "a_stranger"))),
@@ -693,6 +715,40 @@ const traveller = (live: unknown = {}): RulesetCombatantInput => ({
     ["bite"],
     "a sequence never hands a part a use it no longer has",
   );
+}
+
+// ── A one-use part named twice is promised once, and lands once ──
+{
+  const twice: RulesetCombatantInput = {
+    id: "twice",
+    name: "Twice",
+    side: "enemy",
+    block: {
+      health: 30,
+      defense: 12,
+      initiativeModifier: 0,
+      actions: [
+        {
+          id: "spit",
+          name: "Spit",
+          budget: "action",
+          toHit: 10,
+          damage: { count: 1, sides: 4, flat: 0 },
+          uses: { per: "encounter", count: 1 },
+        },
+        { id: "double_spit", name: "Double spit", budget: "action", sequence: [{ action: "spit", times: 2 }] },
+      ],
+    },
+  };
+  let state = fight(fiveE, [fighter(), twice], fiveBestiary, 18, 5);
+  state = endTurn(fiveE, state, "brenna").state;
+  assert.deepEqual(
+    rulesetCombatOptions(fiveE, state, "twice").find((option) => option.id === "double_spit")?.forecast,
+    { averageDamage: 2.5 },
+    "the forecast counts strike by strike, the way the sequence resolves",
+  );
+  const spat = act(fiveE, state, { actorId: "twice", optionId: "double_spit", targetIds: ["brenna"] }, 16, 3);
+  assert.equal(spat.events.filter((event) => event.type === "attack").length, 1, "and one strike is what happens");
 }
 
 // ── A sequence with a target for each part, on Ember Roads ──
