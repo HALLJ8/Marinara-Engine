@@ -264,10 +264,7 @@ assert.equal(
   formatCatalogMechanics(coldfire.mechanics!, labels, t),
   "Attack · range 12 paces · burst 4 paces · anyone · hits friends too · 2d6 coldfire",
 );
-assert.equal(
-  formatCatalogMechanics(lastEmber.mechanics!, labels, t),
-  "Healing · self or touch · allies · 3 · costs 1 Grit",
-);
+assert.equal(formatCatalogMechanics(lastEmber.mechanics!, labels, t), "Healing · self or touch · allies · 3 · Grit: 1");
 
 // Nothing in the line is hard-coded to one system: the save and the pool are named by the RULESET,
 // the unit by the CATALOG, and every other word by a localization key.
@@ -290,7 +287,7 @@ assert.equal(
     d20Labels,
     t,
   ),
-  "Attack · range 150 ft · burst 20 ft · 8d6 fire · Dexterity save for half · costs 1 Slots (3rd)",
+  "Attack · range 150 ft · burst 20 ft · 8d6 fire · Dexterity: half on a success · Slots (3rd): 1",
 );
 
 // The remaining vocabulary still renders, and an unknown save or pool falls back to its own id
@@ -310,7 +307,7 @@ assert.equal(
     d20Labels,
     t,
   ),
-  "Debuff · enemies · attack roll · 1d8+3 · 2 for each extra step · grit save to avoid · concentration · reaction",
+  "Debuff · enemies · attack roll · 1d8+3 · 2 more for each step of extra cost · grit: nothing on a success · concentration · reaction",
 );
 assert.equal(formatCatalogMechanics({ kind: "utility" }, d20Labels, t), "Utility");
 // A catalog that declares no distance unit still reads, with bare numbers.
