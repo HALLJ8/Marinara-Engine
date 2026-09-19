@@ -303,7 +303,7 @@ export function clampRulesetStatBlock(
   if (health < tier.health[0] || health > tier.health[1]) {
     block.health = Math.min(tier.health[1], Math.max(tier.health[0], Math.floor(health)));
     // The band is about the number, so once the number is set the dice have nothing left to decide.
-    if (block.healthDice) delete block.healthDice;
+    delete block.healthDice;
     adjusted.push(
       `Health ${health} was pulled into the ${tier.health[0]} to ${tier.health[1]} of ${tier.label}, and is now ${block.health}.`,
     );
