@@ -379,17 +379,20 @@ export interface RulesetCheckRoll {
 }
 
 /** A check that threw nothing at all: the shape every "no roll happened" answer takes, so no path
- *  ever has to invent a die to have something to return. */
-const NO_ROLL: RulesetCheckRoll = {
-  rolls: [],
-  usedRoll: 0,
-  total: 0,
-  success: false,
-  criticalSuccess: false,
-  criticalFailure: false,
-  rollMode: "normal",
-  dice: "",
-};
+ *  ever has to invent a die to have something to return. Built fresh each time, because a caller
+ *  spreads it into a result it then owns. */
+function noRoll(): RulesetCheckRoll {
+  return {
+    rolls: [],
+    usedRoll: 0,
+    total: 0,
+    success: false,
+    criticalSuccess: false,
+    criticalFailure: false,
+    rollMode: "normal",
+    dice: "",
+  };
+}
 
 /** Roll a `dice-sum` check. Advantage and disadvantage cancel, and are ignored entirely when the
  *  ruleset does not allow them. `preRolled` stands in for the dice when the player rolled first;
@@ -410,7 +413,7 @@ export function rollDiceSumCheck(
   rollDie: (sides: number) => number,
 ): RulesetCheckRoll {
   const resolution = definition.resolution;
-  if (resolution.kind !== "dice-sum") return NO_ROLL;
+  if (resolution.kind !== "dice-sum") return noRoll();
   const { dice, naturals, advantage: allowsAdvantage } = resolution;
   const single = dice.count === 1;
   const preRolled =
@@ -473,6 +476,7 @@ export function rollDicePoolCheck(
     modifier: number;
     /** How many successes the check needs. */
     required: number;
+    /** Taken so the two rollers answer the same question. No pool rule reads it today. */
     isSave: boolean;
     /** `threshold=`, honoured only where the ruleset lets the target move. */
     threshold?: number;
@@ -482,11 +486,8 @@ export function rollDicePoolCheck(
   rollDie: (sides: number) => number,
 ): RulesetPoolRoll {
   const resolution = definition.resolution;
-  if (resolution.kind !== "dice-pool") return { ...NO_ROLL, threshold: 0 };
+  if (resolution.kind !== "dice-pool") return { ...noRoll(), threshold: 0 };
   const { die, pool, target, double, explode, cancel, botch, exceptional, situationalDice } = resolution;
-  // `isSave` is read by no pool rule today. It is taken all the same, so the two rollers answer
-  // the same question and a kind that does distinguish saves needs no new call site.
-  void input.isSave;
 
   const threshold =
     target.min < target.max && Number.isFinite(input.threshold)
