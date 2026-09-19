@@ -1110,6 +1110,10 @@ const traveller = (live: unknown = {}): RulesetCombatantInput => ({
   }
   const { rulesetBattleCatalogIds } = await import("../../packages/client/src/lib/ruleset-combat-bridge.js");
   assert.deepEqual(rulesetBattleCatalogIds(ember), ["knacks"], "and the bridge asks for none of it either");
+  // The editor fetches the catalogs a sheet's own rows point at, and no row ever points at a
+  // creature, so a bestiary is never fetched for a character sheet either.
+  const { rulesetCatalogIdsForBuild } = await import("../../packages/shared/src/index.js");
+  assert.deepEqual(rulesetCatalogIdsForBuild(fiveE, fighterBuild()), []);
   // A bestiary entry writes nothing onto a sheet, which is what makes all of that hold.
   const { rowsFromCatalogEntry } = await import("../../packages/shared/src/index.js");
   assert.deepEqual(rowsFromCatalogEntry("creatures", entryOf(fiveE, "creatures", "grave-piper")), []);
