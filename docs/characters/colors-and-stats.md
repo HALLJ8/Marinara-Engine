@@ -67,6 +67,11 @@ When a Game Mode ruleset is installed, such as 5e (SRD 5.1), both **Stats** tabs
 
 A sheet here is that character's **starting build** for that ruleset. A new game on the ruleset takes a copy. Changes made inside a game stay in that game and never come back to the card.
 
+Some rulesets ship ready-made spells, attacks and features. Lists they fill have an **Add from catalog** button that opens a searchable picker, and the rows it adds are copies you can edit like any other. Two things follow from that:
+
+- A cell the ruleset keeps for you, such as uses that follow an ability score or a class resource that grows with your level, is shown in place but cannot be typed in, with the note "Set by the ruleset". It is worked out from the rest of the sheet every time you edit it.
+- When the ruleset's own text for one of those rows has changed since you picked it, a line under the list says how many rows have newer text, with a **Review** button. The review shows each row with what your sheet holds beside what the ruleset says, and a tick per row. **Update selected** writes the ticked rows and nothing else. Only text is compared: numbers, switches and anything you typed in another column are left alone, and so is every row you untick.
+
 A sheet for a ruleset you do not have installed is kept, not deleted. It shows as one line with a **Remove** button, it is never sent to the AI, and it becomes editable again when you install that ruleset. It also travels with the card when you export it. Each sheet is limited to 64 KB.
 
 A sheet for an installed ruleset that this version of Marinara cannot read, for example one saved by a newer version, is also kept as it is. Its entry offers **Remove this sheet** only, so adding a new sheet can never overwrite it by accident.

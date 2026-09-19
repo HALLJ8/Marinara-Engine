@@ -68,7 +68,7 @@ Some numbers on the sheet belong to the ruleset rather than to you. A class reso
 
 These live values belong to the message they happened in. If you swipe to another version of a turn, or regenerate it, the sheet goes back to how it was before that turn, so nothing is ever spent twice.
 
-Click **Edit sheet** to change the build itself, for example after a level-up: scores, fields, lists such as spells, and skill and save training. Calculated values update as you type. Click **Save sheet** when you are done. This changes only this game's copy of the sheet. The sheet stored on the character or persona is never changed by a game.
+Click **Edit sheet** to change the build itself, for example after a level-up: scores, fields, lists such as spells, and skill and save training. Calculated values update as you type. It is the same editor as the one on the character card, so rows can be added from the ruleset's catalogs here too, cells the ruleset keeps are shown but cannot be typed in, and a list whose ruleset text has changed offers a **Review** button. Click **Save sheet** when you are done. This changes only this game's copy of the sheet. The sheet stored on the character or persona is never changed by a game.
 
 The separate **Edit Sheet** button described above still edits the general sheet (class, abilities, strengths and so on) and leaves the ruleset sheet alone.
 

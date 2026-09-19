@@ -213,7 +213,21 @@ validated by the Engine that reads it, so it needs nothing.
 
 Each picked row is copied onto the sheet with one extra key, `_catalog`, holding `<catalog id>/<entry id>`. Column ids always start with a letter, so this key can never be one of yours.
 
-The copy is the character's. The player can edit any of it afterwards, the sheet keeps working while your ruleset is not installed, and publishing a new version of the ruleset never rewrites anyone's character. The mark is only there so the picker can show what a sheet already has.
+The copy is the character's. The player can edit any of it afterwards, the sheet keeps working while your ruleset is not installed, and publishing a new version of the ruleset never rewrites anyone's character. The mark is what the picker reads to show what a sheet already has, and what Refresh reads below.
+
+### Refresh from ruleset
+
+Because a picked row keeps its mark, the sheet editor can tell a player when your newer text differs from what their row holds. A short line under the list says how many rows have newer text, and a **Review** button shows each of them with what the sheet holds beside what the ruleset says, and a tick per row. Nothing is written until the player clicks **Update selected**, and only the columns that differ in the ticked rows are written. Everything else in the row survives, the mark included.
+
+What is compared is deliberately narrow:
+
+- Only `text`, `longtext`, `dice` and `enum` columns. A `number` or a `boolean` is where the player's own state lives (prepared, proficient, a magic weapon's bonus, a maximum they set by hand), and there is no stored base to merge against, so a difference there is never offered. A scaled column is never part of it either: it already follows the sheet.
+- Only columns your entry sets. A column your entry leaves out is never touched, whatever the sheet holds in it.
+- A value the column itself would refuse, such as an `enum` value you no longer offer or text past its `maxLength`, is skipped rather than written.
+- A row is matched to the entry row it came from by position among the rows carrying the same mark in that list, which holds while the sheet still has as many of them as your entry writes. Otherwise it works only when your entry writes a single row for that list. If a player deleted one row of a two-row entry, that entry is left alone rather than guessed at.
+- A row whose entry your catalog no longer has is left alone, silently.
+
+So rewording or renaming an entry can reach characters who already picked it, if they accept it. Changing what a number means cannot, and will not: that column is the player's once the row is theirs.
 
 ### `mechanics`, for later
 
