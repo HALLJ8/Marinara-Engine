@@ -225,8 +225,8 @@ vocabulary plus the package's data, not from a file that can name one system's w
 4. The bridge steps aside per ruleset: a ruleset that declares `combat` never takes the `battle`
    path, and `coverage.combat` finally means something.
 
-**The slices.** C1 the schema and the resolver (this one). C2 bestiary catalogs, stat-block actions,
-multiattack and recharge, the threat clamp, and the 5e package's creatures and enriched spells. C3
+**The slices.** C1 the schema and the resolver. C2 bestiary catalogs, stat-block actions, sequences
+and recharge, the threat clamp, and the 5e package's own creatures and enriched spells. C3
 the director's `ruleset` style: session, routes, persistence, enemy choices over the menu, the
 Classic shell on real numbers, `coverage.combat` true. C4 the Tactical shell: movement, reach and
 ranges, areas, cover, opportunity attacks. C5 reactions through the director's windows, legendary
@@ -291,6 +291,54 @@ actions, contests and the remaining conditions.
   damage and replaced by a second ability, dying with a revival on a lucky face and death on three
   failures, healing from zero, victory, defeat, the summary, the 1.26 install gate and a fight
   carried through `JSON.parse(JSON.stringify(...))` mid-battle.
+
+### What C2 settled
+
+- **A catalog says what it holds.** `holds` is `"rows"` (the default, so every catalog written
+  before this release is unchanged) or `"creatures"`. A bestiary declares no `feeds`, needs a
+  `combat` block and a `threat` scale, and is never offered by the sheet editor's picker, which goes
+  by `feeds` and therefore never sees one. An entry carries `rows` or a `creature`, never both and
+  never neither, and a creature carries no `mechanics`: it says what it does in its own actions. A
+  mixed catalog is refused, inline and in a `catalogs/<id>.json` asset, because
+  `rulesetCatalogEntryIssues` is where both are checked.
+- **A creature is written in the keys `combat` already declares**: health as a number or as dice
+  thrown when the encounter is created, a defense, an initiative modifier, ability scores and save
+  modifiers under the sheet's own ids, resistances by declared damage type, immunities by the
+  sheet's own conditions, a tier of the ruleset's own scale, prompt-safe traits the Game Master is
+  shown and never resolves, and actions. Capability API 1.27, read from the ruleset's own bytes
+  exactly as 1.21 through 1.26 are.
+- **A stat block carries its own save difficulties.** `save.difficulty`, or `saveDifficulty` for a
+  condition that ends on a save when the action forces none of its own, and one of the two is
+  required wherever a save is asked for. C1's rule for catalog rows (the abilities source supplies
+  the number) has no counterpart here, because a block is not a sheet.
+- **Four things only a creature's action has**: `uses` (per encounter or per day), `recharge` (spent
+  when used, rolled at the start of its owner's turn, back on `from` or higher, starts available),
+  `sequence` (other actions of the same block, in order, one budget for the lot, each part with its
+  own target and its own roll, never naming another sequence) and `signature` (bought with the
+  block's own `signaturePoints`, refreshed at the start of its own turn, never on its own turn's
+  menu). `rulesetSignatureOptions` prices them and `applyRulesetCombatChoice` spends them; the
+  window that offers one between two turns is C5.
+- **A sequence takes the targets of all its parts.** Hand it fewer and every part takes the ones at
+  the front of the list, so one id is "all of it at the same target". A part whose target the fight
+  is already over for is skipped, and nothing picks a new one: choosing is the caller's job.
+- **The clamp is for proposals only.** A shipped bestiary is data the author wrote and is taken as
+  written; a creature the Game Master invents goes through `clampRulesetStatBlock`, which pulls
+  health into the tier's band, holds defense, to-hit and save difficulties to two above the tier,
+  drops names the ruleset does not have and everything past six actions, and scales damage down
+  until the best round fits the tier's `damagePerRound` upper bound. It takes off dice count, then
+  the flat part, then a strike from a sequence, then the size of the die, and never scales anything
+  to nothing. A tier the ruleset does not declare falls back to the lowest, and every change comes
+  back as a plain sentence for the log.
+- **`damagePerRound` is read as one target's worth of a whole round**, sequence included, rather
+  than as one attack, because the round is what a clamp has to bound.
+- **Looking one up is exact, then plain, then nothing.** `findRulesetCreature` matches
+  `<catalogId>/<entryId>`, then a label or an id once case and punctuation are set aside, then
+  returns null. A reference the handed-in catalogs do not hold leaves that opponent out of the fight
+  with one `refused` event carrying `unknown-creature`, rather than walking in a creature with no
+  numbers.
+- **Proven on both examples** in `scripts/regressions/game-ruleset-combat-creatures.regression.ts`:
+  Ember Roads ships three original creatures and a three-rung threat scale, the 5e draft ships four,
+  and neither file's format knows the other's words.
 
 ## Architecture
 

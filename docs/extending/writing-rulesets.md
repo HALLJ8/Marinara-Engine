@@ -212,7 +212,8 @@ The header goes in `catalogs` at the top level of the file, beside `gm`.
 ```
 
 - `id` and `label`: the id follows the sheet id rules, and the label is what the picker is called.
-- `feeds`: the lists on your sheet that this catalog's entries may write into, one to eight of them. An entry can never write into a list that is not here, and it can never write a value the list's columns could not hold.
+- `holds`: `"rows"` (the default, and what every catalog written before this release is) or `"creatures"`. A catalog of creatures is a bestiary a fight reads: it writes nothing onto a sheet, declares no `feeds`, and the picker never offers it. See [Creatures](#creatures-a-bestiary-a-fight-reads) below.
+- `feeds`: the lists on your sheet that this catalog's entries may write into, one to eight of them. Required for a catalog of rows and refused on a catalog of creatures. An entry can never write into a list that is not here, and it can never write a value the list's columns could not hold.
 - `filters`: optional, up to eight. What the picker can narrow the list by. A filter is a `number`, a `text` value, or `tags` (several words). `startFrom` names a sheet field the picker opens on, so a character whose Calling is Tinker sees Tinker entries first.
 - `units`: optional. What a range or an area size in an entry's `mechanics` block means in your system.
 
@@ -237,6 +238,7 @@ The header goes in `catalogs` at the top level of the file, beside `gm`.
 - `label` and `summary`: what the picker shows. The summary is optional, one line, and up to 300 characters.
 - `filters`: the values for the filters the header declared. A `number` filter takes a number, a `text` filter takes one string, and a `tags` filter takes a list of strings.
 - `rows`: what picking the entry writes, one to six rows. `list` is one of the catalog's `feeds`, and `values` are keyed by that list's column ids.
+- `creature`: an opponent instead of rows, in a catalog that `holds` creatures. An entry has exactly one of `rows` or `creature`, and a creature carries no `mechanics`: it says what it does in its own actions.
 
 Every value is checked against the target list's columns, so a mistyped column name or a number outside a column's range is reported with the entry it came from. Entries written inside the ruleset file are checked when the ruleset is loaded, which for an imported file means at import. A package's separate catalog file is checked when the picker first asks for it, and a file with a mistake shows its reasons there instead of any entries.
 
@@ -377,7 +379,7 @@ The path is always `catalogs/<the catalog's id>.json`. The file itself looks lik
 { "schemaVersion": 1, "catalog": "knacks", "entries": [] }
 ```
 
-Separate catalog files are for packages published through the official catalog: the package lists the file in `contributions.assets.paths` beside `ruleset.json`, and it needs Capability API 1.21. **A ruleset you import as a single file, or share through a GitHub repository, carries its catalogs inline**, which means they have to fit inside the 256 KB limit on the whole ruleset file. That is room for a few hundred short entries.
+Separate catalog files are for packages published through the official catalog: the package lists the file in `contributions.assets.paths` beside `ruleset.json`, and it needs Capability API 1.21. A catalog of creatures, inline or in its own file, needs Capability API 1.27. **A ruleset you import as a single file, or share through a GitHub repository, carries its catalogs inline**, which means they have to fit inside the 256 KB limit on the whole ruleset file. That is room for a few hundred short entries.
 
 The limits are 12 catalogs per ruleset, 2000 entries per catalog either way, and 1 MB for one catalog file.
 
@@ -473,7 +475,8 @@ every name in it is yours. There is one kind today.
 **Nothing plays on it yet.** This release is the format and the resolver behind it, with no screen,
 no menu and no saved battle. A ruleset that declares `combat` still fights the way it did before
 until a later release wires it up. Write it now if you want it ready; nothing changes for your
-players today.
+players today. The same goes for the bestiary below: the creatures are read, checked and resolved,
+but nobody fights them yet.
 
 ```json
 "combat": {
@@ -593,9 +596,11 @@ regression does, and no player sees one yet. The 5e draft uses the same keys for
   costs (`damageWhileDown`, `criticalWhileDown`) and the `condition` a downed character is in.
   Without this block a character at zero is simply down, and healing brings them back.
 - `damageTypes`: optional. The types your system has, matched without case.
-- `threat`: optional. `tiers`, the scale an opponent is picked from: an id, a label, a `health` band,
-  a `defense`, a `toHit`, a `damagePerRound` band and a `saveDifficulty`. It is checked now and read
-  when creatures arrive, so nothing lands off your scale.
+- `threat`: optional, and needed by a bestiary. `tiers`, the scale an opponent is picked from: an id,
+  a label, a `health` band, a `defense`, a `toHit`, a `damagePerRound` band and a `saveDifficulty`.
+  Every creature you ship names one of these tiers, and an opponent nobody wrote is pulled onto the
+  one the Game Master asked for, so nothing lands off your scale. The `damagePerRound` band is read
+  as what a creature does to ONE target in a round, its whole sequence included.
 
 ### What a fight reads from `mechanics`
 
@@ -613,6 +618,112 @@ grants temporary points on the health pool, and they never stack: the bigger buf
 `scales` grows the amount by the extra DICE its table gives for the value it reads. `cost` is paid
 through the sheet's own `use` command, and `budget` overrides which part of the economy it spends.
 
+### Creatures: a bestiary a fight reads
+
+A catalog that declares `"holds": "creatures"` carries opponents instead of sheet rows. It feeds no
+list, the sheet editor's picker never offers it, and every number in it is written in the keys your
+`combat` block already declares. It needs a `combat` block and a `threat` scale, because a creature
+is filed under one of your own tiers.
+
+```json
+{
+  "id": "road_trouble",
+  "label": "Road trouble",
+  "holds": "creatures",
+  "filters": [{ "id": "tier", "label": "How bad", "type": "text" }],
+  "entries": [
+    {
+      "id": "rust-jackal",
+      "label": "Rust Jackal",
+      "summary": "A lean thing that lives on the metal roads.",
+      "filters": { "tier": "Pack trouble" },
+      "creature": {
+        "health": { "dice": "3d6" },
+        "defense": 6,
+        "initiativeModifier": 1,
+        "speed": 16,
+        "abilities": { "brawn": 1, "wits": 0, "heart": -1 },
+        "tier": "pack",
+        "actions": [
+          {
+            "id": "bite",
+            "name": "Bite",
+            "budget": "act",
+            "toHit": 2,
+            "damage": { "dice": "1d6", "flat": 1, "type": "cut" },
+            "reach": 2
+          },
+          {
+            "id": "worry",
+            "name": "Worry",
+            "budget": "act",
+            "toHit": 2,
+            "damage": { "dice": "1d4", "type": "cut" },
+            "applies": [{ "condition": "shaken", "duration": { "rounds": 2 } }]
+          },
+          {
+            "id": "snap_and_worry",
+            "name": "Snap and worry",
+            "budget": "act",
+            "sequence": [
+              { "action": "bite", "times": 1 },
+              { "action": "worry", "times": 1 }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}
+```
+
+- `health`: a number, or `{ "dice": "3d6", "flat": 2 }` thrown once when the fight is created. A
+  forecast reads the average, so a menu never promises a die nobody has thrown.
+- `defense`, `initiativeModifier`, `speed`: what an attack is rolled against, what it adds to
+  initiative, and how far it moves in your own unit (carried until a fight has positions).
+- `abilities` and `saves`: keyed by the ability ids and save ids your sheet declares. A save it does
+  not name reads as zero.
+- `resist`, `vulnerable`, `immune`: damage types, matched without case, and checked against
+  `combat.damageTypes` when you declare any. `conditionImmunities` names your own conditions.
+- `tier`: which rung of `combat.threat` it belongs to.
+- `traits`: short name and text pairs the Game Master is shown. They are never resolved, so
+  anything with numbers in it belongs in an action.
+- `signaturePoints`: points given back at the start of its own turn, spent on `signature` actions.
+- `actions`: up to twelve, each with an `id` of its own. An action carries what a hand-written stat
+  block carries (`toHit`, `autoHit`, `damage`, `save`, `applies`, `targetCount`, `reach`, `range`)
+  plus four things only a creature has:
+  - `uses`: `{ "per": "encounter" | "day", "count": n }`. When they run out the action leaves the
+    menu.
+  - `recharge`: `{ "dice": { "count": 1, "sides": 6 }, "from": 5 }`. It starts the fight available,
+    is spent when used, and at the start of the creature's own turn it rolls: `from` or higher
+    brings it back. The log carries the dice either way.
+  - `sequence`: other actions of the same block, in order, each with its own target. **This is how
+    a creature that strikes twice in one action is written.** One budget pays for the whole
+    sequence. A sequence carries nothing of its own and may never name another sequence.
+  - `signature`: `{ "cost": n }`, bought with the creature's own points instead of a budget, and
+    only while somebody else is acting. Stored, priced and spent today; see Not yet below.
+- A save needs a difficulty on the action itself: `save.difficulty` for a save the action forces, or
+  `saveDifficulty` for a condition that ends on a save when the action has no save of its own. A
+  stat block is not a character sheet, so there is nowhere else for that number to come from.
+
+The 5e draft's own bestiary is four hand-written creatures in
+`docs/development/ruleset-5e-2014.example.json`, covering a sequence, a recharge, a save with a
+condition, resistances and immunities, limited uses and signature points.
+
+#### Opponents nobody wrote
+
+When a Game Master invents an opponent, the Engine pulls the proposal onto your `threat` scale
+before anything rolls: health into the tier's band, defense, to-hit and save difficulties to at most
+two above the tier's own, and the damage scaled down until the creature's best round (its heaviest
+sequence, or its heaviest single action, measured against one target) is inside the tier's
+`damagePerRound`. It takes off the dice count first, then the flat part, then a strike from a
+sequence, and only then the size of the die, and never scales anything down to nothing. Names your
+ruleset does not have are dropped: unknown damage types, conditions and saves, and anything past the
+first six actions. A tier you never declared falls back to the bottom of your scale. Every change
+comes back as a plain sentence, so a log can say what it did.
+
+Your own bestiary is never clamped. It is data you wrote, so the Engine takes it as written.
+
 ### Not yet
 
 Said plainly, because a ruleset should not claim what the Engine does not do:
@@ -621,9 +732,9 @@ Said plainly, because a ruleset should not claim what the Engine does not do:
 - **No positions**: no distance, reach, ranges, areas on a map, cover, movement or opportunity
   attacks. `range`, `area` and `economy.movement` are carried and not read.
 - **No reactions**, so nothing interrupts a turn, and `cannot-react` changes nothing yet.
-- **No ready-made opponents.** A fight's opponents are stat blocks handed to the resolver; a
-  bestiary you can ship in your ruleset is a later release.
-- **One attack per action**, with no extra attacks, no multiattack and no recharge.
+- **Signature actions are stored, priced and resolved, but nothing opens the window they are used
+  in.** The points, the options and the spending are all here; what asks a creature for one between
+  one turn and the next arrives with reactions.
 - Conditions do what the closed effect list can say and no more. A condition that gives
   disadvantage on ability checks, or resistance to everything, is a plain record on the sheet today.
 
