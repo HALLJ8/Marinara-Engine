@@ -23,6 +23,7 @@ import {
   parseRulesetDefinition,
   readRulesetLive,
   rowsFromCatalogEntry,
+  RULESET_MOVE_OPTION,
   rulesetSheetBuildSchema,
   type DirectedCombatView,
   type DirectedCommand,
@@ -470,11 +471,16 @@ try {
     }
 
     // A walk the menu offered is taken, and where they ended up survives a reload.
-    const move = fight.ruleset!.options!.find((option) => option.id === "move")!;
+    const move = fight.ruleset!.options!.find((option) => option.id === RULESET_MOVE_OPTION)!;
     assert.ok(move, "a positioned menu offers the walk");
     assert.ok(move.cells!.length > 0);
     const target = move.cells![0]!;
-    const walked = await send({ type: "ruleset", optionId: "move", targetIds: [], to: { x: target.x, y: target.y } });
+    const walked = await send({
+      type: "ruleset",
+      optionId: RULESET_MOVE_OPTION,
+      targetIds: [],
+      to: { x: target.x, y: target.y },
+    });
     assert.equal(walked.statusCode, 200, walked.body);
     const mover = fight.ruleset!.combatants.find((combatant) => combatant.id === mine.id)!;
     assert.equal(mover.x, target.x);
@@ -493,7 +499,7 @@ try {
 
     // A cell the menu did not offer is refused with its own code, and bumps nothing.
     const revisionBefore = fight.revision;
-    const nowhere = await send({ type: "ruleset", optionId: "move", targetIds: [], to: { x: 63, y: 63 } });
+    const nowhere = await send({ type: "ruleset", optionId: RULESET_MOVE_OPTION, targetIds: [], to: { x: 63, y: 63 } });
     assert.equal(nowhere.statusCode, 400, nowhere.body);
     assert.equal(nowhere.json().code, "ruleset_combat_unreachable");
     assert.equal(fight.revision, revisionBefore, "a refusal never bumps the revision");

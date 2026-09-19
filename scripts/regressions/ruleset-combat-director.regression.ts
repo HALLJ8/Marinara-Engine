@@ -26,6 +26,7 @@ import {
   currentRulesetActor,
   parseRulesetDefinition,
   rowsFromCatalogEntry,
+  RULESET_MOVE_OPTION,
   rulesetCombatant,
   rulesetCombatRoller,
   rulesetCombatStanding,
@@ -876,7 +877,7 @@ for (const setup of [
   assert.equal(cells.size, projected.combatants.length, "and no two of them in the same cell");
 
   // The menu the actor on turn is sent carries somewhere to walk.
-  const move = projected.options!.find((option) => option.id === "move");
+  const move = projected.options!.find((option) => option.id === RULESET_MOVE_OPTION);
   assert.ok(move, "a positioned menu offers the walk");
   assert.equal(move.kind, "move");
   assert.ok(move.cells!.length > 0);
@@ -891,7 +892,7 @@ for (const setup of [
   assert.ok(
     commandRulesetCombatDirector(fiveE, state, {
       type: "ruleset",
-      optionId: "move",
+      optionId: RULESET_MOVE_OPTION,
       targetIds: [],
       to: { x: step.x, y: step.y },
     }).ok,
@@ -906,7 +907,7 @@ for (const setup of [
   const before = JSON.stringify(state.rulesetFight);
   const refused = commandRulesetCombatDirector(fiveE, state, {
     type: "ruleset",
-    optionId: "move",
+    optionId: RULESET_MOVE_OPTION,
     targetIds: [],
     to: { x: 63, y: 63 },
   });

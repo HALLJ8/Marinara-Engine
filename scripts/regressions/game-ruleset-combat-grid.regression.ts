@@ -29,6 +29,8 @@ import {
   createRulesetEncounter,
   parseRulesetDefinition,
   rowsFromCatalogEntry,
+  RULESET_MOVE_OPTION,
+  RULESET_STAND_OPTION,
   rulesetAimCells,
   rulesetAreaCells,
   rulesetAreaTargets,
@@ -599,12 +601,12 @@ const cellsOf = (cells: Array<{ x: number; y: number }>) =>
   assert.equal(attack.total, 6 + 7, "six on the die plus the sheet's own bonus");
   assert.equal(attack.outcome, "miss", "which would have hit a Snag standing in the open");
   // The forecast agrees with the roll, because both read the same number.
-  const open = fight(fiveE, [fighter(), snag()], [12, 9], {
+  const inTheOpen = fight(fiveE, [fighter(), snag()], [12, 9], {
     grid: drawn(".."),
     placements: { brenna: { x: 0, y: 0 }, snag: { x: 1, y: 0 } },
   });
   const covered = optionNamed(fiveE, state, "brenna", "Longsword").forecast!.hitChance!;
-  const bare = optionNamed(fiveE, open, "brenna", "Longsword").forecast!.hitChance!;
+  const bare = optionNamed(fiveE, inTheOpen, "brenna", "Longsword").forecast!.hitChance!;
   assert.ok(covered < bare, "a covered target is harder to hit, and the menu says so before the roll");
   // Ember Roads declares no cover, so the same ground adds nothing.
   const rough = fight(ember, [traveller(), emberHound()], [3, 4, 2, 3], {
@@ -803,7 +805,7 @@ const cellsOf = (cells: Array<{ x: number; y: number }>) =>
   const struck = act(
     fiveE,
     state,
-    { actorId: "brenna", optionId: "move", targetIds: [], to: { x: 5, y: 1 } },
+    { actorId: "brenna", optionId: RULESET_MOVE_OPTION, targetIds: [], to: { x: 5, y: 1 } },
     // Snag's strike: the attack roll, then its damage.
     17,
     5,
@@ -826,14 +828,19 @@ const cellsOf = (cells: Array<{ x: number; y: number }>) =>
   assert.equal(walked.left, 1);
 
   // One budget, one strike: walking back through it costs nothing more this round.
-  const again = act(fiveE, struck.state, { actorId: "brenna", optionId: "move", targetIds: [], to: { x: 4, y: 1 } });
+  const again = act(fiveE, struck.state, {
+    actorId: "brenna",
+    optionId: RULESET_MOVE_OPTION,
+    targetIds: [],
+    to: { x: 4, y: 1 },
+  });
   assert.equal(eventsOf(again.events, "opportunity").length, 0);
 
   // Disengaging prevents it for the rest of the turn.
   const disengaged = act(fiveE, state, { actorId: "brenna", optionId: "standard:disengage", targetIds: [] });
   const quiet = act(fiveE, disengaged.state, {
     actorId: "brenna",
-    optionId: "move",
+    optionId: RULESET_MOVE_OPTION,
     targetIds: [],
     to: { x: 5, y: 1 },
   });
@@ -867,7 +874,12 @@ const cellsOf = (cells: Array<{ x: number; y: number }>) =>
   });
   const roughMove = optionNamed(ember, rough, "juno", "Move");
   for (const cell of roughMove.cells!) assert.deepEqual(cell.provokes, [], "this system simply has no such strike");
-  const strolled = act(ember, rough, { actorId: "juno", optionId: "move", targetIds: [], to: { x: 5, y: 0 } });
+  const strolled = act(ember, rough, {
+    actorId: "juno",
+    optionId: RULESET_MOVE_OPTION,
+    targetIds: [],
+    to: { x: 5, y: 0 },
+  });
   assert.equal(eventsOf(strolled.events, "opportunity").length, 0);
   assert.deepEqual(firstOf(strolled.events, "move").to, { x: 5, y: 0 });
 }
@@ -892,7 +904,7 @@ const cellsOf = (cells: Array<{ x: number; y: number }>) =>
   const step = act(
     fiveE,
     state,
-    { actorId: "glass", optionId: "move", targetIds: [], to: { x: 5, y: 1 } },
+    { actorId: "glass", optionId: RULESET_MOVE_OPTION, targetIds: [], to: { x: 5, y: 1 } },
     // Snag hits, and a scimitar is more than one hit point.
     18,
     6,
@@ -910,7 +922,12 @@ const cellsOf = (cells: Array<{ x: number; y: number }>) =>
 {
   const board = { grid: open(13, 1), placements: { brenna: { x: 0, y: 0 }, snag: { x: 12, y: 0 } } };
   const state = fight(fiveE, [fighter(), snag()], [12, 9], board);
-  const first = act(fiveE, state, { actorId: "brenna", optionId: "move", targetIds: [], to: { x: 2, y: 0 } });
+  const first = act(fiveE, state, {
+    actorId: "brenna",
+    optionId: RULESET_MOVE_OPTION,
+    targetIds: [],
+    to: { x: 2, y: 0 },
+  });
   assert.equal(who(first.state, "brenna").movementLeft, 4);
   const swing = act(
     fiveE,
@@ -924,15 +941,25 @@ const cellsOf = (cells: Array<{ x: number; y: number }>) =>
   );
   assert.equal(firstOf(swing.events, "attack").mode, "disadvantage");
   assert.equal(who(swing.state, "brenna").movementLeft, 4, "acting costs no movement");
-  const second = act(fiveE, swing.state, { actorId: "brenna", optionId: "move", targetIds: [], to: { x: 6, y: 0 } });
+  const second = act(fiveE, swing.state, {
+    actorId: "brenna",
+    optionId: RULESET_MOVE_OPTION,
+    targetIds: [],
+    to: { x: 6, y: 0 },
+  });
   assert.equal(who(second.state, "brenna").movementLeft, 0, "and the rest is spent after");
   assert.equal(
-    rulesetCombatOptions(fiveE, second.state, "brenna").some((option) => option.id === "move"),
+    rulesetCombatOptions(fiveE, second.state, "brenna").some((option) => option.id === RULESET_MOVE_OPTION),
     false,
     "with nothing left there is nowhere to walk",
   );
   // A cell beyond what is left is refused, and changes nothing.
-  const tooFar = act(fiveE, second.state, { actorId: "brenna", optionId: "move", targetIds: [], to: { x: 7, y: 0 } });
+  const tooFar = act(fiveE, second.state, {
+    actorId: "brenna",
+    optionId: RULESET_MOVE_OPTION,
+    targetIds: [],
+    to: { x: 7, y: 0 },
+  });
   assert.equal(firstOf(tooFar.events, "refused").reason, "unreachable");
   assert.deepEqual(tooFar.state, second.state);
 
@@ -940,7 +967,12 @@ const cellsOf = (cells: Array<{ x: number; y: number }>) =>
   const fresh = fight(fiveE, [fighter(), snag()], [12, 9], board);
   const dashed = act(fiveE, fresh, { actorId: "brenna", optionId: "standard:dash", targetIds: [] });
   assert.equal(who(dashed.state, "brenna").movementLeft, 12, "six squares, and six more");
-  const sprint = act(fiveE, dashed.state, { actorId: "brenna", optionId: "move", targetIds: [], to: { x: 10, y: 0 } });
+  const sprint = act(fiveE, dashed.state, {
+    actorId: "brenna",
+    optionId: RULESET_MOVE_OPTION,
+    targetIds: [],
+    to: { x: 10, y: 0 },
+  });
   assert.deepEqual(firstOf(sprint.events, "move").to, { x: 10, y: 0 });
   assert.equal(firstOf(sprint.events, "move").left, 2);
 
@@ -955,7 +987,7 @@ const cellsOf = (cells: Array<{ x: number; y: number }>) =>
 {
   const board = { grid: open(6, 1), placements: { juno: { x: 0, y: 0 }, ash: { x: 4, y: 0 } } };
   const state = fight(ember, [traveller(), emberHound()], [4, 3, 2, 3], board);
-  assert.ok(optionIds(ember, state, "juno").includes("move"));
+  assert.ok(optionIds(ember, state, "juno").includes(RULESET_MOVE_OPTION));
   // "pinned" carries both `cannot-act` and `speed-zero` on this ruleset, so a pinned traveller is
   // offered nothing but the end of their turn.
   const pinned = structuredClone(state);
@@ -976,7 +1008,7 @@ const cellsOf = (cells: Array<{ x: number; y: number }>) =>
   );
   const rooted = fight(stuck, [traveller(), emberHound()], [4, 3, 2, 3], board);
   who(rooted, "juno").tracked.push({ condition: "shaken", rounds: null });
-  assert.equal(optionIds(stuck, rooted, "juno").includes("move"), false, "no walking");
+  assert.equal(optionIds(stuck, rooted, "juno").includes(RULESET_MOVE_OPTION), false, "no walking");
   assert.ok(optionIds(stuck, rooted, "juno").length > 1, "but a turn is still a turn");
 
   // The other one: the 5e draft's own prone condition costs half the allowance to shake off, and
@@ -988,15 +1020,15 @@ const cellsOf = (cells: Array<{ x: number; y: number }>) =>
   const down = structuredClone(flat);
   who(down, "brenna").tracked.push({ condition: "prone", rounds: null });
   const menu = rulesetCombatOptions(fiveE, down, "brenna");
-  const stand = menu.find((option) => option.id === "stand");
+  const stand = menu.find((option) => option.id === RULESET_STAND_OPTION);
   assert.ok(stand, "getting up is what a positioned menu offers instead of walking");
   assert.equal(stand.movementCost, 3, "half of six");
   assert.equal(
-    menu.some((option) => option.id === "move"),
+    menu.some((option) => option.id === RULESET_MOVE_OPTION),
     false,
     "and nothing else moves until they are up",
   );
-  const up = act(fiveE, down, { actorId: "brenna", optionId: "stand", targetIds: [] });
+  const up = act(fiveE, down, { actorId: "brenna", optionId: RULESET_STAND_OPTION, targetIds: [] });
   assert.equal(who(up.state, "brenna").movementLeft, 3);
   assert.equal(
     firstOf(up.events, "condition").active,
@@ -1005,13 +1037,13 @@ const cellsOf = (cells: Array<{ x: number; y: number }>) =>
   );
   assert.deepEqual(firstOf(up.events, "move").path, [], "movement spent and nowhere gone");
   assert.equal(firstOf(up.events, "move").cost, 3);
-  assert.ok(rulesetCombatOptions(fiveE, up.state, "brenna").some((option) => option.id === "move"));
+  assert.ok(rulesetCombatOptions(fiveE, up.state, "brenna").some((option) => option.id === RULESET_MOVE_OPTION));
   // And a fight with no board never offers either of them, prone or not.
   const theatre = fight(fiveE, [fighter(), snag()], [12, 9]);
   who(theatre, "brenna").tracked.push({ condition: "prone", rounds: null });
   const flatMenu = rulesetCombatOptions(fiveE, theatre, "brenna").map((option) => option.id);
-  assert.equal(flatMenu.includes("stand"), false);
-  assert.equal(flatMenu.includes("move"), false);
+  assert.equal(flatMenu.includes(RULESET_STAND_OPTION), false);
+  assert.equal(flatMenu.includes(RULESET_MOVE_OPTION), false);
 }
 
 // ── The three distance condition effects, as the 5e draft already declares them ──
@@ -1161,8 +1193,18 @@ const cellsOf = (cells: Array<{ x: number; y: number }>) =>
   const state = fight(fiveE, [fighter(), snag()], [12, 9], board);
   const carried = JSON.parse(JSON.stringify(state)) as RulesetEncounterState;
   assert.deepEqual(carried, state, "nothing in the state is a Map, a class or a function");
-  const here = act(fiveE, state, { actorId: "brenna", optionId: "move", targetIds: [], to: { x: 2, y: 1 } });
-  const there = act(fiveE, carried, { actorId: "brenna", optionId: "move", targetIds: [], to: { x: 2, y: 1 } });
+  const here = act(fiveE, state, {
+    actorId: "brenna",
+    optionId: RULESET_MOVE_OPTION,
+    targetIds: [],
+    to: { x: 2, y: 1 },
+  });
+  const there = act(fiveE, carried, {
+    actorId: "brenna",
+    optionId: RULESET_MOVE_OPTION,
+    targetIds: [],
+    to: { x: 2, y: 1 },
+  });
   assert.deepEqual(here.events, there.events);
   assert.deepEqual(here.state, there.state);
 }
@@ -1283,6 +1325,17 @@ const cellsOf = (cells: Array<{ x: number; y: number }>) =>
     supportedCapabilityApi.major > 1 || supportedCapabilityApi.minor >= 28,
     "the host still advertises the positions seam introduced in API 1.28",
   );
+}
+
+// ── A shape far bigger than the board costs no more than the board ──
+{
+  const board = open(6, 4);
+  const started = Date.now();
+  const vast = rulesetAreaCells("burst", 100000, { x: 2, y: 2 }, { x: 2, y: 2 }, board);
+  const wide = rulesetAreaCells("cone", 100000, { x: 0, y: 0 }, { x: 5, y: 0 }, board);
+  assert.equal(vast.length, 24, "a burst that size is simply the whole board");
+  assert.ok(wide.length > 0 && wide.length <= 24, "and a cone that size is what of the board it faces");
+  assert.ok(Date.now() - started < 500, "neither is scanned beyond the board's own edges");
 }
 
 console.info("game ruleset combat grid regressions passed.");

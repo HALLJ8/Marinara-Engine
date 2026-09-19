@@ -44,9 +44,12 @@ function positioned(state: RulesetEncounterState): boolean {
   return !!state.board?.grid;
 }
 
-/** The two ids a positioned fight adds to the menu beside the actor's own actions. */
-export const RULESET_MOVE_OPTION = "move";
-export const RULESET_STAND_OPTION = "stand";
+/** The two ids a positioned fight adds to the menu beside the actor's own actions. Written with a
+ *  colon, which no sheet id or stat block action id may hold, so a creature that really has an
+ *  action called "move" or "stand" can never be mistaken for walking. The same trick the standard
+ *  actions use (`standard:dodge`). */
+export const RULESET_MOVE_OPTION = "move:walk";
+export const RULESET_STAND_OPTION = "move:stand";
 
 /** What one option may be pointed at, in cells. `sight` is whether something solid between the two
  *  of them stops it. Null when this fight measures nothing. */
@@ -141,12 +144,19 @@ export function rulesetAimCells(
   actorId: string,
   optionId: string,
 ): Array<{ x: number; y: number; targetIds: string[] }> {
+  const grid = state.board?.grid;
   const from = rulesetPositionOf(rulesetCombatant(state, actorId));
   const reach = rulesetOptionReach(state, actorId, optionId);
-  if (!from || !reach) return [];
+  if (!grid || !from || !reach) return [];
   const aims: Array<{ x: number; y: number; targetIds: string[] }> = [];
-  for (let y = from.y - reach.max; y <= from.y + reach.max; y++) {
-    for (let x = from.x - reach.max; x <= from.x + reach.max; x++) {
+  // Scanned over the BOARD, never over the range: a ruleset may declare a range of ten thousand
+  // units, and a loop that long would be a way to stall a server with one catalog entry.
+  const top = Math.max(0, from.y - reach.max);
+  const bottom = Math.min(grid.height - 1, from.y + reach.max);
+  const left = Math.max(0, from.x - reach.max);
+  const right = Math.min(grid.width - 1, from.x + reach.max);
+  for (let y = top; y <= bottom; y++) {
+    for (let x = left; x <= right; x++) {
       const at = { x, y };
       if (!rulesetAimLegal(state, actorId, optionId, at)) continue;
       const targetIds = rulesetAreaTargets(state, actorId, optionId, at);

@@ -133,10 +133,23 @@ export function rulesetAreaCells(
   return shape === "line" ? lineCells(reach, origin, dx, dy, grid) : coneCells(reach, origin, dx, dy, grid);
 }
 
+/** The part of the board within `reach` of a cell. Every shape is scanned over THIS, never over its
+ *  own size: a ruleset may declare an area ten thousand units across, and a loop that long would be
+ *  a way to stall a server with one catalog entry. */
+function boardBox(grid: TacticalGrid, around: RulesetCombatCell, reach: number) {
+  return {
+    top: Math.max(0, around.y - reach),
+    bottom: Math.min(grid.height - 1, around.y + reach),
+    left: Math.max(0, around.x - reach),
+    right: Math.min(grid.width - 1, around.x + reach),
+  };
+}
+
 function burstCells(reach: number, centre: RulesetCombatCell, grid: TacticalGrid): RulesetCombatCell[] {
   const cells: RulesetCombatCell[] = [];
-  for (let y = centre.y - reach; y <= centre.y + reach; y++) {
-    for (let x = centre.x - reach; x <= centre.x + reach; x++) {
+  const box = boardBox(grid, centre, reach);
+  for (let y = box.top; y <= box.bottom; y++) {
+    for (let x = box.left; x <= box.right; x++) {
       if (rulesetCellBlocked(grid, x, y)) continue;
       if (!rulesetLineOfSight(grid, centre, { x, y })) continue;
       cells.push({ x, y });
@@ -153,6 +166,7 @@ function lineCells(
   grid: TacticalGrid,
 ): RulesetCombatCell[] {
   const cells: RulesetCombatCell[] = [];
+  // `rulesetCellBlocked` reads off the board as solid, so the line ends at the edge whatever its size.
   for (let step = 1; step <= reach; step++) {
     const cell = { x: origin.x + dx * step, y: origin.y + dy * step };
     // Something solid ends the line where it stands, rather than letting it carry on behind.
@@ -176,8 +190,9 @@ function coneCells(
 ): RulesetCombatCell[] {
   const diagonal = dx !== 0 && dy !== 0;
   const cells: RulesetCombatCell[] = [];
-  for (let y = origin.y - reach; y <= origin.y + reach; y++) {
-    for (let x = origin.x - reach; x <= origin.x + reach; x++) {
+  const box = boardBox(grid, origin, reach);
+  for (let y = box.top; y <= box.bottom; y++) {
+    for (let x = box.left; x <= box.right; x++) {
       const offX = x - origin.x;
       const offY = y - origin.y;
       const out = Math.max(Math.abs(offX), Math.abs(offY));
