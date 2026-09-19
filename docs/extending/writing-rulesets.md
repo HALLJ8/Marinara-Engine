@@ -153,7 +153,7 @@ The header goes in `catalogs` at the top level of the file, beside `gm`.
 - `filters`: the values for the filters the header declared. A `number` filter takes a number, a `text` filter takes one string, and a `tags` filter takes a list of strings.
 - `rows`: what picking the entry writes, one to six rows. `list` is one of the catalog's `feeds`, and `values` are keyed by that list's column ids.
 
-Every value is checked against the target list's columns when the ruleset is loaded, so a mistyped column name or a number outside a column's range is reported with the entry it came from, before anybody plays on it.
+Every value is checked against the target list's columns, so a mistyped column name or a number outside a column's range is reported with the entry it came from. Entries written inside the ruleset file are checked when the ruleset is loaded, which for an imported file means at import. A package's separate catalog file is checked when the picker first asks for it, and a file with a mistake shows its reasons there instead of any entries.
 
 ### One entry, several lists
 
