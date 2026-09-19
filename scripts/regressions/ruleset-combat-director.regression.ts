@@ -718,10 +718,13 @@ for (const setup of [
     "and the same dice come next",
   );
   // The cursor is what makes that true: rolling from zero would not agree.
-  assert.notDeepEqual(
-    rulesetCombatRoller(state.rulesetFight!.encounter.seed, 0)(20),
-    rulesetCombatRoller(state.rulesetFight!.encounter.seed, cursor)(20) + 1000,
-  );
+  // Eight dice from each, because one d20 agrees by chance one time in twenty.
+  const eight = (from: number) => {
+    const roll = rulesetCombatRoller(state.rulesetFight!.encounter.seed, from);
+    return Array.from({ length: 8 }, () => roll(20));
+  };
+  assert.notDeepEqual(eight(0), eight(cursor), "the dice after the cursor are not the dice the fight opened with");
+  assert.deepEqual(eight(cursor), eight(cursor), "and the same cursor always gives the same dice");
 
   // The live sheet state the route writes back is keyed the way the game stores it.
   const live = rulesetFightLiveStates(state.rulesetFight!);
