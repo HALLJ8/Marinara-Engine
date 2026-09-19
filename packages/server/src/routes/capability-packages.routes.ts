@@ -197,7 +197,7 @@ export async function capabilityPackagesRoutes(app: FastifyInstance) {
     // already holds this answer is told so before any of that work. `no-cache` still makes it ask.
     const etag = `"${source.sha256}.${definition.version}"`;
     reply.header("ETag", etag).header("Cache-Control", "no-cache");
-    if (request.headers["if-none-match"] === etag) return reply.status(304).send();
+    if (ifNoneMatchSatisfied(request.headers["if-none-match"], etag)) return reply.status(304).send();
     const file = await source.read();
     if ("issue" in file) return unusable([file.issue]);
     let document: unknown;
