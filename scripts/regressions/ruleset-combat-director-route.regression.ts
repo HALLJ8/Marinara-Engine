@@ -408,6 +408,126 @@ try {
     assert.equal(await liveOf(1), null, "and the telling the player swiped away from is untouched");
   }
 
+  // ── A ruleset fight on a board, through the real routes ──
+  {
+    const boarded = await newGame({ ruleset: true });
+    const opened = await post("/combat/start", {
+      chatId: boarded.chat.id,
+      anchor: boarded.anchor.id,
+      style: "ruleset",
+      positioned: true,
+      party: [unit("brenna", "Brenna", "player")],
+      enemies: [{ ...unit("lurker", "Thorn Lurker", "enemy"), creature: "creatures/thorn-lurker" }],
+    });
+    assert.equal(opened.statusCode, 200, opened.body);
+    let fight = opened.json().session as DirectedCombatView;
+    const grid = fight.ruleset!.grid;
+    assert.ok(grid, "asking for a board on a ruleset that declares a cell size gets one");
+    assert.deepEqual(grid!.distance, { label: "ft", perCell: 5 }, "and it says what one cell is worth");
+    assert.equal(grid!.tiles.length, grid!.height);
+    for (const row of grid!.tiles) assert.equal(row.length, grid!.width);
+    // The board sizes are the tactical style's own; this fight has no generator of its own.
+    assert.ok(grid!.width >= 12 && grid!.width <= 14 && grid!.height >= 8 && grid!.height <= 10);
+    for (const combatant of fight.ruleset!.combatants) {
+      assert.equal(typeof combatant.x, "number", `${combatant.id} stands somewhere`);
+      assert.ok(combatant.x! >= 0 && combatant.x! < grid!.width && combatant.y! >= 0 && combatant.y! < grid!.height);
+      assert.ok((combatant.movement ?? 0) >= 1, "and walks what its own numbers say");
+    }
+
+    const send = async (command: DirectedCommand) => {
+      const response = await post("/combat/command", {
+        chatId: boarded.chat.id,
+        anchor: boarded.anchor.id,
+        id: fight.id,
+        instanceId: fight.instanceId,
+        revision: fight.revision,
+        requestId: crypto.randomUUID(),
+        command,
+      });
+      if (response.statusCode === 200) fight = response.json().session;
+      return response;
+    };
+    for (let guard = 0; guard < 20 && fight.ruleset!.controller !== "manual" && !fight.outcome; guard++) {
+      await send({ type: "continue" });
+    }
+    assert.equal(fight.ruleset!.controller, "manual", "the fight stops at the human");
+
+    // Every attack the menu offers is filtered by where the actor stands, and the refusal for one
+    // further off than it reaches carries its own code. The board's own deployment strips put the
+    // two sides a long way apart, and both sides of this are asserted so the seed cannot matter.
+    const mine = fight.ruleset!.combatants.find((combatant) => combatant.id === fight.ruleset!.actorId)!;
+    const foe = fight.ruleset!.combatants.find((combatant) => combatant.side === "enemy" && !combatant.defeated)!;
+    const away = Math.max(Math.abs(mine.x! - foe.x!), Math.abs(mine.y! - foe.y!));
+    const sword = fight.ruleset!.options!.find((option) => option.kind === "attack")!;
+    assert.ok(sword, "the fighter's own weapon is on the menu");
+    if (away > 1) {
+      assert.equal(sword.targetIds.includes(foe.id), false, "somebody that far off is not on the sword's list");
+      const refusedReach = await send({ type: "ruleset", optionId: sword.id, targetIds: [foe.id] });
+      assert.equal(refusedReach.statusCode, 400, refusedReach.body);
+      assert.equal(refusedReach.json().code, "ruleset_combat_out-of-reach");
+    } else {
+      assert.equal(sword.targetIds.includes(foe.id), true, "and somebody in the next square is");
+    }
+
+    // A walk the menu offered is taken, and where they ended up survives a reload.
+    const move = fight.ruleset!.options!.find((option) => option.id === "move")!;
+    assert.ok(move, "a positioned menu offers the walk");
+    assert.ok(move.cells!.length > 0);
+    const target = move.cells![0]!;
+    const walked = await send({ type: "ruleset", optionId: "move", targetIds: [], to: { x: target.x, y: target.y } });
+    assert.equal(walked.statusCode, 200, walked.body);
+    const mover = fight.ruleset!.combatants.find((combatant) => combatant.id === mine.id)!;
+    assert.equal(mover.x, target.x);
+    assert.equal(mover.y, target.y);
+    assert.equal(mover.movementLeft, mine.movementLeft! - target.cost);
+    const reloaded = await app.inject({
+      url: `/combat/state?chatId=${boarded.chat.id}&anchor=${boarded.anchor.id}`,
+    });
+    assert.equal(reloaded.statusCode, 200, reloaded.body);
+    const saved = (reloaded.json().session as DirectedCombatView).ruleset!;
+    assert.deepEqual(saved.grid, grid, "the board is stored and read back exactly");
+    const restored = saved.combatants.find((combatant) => combatant.id === mine.id)!;
+    assert.equal(restored.x, target.x);
+    assert.equal(restored.y, target.y);
+    assert.equal(restored.movementLeft, mover.movementLeft);
+
+    // A cell the menu did not offer is refused with its own code, and bumps nothing.
+    const revisionBefore = fight.revision;
+    const nowhere = await send({ type: "ruleset", optionId: "move", targetIds: [], to: { x: 63, y: 63 } });
+    assert.equal(nowhere.statusCode, 400, nowhere.body);
+    assert.equal(nowhere.json().code, "ruleset_combat_unreachable");
+    assert.equal(fight.revision, revisionBefore, "a refusal never bumps the revision");
+
+    // And the fight still ends.
+    await send({ type: "control", unitId: "brenna", controller: "ai" });
+    for (let guard = 0; guard < 200 && !fight.outcome; guard++) await send({ type: "continue" });
+    assert.ok(fight.outcome, `a positioned fight finishes: ${fight.outcome}`);
+  }
+
+  // ── The same game without asking for a board is the fight it always was ──
+  {
+    const flatGame = await newGame({ ruleset: true });
+    const opened = await post("/combat/start", {
+      chatId: flatGame.chat.id,
+      anchor: flatGame.anchor.id,
+      style: "ruleset",
+      party: [unit("brenna", "Brenna", "player")],
+      enemies: [{ ...unit("lurker", "Thorn Lurker", "enemy"), creature: "creatures/thorn-lurker" }],
+    });
+    assert.equal(opened.statusCode, 200, opened.body);
+    const flat = opened.json().session as DirectedCombatView;
+    assert.equal(flat.ruleset!.grid, undefined, "no board was asked for, so none was drawn");
+    for (const combatant of flat.ruleset!.combatants) {
+      assert.equal(combatant.x, undefined);
+      assert.equal(combatant.movementLeft, undefined);
+    }
+    assert.equal(
+      (flat.ruleset!.options ?? []).some((option) => option.kind === "move"),
+      false,
+      "and nothing on the menu walks anywhere",
+    );
+  }
+
   // ── A party member with no sheet is refused by name ──
   {
     const game3 = await newGame({ ruleset: true });
@@ -563,7 +683,7 @@ try {
   }
 
   console.log(
-    "Ruleset combat director route: start, idempotency, refusal codes, the live sheet write-back, an unchanged classic fight, the boss window and the blueprint prompt passed.",
+    "Ruleset combat director route: start, idempotency, refusal codes, the live sheet write-back, the board, an unchanged classic fight, the boss window and the blueprint prompt passed.",
   );
 } finally {
   await app.close();
