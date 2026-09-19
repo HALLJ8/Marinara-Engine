@@ -1129,5 +1129,29 @@
       },
       { "list": "attacks" }
     ]
-  }
+  },
+  "layers": [
+    {
+      "$comment": "Layers are variants of THESE rules that the player turns on when the game is created. They only narrow and append: a value can be taken out of an enum field, never added, so a sheet stays readable whichever layers a game chose.",
+      "id": "low_magic",
+      "label": "Low magic",
+      "summary": "Arcane training is gone. Only the devoted still channel anything.",
+      "conflicts": ["high_magic"],
+      "gm": {
+        "guidance": "Low magic is on. Spellcasting is rare, feared and slow, so treat every casting as remarkable, let bystanders react to it, and prefer mundane solutions when the party reaches for one.",
+        "worldGuidance": "Low magic is on. Build a world where arcane learning has been lost or driven out: no wizard schools, no shops of wands, and healing that mostly comes from hands and herbs."
+      },
+      "fields": [{ "id": "spellcasting_ability", "removeValues": ["int", "cha"] }]
+    },
+    {
+      "$comment": "Declared after Low magic, so when a pin somehow turns both on it is this one that is dropped and the same two choices always give the same rules.",
+      "id": "high_magic",
+      "label": "High magic",
+      "summary": "Magic is everywhere, cheap and ordinary.",
+      "gm": {
+        "guidance": "High magic is on. Casting is ordinary and public, so let NPCs use it freely, price magical help like any other service, and do not treat a spell as a surprise.",
+        "worldGuidance": "High magic is on. Build a world running on spellwork: lit streets, sent messages, working guilds of casters, and problems that already assume magic exists."
+      }
+    }
+  ]
 }

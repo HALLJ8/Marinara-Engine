@@ -288,5 +288,24 @@
     "health": { "pool": "grit" },
     "energy": { "pool": "luck" },
     "skills": [{ "list": "knacks" }]
-  }
+  },
+  "layers": [
+    {
+      "$comment": "A variant of these rules the player turns on when the game is created. It only narrows and appends: a harsher ladder, a line of guidance for play, a line for world generation, and the knacks that cost Grit left out of the picker.",
+      "id": "hard_winter",
+      "label": "Hard winter",
+      "summary": "Cold, hunger and short days. Everything is harder and nobody can spare the Grit.",
+      "gm": {
+        "guidance": "Hard winter is on. Cold, hunger and short days make everything harder, so use the harsher ladder and let a failed check cost warmth, food or daylight as well as progress.",
+        "worldGuidance": "Hard winter is on. Build a world locked in a long cold: closed roads, thin stores, and settlements rationing what they have."
+      },
+      "difficultyLadder": [
+        { "label": "Easy", "dc": 7 },
+        { "label": "Risky", "dc": 9 },
+        { "label": "Hard", "dc": 11 },
+        { "label": "Desperate", "dc": 13 }
+      ],
+      "catalogs": [{ "id": "knacks", "hide": { "filter": "grit", "above": 0 } }]
+    }
+  ]
 }

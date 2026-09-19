@@ -63,6 +63,11 @@ export function isCommunityRulesetId(id: string): boolean {
  *  refuse a url the pin could not carry: a pin that fails to parse takes the game's rules with it. */
 export const rulesetSourceUrlSchema = z.string().url().max(300);
 
+/** How many entries a client may send in a new game's `options` record. The pin itself is read
+ *  tolerantly (an existing game must never become unreadable), so the bound belongs on the way in,
+ *  at `/game/create`, and is generous: a ruleset offers at most a dozen layers. */
+export const RULESET_REF_MAX_OPTIONS = 64;
+
 /** The pin written once by game creation (`chat.metadata.gameRuleset`). Read tolerantly: this is
  *  persisted data, so a field a newer Engine added must not make the pin unreadable here. */
 export const rulesetRefSchema = z
@@ -209,6 +214,11 @@ const sheetMathShape = {
   proficiencyTiers: z.array(proficiencyTierSchema).min(1).max(12),
 };
 
+/** One rung of a summed ladder. Hoisted out of the kind because a layer may swap the whole ladder
+ *  for another one, and both places must mean exactly the same shape. */
+const diceSumLadderStepSchema = z.object({ label, dc: z.number().int().min(-100).max(1000) }).strict();
+const diceSumLadderSchema = z.array(diceSumLadderStepSchema).min(1).max(12);
+
 /** Roll dice, add the sheet's modifiers, meet or beat a difficulty. The first resolution kind.
  *  The dice are a parameter so a 2d6+stat system does not need its own kind. */
 const diceSumResolutionSchema = z
@@ -225,10 +235,7 @@ const diceSumResolutionSchema = z
       .object({ check: naturalPolicySchema.default("none"), save: naturalPolicySchema.default("none") })
       .strict()
       .default({}),
-    difficultyLadder: z
-      .array(z.object({ label, dc: z.number().int().min(-100).max(1000) }).strict())
-      .min(1)
-      .max(12),
+    difficultyLadder: diceSumLadderSchema,
   })
   .strict();
 
@@ -241,6 +248,13 @@ export const RULESET_POOL_MAX_DICE = 100;
 const POOL_DIE_MAX_SIDES = 100;
 
 const poolFace = z.number().int().min(2).max(POOL_DIE_MAX_SIDES);
+
+/** One rung of a pool ladder, hoisted for the same reason as the summed one. `successes` is how
+ *  many the check needs; a step names a `target` only where the ruleset lets the target move. */
+const dicePoolLadderStepSchema = z
+  .object({ label, successes: z.number().int().min(1).max(RULESET_POOL_MAX_DICE), target: poolFace.optional() })
+  .strict();
+const dicePoolLadderSchema = z.array(dicePoolLadderStepSchema).min(1).max(12);
 
 /** Throw a handful of dice and count the ones that reach a target number. The second resolution
  *  kind, and the same sheet: what `dice-sum` adds to the roll is, here, the NUMBER OF DICE. So a
@@ -296,22 +310,17 @@ const dicePoolResolutionSchema = z
       .object({ min: z.number().int().min(-20).max(0), max: z.number().int().min(0).max(20) })
       .strict()
       .optional(),
-    /** `successes` is how many the check needs. A step names a `target` only where the ruleset
-     *  lets the target move. */
-    difficultyLadder: z
-      .array(
-        z
-          .object({
-            label,
-            successes: z.number().int().min(1).max(RULESET_POOL_MAX_DICE),
-            target: poolFace.optional(),
-          })
-          .strict(),
-      )
-      .min(1)
-      .max(12),
+    difficultyLadder: dicePoolLadderSchema,
   })
   .strict();
+
+/** A ladder in either kind's shape. A layer declares one of these and the cross-checks hold it to
+ *  the base ruleset's own kind, so the two can never mean different things by "difficulty". */
+export const rulesetDifficultyLadderSchema = z.union([diceSumLadderSchema, dicePoolLadderSchema]);
+export type RulesetDiceSumLadderStep = z.infer<typeof diceSumLadderStepSchema>;
+export type RulesetDicePoolLadderStep = z.infer<typeof dicePoolLadderStepSchema>;
+export type RulesetDifficultyLadderStep = RulesetDiceSumLadderStep | RulesetDicePoolLadderStep;
+export type RulesetDifficultyLadder = z.infer<typeof rulesetDifficultyLadderSchema>;
 
 /** Closed registry of resolution kinds. Adding a kind is an Engine PR with regressions. */
 export const rulesetResolutionSchema = z.discriminatedUnion("kind", [
@@ -558,6 +567,10 @@ const gmSchema = z
     checkGuidance: promptSafeText(1500),
     /** Introduces the sheet blocks and the sheet command. */
     sheetGuidance: promptSafeText(1500).optional(),
+    /** Given to world generation when a game on this ruleset is created, so the world it invents
+     *  suits the rules the party will play by (no gunpowder, magic is rare, the dead walk). It is
+     *  read once, at setup, and never reaches a turn. */
+    worldGuidance: promptSafeText(1500).optional(),
     /** What the compact per-character sheet block shows beyond what the Engine always renders
      *  (ability modifiers, trained skills and saves, live state). */
     sheetSummary: z
@@ -819,6 +832,93 @@ const battleSchema = z
   })
   .strict();
 
+// ── Layers: variants a ruleset ships inside its own file ──
+
+/** How many layers one ruleset may declare. They are toggles under the ruleset in the setup
+ *  wizard, so this is a ceiling on a list a player has to read before a game starts. */
+export const RULESET_LAYERS_MAX = 12;
+
+/** How much Game Master text ONE layer may carry in total, check-time and world-generation
+ *  together. A layer appends to the ruleset's own guidance rather than replacing it, so this is
+ *  the ceiling on what a single toggle can add to a prompt. */
+export const RULESET_LAYER_GUIDANCE_MAX = 4000;
+
+/** What a layer takes out of an enum field. Values are only ever REMOVED. A value a layer added
+ *  would be unknown to every other reader of the sheet, starting with the ruleset's own editor,
+ *  and a character carrying it would stop making sense the moment the layer was turned off. */
+const layerFieldSchema = z
+  .object({
+    id: sheetId,
+    removeValues: z.array(z.string().min(1).max(80)).min(1).max(40),
+    /** The value the field falls back to when the layer takes the declared default away. */
+    default: z.string().max(80).optional(),
+  })
+  .strict();
+
+/** Which entries the catalog picker leaves out under this layer. Exactly one comparison, against a
+ *  filter the catalog declares, so a rule that could never match an entry is refused at import. */
+const layerCatalogHideSchema = z
+  .object({
+    filter: sheetId,
+    above: z.number().finite().optional(),
+    below: z.number().finite().optional(),
+    equals: z.string().max(80).optional(),
+    notIn: z.array(z.string().max(80)).min(1).max(24).optional(),
+  })
+  .strict()
+  .superRefine((hide, ctx) => {
+    const present = (["above", "below", "equals", "notIn"] as const).filter((key) => hide[key] !== undefined);
+    if (present.length !== 1) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "A hide rule names exactly one of: above, below, equals, notIn",
+      });
+    }
+  });
+
+const layerCatalogSchema = z.object({ id: sheetId, hide: layerCatalogHideSchema }).strict();
+
+const layerGmSchema = z
+  .object({
+    /** Appended to `gm.checkGuidance`, after the ruleset's own text and after earlier layers'. */
+    guidance: promptSafeText(RULESET_LAYER_GUIDANCE_MAX).optional(),
+    /** Appended to `gm.worldGuidance` the same way. */
+    worldGuidance: promptSafeText(RULESET_LAYER_GUIDANCE_MAX).optional(),
+  })
+  .strict()
+  .superRefine((gm, ctx) => {
+    if ((gm.guidance?.length ?? 0) + (gm.worldGuidance?.length ?? 0) > RULESET_LAYER_GUIDANCE_MAX) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `One layer carries at most ${RULESET_LAYER_GUIDANCE_MAX} characters of guidance in total`,
+      });
+    }
+  });
+
+/** A variant of this ruleset the player turns on when a game is created (Low magic, Hard winter),
+ *  frozen into the pin for that game's lifetime. The effects are a closed set and every one of them
+ *  narrows or appends, so a layer can never teach the Engine a mechanic the ruleset itself could
+ *  not declare: guidance is added, enum values are taken away, the ladder is swapped for another
+ *  ladder of the same kind, and catalog entries are hidden from the picker. Layers shipped by
+ *  OTHER authors are a later slice; these live in the ruleset's own file, so a pinned game can
+ *  never lose one. */
+const rulesetLayerSchema = z
+  .object({
+    id: sheetId,
+    label,
+    /** Shown beside the toggle in the setup wizard. */
+    summary: promptSafeText(300).optional(),
+    /** Layers that cannot be on together. Naming one side of the pair is enough. */
+    conflicts: z.array(sheetId).max(RULESET_LAYERS_MAX).optional(),
+    gm: layerGmSchema.optional(),
+    fields: z.array(layerFieldSchema).max(24).optional(),
+    /** REPLACES the ruleset's ladder, in the shape of its own resolution kind. */
+    difficultyLadder: rulesetDifficultyLadderSchema.optional(),
+    /** Several rules may name one catalog, so a layer can hide by level and by school at once. */
+    catalogs: z.array(layerCatalogSchema).max(24).optional(),
+  })
+  .strict();
+
 const rulesetDefinitionBaseSchema = z
   .object({
     schemaVersion: z.literal(1),
@@ -840,6 +940,8 @@ const rulesetDefinitionBaseSchema = z
     catalogs: z.array(catalogSchema).max(12).optional(),
     /** Optional, and absent rather than empty, for the same reason as `catalogs`. */
     battle: battleSchema.optional(),
+    /** Optional, and absent rather than empty, for the same reason as `catalogs`. */
+    layers: z.array(rulesetLayerSchema).max(RULESET_LAYERS_MAX).optional(),
   })
   .strict();
 
@@ -933,7 +1035,12 @@ function rulesetValueRefIssues(
   return issues;
 }
 
-function refineRulesetDefinition(def: RulesetDefinitionBase, ctx: z.RefinementCtx): void {
+/** `layersApplied` is true for an EFFECTIVE definition, whose active layers have already been
+ *  folded into it. Only one check changes: a layer that narrowed an enum field now names values
+ *  the field no longer lists, which is the whole point, so re-running that one would refuse the
+ *  Engine's own result. Everything else holds, because applying a layer does not change what the
+ *  layer declared. */
+function refineRulesetDefinition(def: RulesetDefinitionBase, ctx: z.RefinementCtx, layersApplied = false): void {
   const issue = (path: (string | number)[], message: string) =>
     ctx.addIssue({ code: z.ZodIssueCode.custom, path, message });
 
@@ -1099,6 +1206,36 @@ function refineRulesetDefinition(def: RulesetDefinitionBase, ctx: z.RefinementCt
       }
     });
   }
+  /** A difficulty ladder, checked against the kind that has to read it. The base ruleset's own
+   *  ladder and every ladder a layer swaps in go through this, so the file can never hold a rung
+   *  the resolver could not answer. */
+  const checkDifficultyLadder = (ladder: readonly RulesetDifficultyLadderStep[], path: (string | number)[]): void => {
+    if (resolution.kind === "dice-sum") {
+      ladder.forEach((step, index) => {
+        if (!("dc" in step)) issue([...path, index], 'This ruleset sums dice, so a ladder step names "dc"');
+      });
+      return;
+    }
+    const { target } = resolution;
+    const reachable = rulesetPoolMaxSuccesses(resolution);
+    const adjustable = target.min < target.max;
+    ladder.forEach((step, index) => {
+      if (!("successes" in step)) {
+        issue([...path, index], 'This ruleset throws a pool, so a ladder step names "successes"');
+        return;
+      }
+      if (step.successes > reachable) {
+        issue([...path, index, "successes"], `The largest pool can count ${reachable} at most`);
+      }
+      if (step.target === undefined) return;
+      const at = [...path, index, "target"];
+      if (!adjustable) issue(at, "A step names a target only where target.min is below target.max");
+      else if (step.target < target.min || step.target > target.max) {
+        issue(at, `A step's target is inside ${target.min} to ${target.max}`);
+      }
+    });
+  };
+
   if (resolution.kind === "dice-sum") {
     if (resolution.dice.count !== 1 && (resolution.naturals.check !== "none" || resolution.naturals.save !== "none")) {
       issue(["resolution", "naturals"], "Natural results need a single die; with several dice use none");
@@ -1133,22 +1270,10 @@ function refineRulesetDefinition(def: RulesetDefinitionBase, ctx: z.RefinementCt
     if (resolution.exceptional && resolution.exceptional.successes > reachable) {
       issue(["resolution", "exceptional", "successes"], `The largest pool can count ${reachable} at most`);
     }
-    const adjustable = target.min < target.max;
-    resolution.difficultyLadder.forEach((step, index) => {
-      if (step.successes > reachable) {
-        issue(
-          ["resolution", "difficultyLadder", index, "successes"],
-          `The largest pool can count ${reachable} at most`,
-        );
-      }
-      if (step.target === undefined) return;
-      const path = ["resolution", "difficultyLadder", index, "target"];
-      if (!adjustable) issue(path, "A step names a target only where target.min is below target.max");
-      else if (step.target < target.min || step.target > target.max) {
-        issue(path, `A step's target is inside ${target.min} to ${target.max}`);
-      }
-    });
   }
+  // Every ladder in the file is held to the resolution kind's own rules, wherever it sits, so a
+  // layer that swaps one in cannot declare a step the base ruleset would have been refused for.
+  checkDifficultyLadder(resolution.difficultyLadder, ["resolution", "difficultyLadder"]);
 
   sheet.lists.forEach((list, index) => {
     const path = ["sheet", "lists", index];
@@ -1323,6 +1448,74 @@ function refineRulesetDefinition(def: RulesetDefinitionBase, ctx: z.RefinementCt
       }
     });
   }
+
+  // Layers. Every effect is checked against the thing it narrows, because a layer that named
+  // something the ruleset does not have would leave a toggle in the wizard that changes nothing.
+  const layers = def.layers ?? [];
+  const layerIds = unique(layers, ["layers"], "layer");
+  const catalogById = new Map(catalogs.map((catalog) => [catalog.id, catalog]));
+  layers.forEach((layer, index) => {
+    const path = ["layers", index];
+    layer.conflicts?.forEach((other, conflictIndex) => {
+      const at = [...path, "conflicts", conflictIndex];
+      if (other === layer.id) issue(at, "A layer cannot conflict with itself");
+      else if (!layerIds.has(other)) issue(at, `Unknown layer "${other}"`);
+    });
+
+    if (!layersApplied) {
+      unique(layer.fields ?? [], [...path, "fields"], "narrowed field");
+      layer.fields?.forEach((entry, fieldIndex) => {
+        const at = [...path, "fields", fieldIndex];
+        const field = fieldById.get(entry.id);
+        if (!field) return issue([...at, "id"], `Unknown field "${entry.id}"`);
+        if (field.type !== "enum") return issue([...at, "id"], `Field "${entry.id}" is not an enum`);
+        entry.removeValues.forEach((value, valueIndex) => {
+          if (!field.values.includes(value)) {
+            issue([...at, "removeValues", valueIndex], `"${value}" is not one of the values of "${entry.id}"`);
+          }
+        });
+        const remaining = field.values.filter((value) => !entry.removeValues.includes(value));
+        if (remaining.length === 0) {
+          return issue([...at, "removeValues"], `A layer must leave "${entry.id}" at least one value`);
+        }
+        // A field whose default is gone would open every sheet on a value the field no longer
+        // lists, so the layer either keeps the default or names one that survives it.
+        if (entry.default !== undefined) {
+          if (!remaining.includes(entry.default)) {
+            issue([...at, "default"], `default "${entry.default}" is not one of the values this layer leaves`);
+          }
+        } else if (field.default !== undefined && !remaining.includes(field.default)) {
+          issue(
+            [...at, "removeValues"],
+            `Removing "${field.default}" takes the default of "${entry.id}" away; name a new default`,
+          );
+        }
+      });
+    }
+
+    if (layer.difficultyLadder) checkDifficultyLadder(layer.difficultyLadder, [...path, "difficultyLadder"]);
+
+    layer.catalogs?.forEach((entry, catalogIndex) => {
+      const at = [...path, "catalogs", catalogIndex];
+      const catalog = catalogById.get(entry.id);
+      if (!catalog) return issue([...at, "id"], `Unknown catalog "${entry.id}"`);
+      const filter = (catalog.filters ?? []).find((candidate) => candidate.id === entry.hide.filter);
+      if (!filter) {
+        return issue([...at, "hide", "filter"], `Catalog "${entry.id}" declares no filter "${entry.hide.filter}"`);
+      }
+      // A number is compared with above or below and a word with equals or notIn. The other way
+      // round the rule would match no entry, and the author would find out in the picker.
+      const numeric = entry.hide.above !== undefined || entry.hide.below !== undefined;
+      if (numeric !== (filter.type === "number")) {
+        issue(
+          [...at, "hide"],
+          filter.type === "number"
+            ? `Filter "${filter.id}" holds a number, so hide uses above or below`
+            : `Filter "${filter.id}" holds words, so hide uses equals or notIn`,
+        );
+      }
+    });
+  });
   void lists;
 }
 
@@ -1330,7 +1523,34 @@ function refineRulesetDefinition(def: RulesetDefinitionBase, ctx: z.RefinementCt
  *  understands would silently change a game's arithmetic, so an unknown key refuses the file. */
 export const rulesetDefinitionSchema = rulesetDefinitionBaseSchema.superRefine(refineRulesetDefinition);
 
+/** How long guidance may be once the layers a game turned on have been appended to it. A layer
+ *  ADDS to the ruleset's own text, so the merged string routinely passes the 1500 characters one
+ *  file may declare, and it stays bounded all the same: the base plus every layer's own ceiling.
+ *  The file schema keeps the tighter cap, because nothing writes an effective definition back. */
+export const RULESET_EFFECTIVE_GUIDANCE_MAX = 1500 + RULESET_LAYERS_MAX * RULESET_LAYER_GUIDANCE_MAX;
+
+/** The definition as the Engine HOLDS it rather than as an author wrote it: a `ruleset.json` with
+ *  the game's active layers applied, and, for a community ruleset, re-keyed under its namespaced
+ *  id. Two relaxations, both because this document is never written back to a file. Everything
+ *  else is the file's own rule, which is what makes it safe to hand a layered definition to the
+ *  prompt, the resolver, the sheet editor and the battle bridge unchanged. */
+export const rulesetEffectiveDefinitionSchema = rulesetDefinitionBaseSchema
+  .extend({
+    id: z.string().max(140).regex(RULESET_REF_ID_PATTERN),
+    gm: gmSchema.extend({
+      checkGuidance: promptSafeText(RULESET_EFFECTIVE_GUIDANCE_MAX),
+      worldGuidance: promptSafeText(RULESET_EFFECTIVE_GUIDANCE_MAX).optional(),
+    }),
+  })
+  .superRefine((def, ctx) => refineRulesetDefinition(def, ctx, true));
+
 export type RulesetDefinition = z.infer<typeof rulesetDefinitionSchema>;
+/** One declared layer. Absent on every ruleset written before layers existed. */
+export type RulesetLayer = NonNullable<RulesetDefinition["layers"]>[number];
+export type RulesetLayerCatalogRule = NonNullable<RulesetLayer["catalogs"]>[number];
+export type RulesetLayerCatalogHide = RulesetLayerCatalogRule["hide"];
+/** The one field type a layer can narrow. */
+export type RulesetEnumField = Extract<z.infer<typeof rulesetFieldSchema>, { type: "enum" }>;
 export type RulesetResolution = RulesetDefinition["resolution"];
 /** The two kinds, narrowed. Every reader of a field only one kind has takes one of these, so the
  *  compiler finds the readers a third kind would break. */
