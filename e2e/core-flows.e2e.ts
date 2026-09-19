@@ -15258,7 +15258,9 @@ test("Conversation setup commands follow the installed agent library", async ({ 
     await expect(commandsToggle).toBeVisible();
     await commandsToggle.click();
     await expect(page.getByText("Schedule Updates", { exact: true })).toBeVisible();
-    const footer = page.locator('[data-component="ChatSetupWizard"]').getByRole("button", { name: "Start Chatting", exact: true });
+    const footer = page
+      .locator('[data-component="ChatSetupWizard"]')
+      .getByRole("button", { name: "Start Chatting", exact: true });
     await expect(footer).toBeInViewport();
     const footerRect = await footer.boundingBox();
     expect(footerRect!.y + footerRect!.height).toBeLessThanOrEqual(page.viewportSize()!.height);
@@ -20866,6 +20868,15 @@ test("iPhone Conversation Presence keeps its last activity field reachable", asy
     const scrollShell = presencePanel.locator("[data-chat-floating-scroll]");
     await expect(activityFields).toHaveCount(characterIds.length);
     await lastActivityField.focus();
+    await lastActivityField.fill("Reading by the window");
+    // Opening the software keyboard can resize and pan the layout viewport,
+    // in addition to sending the visualViewport events mocked below.
+    await page.evaluate(() => {
+      window.dispatchEvent(new Event("resize"));
+      window.dispatchEvent(new Event("scroll"));
+    });
+    await expect(lastActivityField).toBeFocused();
+    await expect(lastActivityField).toHaveValue("Reading by the window");
 
     const initialViewportHeight = await page.evaluate(() => window.innerHeight);
     const keyboardViewportHeight = 360;
@@ -20903,6 +20914,16 @@ test("iPhone Conversation Presence keeps its last activity field reachable", asy
         );
       })
       .toBe(true);
+    await page.screenshot({ path: testInfo.outputPath("conversation-presence-keyboard.png"), animations: "disabled" });
+    await lastActivityField.press("Enter");
+    await expect
+      .poll(async () => {
+        const response = await page.request.get(`/api/characters/${characterIds.at(-1)}`);
+        const character = await response.json();
+        const data = typeof character.data === "string" ? JSON.parse(character.data) : character.data;
+        return data.extensions?.conversationStatusOverride?.activity;
+      })
+      .toBe("Reading by the window");
   } finally {
     if (chatId) await page.request.delete(`/api/chats/${chatId}?force=true`).catch(() => undefined);
     for (const characterId of characterIds) {

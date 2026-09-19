@@ -10,6 +10,11 @@ import { MessageReplyPreview, ReplyToMessageButton } from "./MessageReplyPreview
 import { RoleplayCommandResults, RoleplayDiceRoll, replaceRoleplayDiceMarkers } from "./RoleplayCommandResults";
 import { splitRoleplayParagraphs } from "../../lib/roleplay-vn-paragraphs";
 import {
+  notifyRoleplayTTSParagraph,
+  withRoleplayTTSParagraphs,
+  type RoleplayTTSParagraphDetail,
+} from "../../lib/roleplay-vn-tts";
+import {
   normalizeCardAssetImageSyntax,
   resolveCardAssetUrl,
   resolveSelfCardAssets,
@@ -919,6 +924,9 @@ interface ChatMessageProps {
   isStreaming?: boolean;
   /** Compact paragraph presentation; full message actions stay in the history. */
   visualNovel?: boolean;
+  followSpeechParagraphs?: boolean;
+  visualNovelSpeech?: RoleplayTTSParagraphDetail | null;
+  onVisualNovelSpeechParagraph?: (index: number) => void;
   /** Explicit VN paragraph index to render instead of automatically picking the latest paragraph. */
   visualNovelParagraphIndex?: number;
   /** Callback notifying the total number of paragraphs available in this message for VN rendering. */
@@ -1795,6 +1803,9 @@ export const ChatMessage = memo(function ChatMessage({
   message,
   isStreaming,
   visualNovel = false,
+  followSpeechParagraphs = false,
+  visualNovelSpeech,
+  onVisualNovelSpeechParagraph,
   visualNovelParagraphIndex,
   onVisualNovelParagraphCount,
   visualNovelMediaTarget,
@@ -2026,23 +2037,32 @@ export const ChatMessage = memo(function ChatMessage({
     },
     [characterMap],
   );
-  const ttsVoiceRequests = useMemo(
-    () =>
-      ttsConfig
-        ? withTTSVoiceRequestCacheKeys(
-            buildTTSVoiceRequests(
-              message.content,
-              ttsConfig,
-              ttsSpeakerName,
-              message.characterId,
-              resolveTTSCharacterId,
-            ),
-            ttsConfig,
-            message.id,
-          )
-        : [],
-    [message.characterId, message.content, message.id, resolveTTSCharacterId, ttsConfig, ttsSpeakerName],
-  );
+  const ttsVoiceRequests = useMemo(() => {
+    if (!ttsConfig) return [];
+    const requests = buildTTSVoiceRequests(
+      message.content,
+      ttsConfig,
+      ttsSpeakerName,
+      message.characterId,
+      resolveTTSCharacterId,
+    );
+    return withTTSVoiceRequestCacheKeys(
+      visualNovel || followSpeechParagraphs
+        ? withRoleplayTTSParagraphs(requests, message.content, ttsConfig)
+        : requests,
+      ttsConfig,
+      message.id,
+    );
+  }, [
+    message.characterId,
+    message.content,
+    message.id,
+    resolveTTSCharacterId,
+    ttsConfig,
+    ttsSpeakerName,
+    visualNovel,
+    followSpeechParagraphs,
+  ]);
   const hasTTSContent = ttsVoiceRequests.length > 0;
   const [ttsState, setTTSState] = useState(ttsService.getState());
   const [ttsActiveId, setTTSActiveId] = useState<string | null>(ttsService.getActiveId());
@@ -2088,9 +2108,18 @@ export const ChatMessage = memo(function ChatMessage({
       void ttsService.speakSequence(ttsVoiceRequests, message.id, {
         progressive: ttsConfig?.progressivePlayback,
         volume: ttsLinePlaybackVolume,
+        onChunkStart: (_request, index) =>
+          notifyRoleplayTTSParagraph(message.chatId, message.id, ttsVoiceRequests, index),
       });
     }
-  }, [hasTTSContent, message.id, ttsConfig?.progressivePlayback, ttsLinePlaybackVolume, ttsVoiceRequests]);
+  }, [
+    hasTTSContent,
+    message.chatId,
+    message.id,
+    ttsConfig?.progressivePlayback,
+    ttsLinePlaybackVolume,
+    ttsVoiceRequests,
+  ]);
 
   const handlePauseResumeTTS = useCallback(() => {
     if (ttsService.getActiveId() !== message.id) return;
@@ -2590,6 +2619,16 @@ export const ChatMessage = memo(function ChatMessage({
     ],
   );
   const displayContent = useMemo(() => formatDisplayContent(message.content), [formatDisplayContent, message.content]);
+
+  useEffect(() => {
+    if (!visualNovel || !ttsConfig || visualNovelSpeech?.messageId !== message.id || !onVisualNovelSpeechParagraph)
+      return;
+    // Display regexes/macros can remove or merge source paragraphs. Match the
+    // speech against the very same text that the VN renderer splits below.
+    const mapped = withRoleplayTTSParagraphs(visualNovelSpeech.requests, displayContent, ttsConfig, false);
+    const index = mapped[visualNovelSpeech.chunkIndex]?.paragraphIndex;
+    if (index !== undefined) onVisualNovelSpeechParagraph(index);
+  }, [displayContent, message.id, onVisualNovelSpeechParagraph, ttsConfig, visualNovel, visualNovelSpeech]);
 
   const displayName = isUser ? userName : charName;
   const avatarUrl = isUser
@@ -3250,6 +3289,52 @@ export const ChatMessage = memo(function ChatMessage({
       </div>
     );
 
+  const roleplayTtsControls = ttsEnabled && (
+    <>
+      {isSpeakingThis && (ttsState === "playing" || ttsState === "paused") && (
+        <>
+          <ActionBtn
+            icon={isPausedThis ? <Play size={MESSAGE_ACTION_ICON_SIZE} /> : <Pause size={MESSAGE_ACTION_ICON_SIZE} />}
+            onClick={handlePauseResumeTTS}
+            title={
+              isPausedThis
+                ? localizeUi("ui.chat.chatmessage.resumeSpeaking")
+                : localizeUi("ui.chat.chatmessage.pauseSpeaking")
+            }
+          />
+          <ActionBtn
+            icon={<RefreshCw size={MESSAGE_ACTION_ICON_SIZE} />}
+            onClick={handleRestartTTS}
+            title={localizeUi("ui.chat.chatmessage.restartSpeaking")}
+          />
+        </>
+      )}
+      <ActionBtn
+        icon={
+          isLoadingThis ? (
+            <Loader2 size={MESSAGE_ACTION_ICON_SIZE} className="animate-spin" />
+          ) : isSpeakingThis ? (
+            <MicOff size={MESSAGE_ACTION_ICON_SIZE} />
+          ) : (
+            <Mic size={MESSAGE_ACTION_ICON_SIZE} />
+          )
+        }
+        onClick={handleSpeak}
+        title={
+          !hasTTSContent
+            ? localizeUi("ui.chat.chatmessage.noDialogueToSpeak")
+            : isLoadingThis
+              ? localizeUi("ui.panels.ttsconfigcard.loading")
+              : isSpeakingThis
+                ? localizeUi("ui.chat.chatmessage.stopSpeaking")
+                : localizeUi("ui.chat.chatmessage.speak")
+        }
+        disabled={!hasTTSContent || (ttsBusy && !isSpeakingThis)}
+      />
+      <TTSLineVolumeControl volume={ttsLineVolume} onVolumeChange={handleTTSLineVolumeChange} dark />
+    </>
+  );
+
   const vnAvatarCropStyle = expressionAvatarUrl ? {} : avatarCropStyle;
 
   if (visualNovel) {
@@ -3324,6 +3409,7 @@ export const ChatMessage = memo(function ChatMessage({
                 </>
               )}
             </div>
+            {ttsEnabled && <div className="mt-2 flex flex-wrap items-center gap-2">{roleplayTtsControls}</div>}
           </div>
         </div>
         {imageLightbox && (
@@ -3944,57 +4030,7 @@ export const ChatMessage = memo(function ChatMessage({
                 onClick={() => onDelete?.(message.id)}
                 title={localizeUi("lorebook.editor.batch.delete")}
               />
-              {ttsEnabled && (
-                <>
-                  {isSpeakingThis && (ttsState === "playing" || ttsState === "paused") && (
-                    <>
-                      <ActionBtn
-                        icon={
-                          isPausedThis ? (
-                            <Play size={MESSAGE_ACTION_ICON_SIZE} />
-                          ) : (
-                            <Pause size={MESSAGE_ACTION_ICON_SIZE} />
-                          )
-                        }
-                        onClick={handlePauseResumeTTS}
-                        title={
-                          isPausedThis
-                            ? localizeUi("ui.chat.chatmessage.resumeSpeaking")
-                            : localizeUi("ui.chat.chatmessage.pauseSpeaking")
-                        }
-                      />
-                      <ActionBtn
-                        icon={<RefreshCw size={MESSAGE_ACTION_ICON_SIZE} />}
-                        onClick={handleRestartTTS}
-                        title={localizeUi("ui.chat.chatmessage.restartSpeaking")}
-                      />
-                    </>
-                  )}
-                  <ActionBtn
-                    icon={
-                      isLoadingThis ? (
-                        <Loader2 size={MESSAGE_ACTION_ICON_SIZE} className="animate-spin" />
-                      ) : isSpeakingThis ? (
-                        <MicOff size={MESSAGE_ACTION_ICON_SIZE} />
-                      ) : (
-                        <Mic size={MESSAGE_ACTION_ICON_SIZE} />
-                      )
-                    }
-                    onClick={handleSpeak}
-                    title={
-                      !hasTTSContent
-                        ? localizeUi("ui.chat.chatmessage.noDialogueToSpeak")
-                        : isLoadingThis
-                          ? localizeUi("ui.panels.ttsconfigcard.loading")
-                          : isSpeakingThis
-                            ? localizeUi("ui.chat.chatmessage.stopSpeaking")
-                            : localizeUi("ui.chat.chatmessage.speak")
-                    }
-                    disabled={!hasTTSContent || (ttsBusy && !isSpeakingThis)}
-                  />
-                  <TTSLineVolumeControl volume={ttsLineVolume} onVolumeChange={handleTTSLineVolumeChange} dark />
-                </>
-              )}
+              {roleplayTtsControls}
             </div>
           </div>
         </div>

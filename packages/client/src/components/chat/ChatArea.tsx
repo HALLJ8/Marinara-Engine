@@ -1,3 +1,4 @@
+import { notifyRoleplayTTSParagraph, withRoleplayTTSParagraphs } from "../../lib/roleplay-vn-tts";
 // ──────────────────────────────────────────────
 // Chat: Main chat area — mode-aware rendering
 // ──────────────────────────────────────────────
@@ -2694,12 +2695,28 @@ export const ChatArea = memo(function ChatArea() {
         return;
       if (ttsRequests.length === 0) return;
 
+      if (
+        mode === "roleplay" &&
+        (chatMeta.roleplayDisplayStyle ?? useUIStore.getState().roleplayDisplayStyle) === "visual-novel"
+      ) {
+        ttsRequests = withRoleplayTTSParagraphs(ttsRequests, lastMsg.content, cfg);
+      }
+
       await ttsService.speakSequence(withTTSVoiceRequestCacheKeys(ttsRequests, cfg, lastMsg.id), lastMsg.id, {
         progressive: cfg.progressivePlayback,
         volume: ttsLineVolume / 100,
+        onChunkStart: (_request, index) => notifyRoleplayTTSParagraph(targetChatId, lastMsg.id, ttsRequests, index),
       });
     },
-    [characterMap, characterNames, chat, personaInfo?.name, resolveTTSCharacterId, ttsLineVolume],
+    [
+      characterMap,
+      characterNames,
+      chat,
+      chatMeta.roleplayDisplayStyle,
+      personaInfo?.name,
+      resolveTTSCharacterId,
+      ttsLineVolume,
+    ],
   );
   useEffect(() => {
     const handleMessageReady = (event: Event) => {

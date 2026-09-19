@@ -882,6 +882,8 @@ interface UIState {
   roleplaySpriteScale: number;
   /** Default presentation for Roleplay chats without a saved choice. */
   roleplayDisplayStyle: "classic" | "visual-novel";
+  roleplayVnAutoPlay: boolean;
+  roleplayVnAutoPlayDelay: number;
   roleplayVnPortraitScale: number;
   roleplayVnSpriteScale: number;
   /** Scale multiplier for Game mode VN dialogue portraits. */
@@ -1190,6 +1192,8 @@ interface UIState {
   setRoleplayNarratorAvatarCycling: (v: boolean) => void;
   setRoleplaySpriteScale: (v: number) => void;
   setRoleplayDisplayStyle: (v: "classic" | "visual-novel") => void;
+  setRoleplayVnAutoPlay: (v: boolean) => void;
+  setRoleplayVnAutoPlayDelay: (v: number) => void;
   setRoleplayVnPortraitScale: (v: number) => void;
   setRoleplayVnSpriteScale: (v: number) => void;
   setGameAvatarScale: (v: number) => void;
@@ -1421,6 +1425,8 @@ export function pickSyncedSettings(state: UIState) {
     roleplayNarratorAvatarCycling: state.roleplayNarratorAvatarCycling,
     roleplaySpriteScale: state.roleplaySpriteScale,
     roleplayDisplayStyle: state.roleplayDisplayStyle,
+    roleplayVnAutoPlay: state.roleplayVnAutoPlay,
+    roleplayVnAutoPlayDelay: state.roleplayVnAutoPlayDelay,
     roleplayVnPortraitScale: state.roleplayVnPortraitScale,
     roleplayVnSpriteScale: state.roleplayVnSpriteScale,
     gameAvatarScale: state.gameAvatarScale,
@@ -1626,6 +1632,8 @@ export function pickPersistedUIState(state: UIState) {
     roleplayNarratorAvatarCycling: state.roleplayNarratorAvatarCycling,
     roleplaySpriteScale: state.roleplaySpriteScale,
     roleplayDisplayStyle: state.roleplayDisplayStyle,
+    roleplayVnAutoPlay: state.roleplayVnAutoPlay,
+    roleplayVnAutoPlayDelay: state.roleplayVnAutoPlayDelay,
     roleplayVnPortraitScale: state.roleplayVnPortraitScale,
     roleplayVnSpriteScale: state.roleplayVnSpriteScale,
     gameAvatarScale: state.gameAvatarScale,
@@ -1870,6 +1878,8 @@ export const useUIStore = create<UIState>()(
         roleplayNarratorAvatarCycling: true,
         roleplaySpriteScale: 1,
         roleplayDisplayStyle: "classic",
+        roleplayVnAutoPlay: false,
+        roleplayVnAutoPlayDelay: 3000,
         roleplayVnPortraitScale: 1,
         roleplayVnSpriteScale: 1.35,
         gameAvatarScale: 1,
@@ -2721,6 +2731,9 @@ export const useUIStore = create<UIState>()(
           set({ roleplaySpriteScale: Math.max(ROLEPLAY_SPRITE_SCALE_MIN, Math.min(ROLEPLAY_SPRITE_SCALE_MAX, v)) }),
         setGameAvatarScale: (v) => set({ gameAvatarScale: Math.max(0.75, Math.min(1.75, v)) }),
         setRoleplayDisplayStyle: (v) => set({ roleplayDisplayStyle: v }),
+        setRoleplayVnAutoPlay: (v) => set({ roleplayVnAutoPlay: v }),
+        setRoleplayVnAutoPlayDelay: (v) =>
+          set({ roleplayVnAutoPlayDelay: Math.max(200, Math.min(10000, Math.round(v))) }),
         setRoleplayVnPortraitScale: (v) =>
           set({ roleplayVnPortraitScale: Number.isFinite(v) ? Math.max(0.75, Math.min(1.75, v)) : 1 }),
         setRoleplayVnSpriteScale: (v) =>
@@ -2785,6 +2798,8 @@ export const useUIStore = create<UIState>()(
             roleplayNarratorAvatarCycling: true,
             roleplaySpriteScale: 1,
             roleplayDisplayStyle: "classic",
+            roleplayVnAutoPlay: false,
+            roleplayVnAutoPlayDelay: 3000,
             roleplayVnPortraitScale: 1,
             roleplayVnSpriteScale: 1.35,
             gameDialogueDisplayMode: "classic" as GameDialogueDisplayMode,

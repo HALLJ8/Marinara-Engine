@@ -1221,6 +1221,22 @@ const SETTINGS_SEARCHABLE_CONTROLS: readonly SettingsSearchableControlMeta[] = [
     kind: "Toggle",
   },
   {
+    id: "roleplay-vn-autoplay",
+    sectionId: "roleplay-messages",
+    label: "Auto-play VN paragraphs",
+    description: "Advance Roleplay Visual Novel paragraphs automatically, waiting for speech when it is playing.",
+    aliases: ["roleplay", "vn", "autoplay", "tts", "speech", "reading"],
+    kind: "Toggle",
+  },
+  {
+    id: "roleplay-vn-autoplay-delay",
+    sectionId: "roleplay-messages",
+    label: "Paragraph delay",
+    description: "Set the time between Roleplay Visual Novel paragraphs when auto-play is enabled.",
+    aliases: ["roleplay", "vn", "autoplay", "delay", "reading"],
+    kind: "Slider",
+  },
+  {
     id: "roleplay-vn-portrait-scale",
     sectionId: "roleplay-messages",
     label: "Dialogue portrait scale",
@@ -4831,6 +4847,10 @@ function AppearanceSettings({ group = "app" }: { group?: AppearanceGroup }) {
   const setRoleplayVnPortraitScale = useUIStore((s) => s.setRoleplayVnPortraitScale);
   const roleplayVnSpriteScale = useUIStore((s) => s.roleplayVnSpriteScale);
   const setRoleplayVnSpriteScale = useUIStore((s) => s.setRoleplayVnSpriteScale);
+  const roleplayVnAutoPlay = useUIStore((s) => s.roleplayVnAutoPlay);
+  const setRoleplayVnAutoPlay = useUIStore((s) => s.setRoleplayVnAutoPlay);
+  const roleplayVnAutoPlayDelay = useUIStore((s) => s.roleplayVnAutoPlayDelay);
+  const setRoleplayVnAutoPlayDelay = useUIStore((s) => s.setRoleplayVnAutoPlayDelay);
   const activeRoleplayStyle =
     appearanceChat?.mode === "roleplay"
       ? (parseChatMetadata(appearanceChat.metadata).roleplayDisplayStyle ?? roleplayDisplayStyle)
@@ -5754,6 +5774,33 @@ function AppearanceSettings({ group = "app" }: { group?: AppearanceGroup }) {
                 }}
               />
               <p className="text-xs text-[var(--muted-foreground)]">{localizeUi("settings.roleplayVn.scope")}</p>
+              <ToggleSetting
+                anchorId={getSettingsControlAnchorId("roleplay-vn-autoplay")}
+                label={localizeUi("settings.roleplayVn.autoPlay")}
+                help={localizeUi("settings.roleplayVn.autoPlayHelp")}
+                checked={roleplayVnAutoPlay}
+                onChange={setRoleplayVnAutoPlay}
+              />
+              {roleplayVnAutoPlay && (
+                <label
+                  id={getSettingsControlAnchorId("roleplay-vn-autoplay-delay")}
+                  className="flex scroll-mt-3 flex-col gap-2 text-xs"
+                >
+                  <span>
+                    {localizeUi("settings.roleplayVn.autoPlayDelay")}{" "}
+                    {localizeUi("settings.units.secondsShort", { value: roleplayVnAutoPlayDelay / 1000 })}
+                  </span>
+                  <input
+                    type="range"
+                    min={200}
+                    max={10000}
+                    step={100}
+                    value={roleplayVnAutoPlayDelay}
+                    onChange={(event) => setRoleplayVnAutoPlayDelay(Number(event.target.value))}
+                    className="w-full accent-[var(--primary)]"
+                  />
+                </label>
+              )}
               <div className="grid gap-3 rounded-lg border border-[var(--border)] p-3 sm:grid-cols-2">
                 <label
                   id={getSettingsControlAnchorId("roleplay-vn-portrait-scale")}

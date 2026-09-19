@@ -526,6 +526,7 @@ export async function sceneRoutes(app: FastifyInstance) {
           ``,
           `Write a vivid but concise narrative summary of what happened during this scene (max 200 words).`,
           `Write in past tense, third person. Include the emotional beats and key moments.`,
+          `Use an outside narrator's point of view. Name the participant whose thoughts or feelings you describe, and do not present this recap as dialogue spoken by a character.`,
           `This summary will become a permanent memory for the character(s) involved.`,
           `Do NOT use asterisks, em-dashes, or markdown formatting. Write natural prose.`,
           `Start directly with the narrative — no preamble like "Here's a summary".`,
