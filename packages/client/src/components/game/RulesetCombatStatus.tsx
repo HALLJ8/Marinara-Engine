@@ -25,6 +25,17 @@ export function RulesetCombatStatus({
   const [orderOpen, setOrderOpen] = useState(
     () => typeof window === "undefined" || window.matchMedia("(min-width: 640px)").matches,
   );
+  // Open by default wherever there is room. A window that GROWS past the breakpoint opens it too,
+  // because the summary that would open it by hand is visually hidden there.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const wide = window.matchMedia("(min-width: 640px)");
+    const follow = (event: MediaQueryListEvent) => {
+      if (event.matches) setOrderOpen(true);
+    };
+    wide.addEventListener("change", follow);
+    return () => wide.removeEventListener("change", follow);
+  }, []);
   const logBox = useRef<HTMLElement>(null);
   const newest = lines.at(-1)?.seq;
   useEffect(() => {

@@ -238,28 +238,32 @@ test("Combat director ruleset: the ruleset's own menu resolves the fight and wri
   expect(imported.ok(), await imported.text()).toBeTruthy();
   const rulesetId = (await imported.json()).rulesetId as string;
 
-  const created = await request.post("/api/game/create", {
-    data: {
-      name: "Director ruleset",
-      setupConfig: {
-        genre: "Fantasy",
-        setting: "The road",
-        tone: "Adventure",
-        difficulty: "normal",
-        playerGoals: "Get through",
-        gmMode: "standalone",
-        rating: "sfw",
-        partyCharacterIds: [],
-        combatStyle: "classic",
-        combatDirector: true,
-        gmBossControl: false,
-        ruleset: { id: rulesetId, version: 1, packageId: null, options: {} },
-      },
-    },
-  });
-  expect(created.ok(), await created.text()).toBeTruthy();
-  const chatId = (await created.json()).sessionChat.id;
+  // Set once the game exists, so a failure anywhere after the import still reaches the cleanup
+  // below and the imported ruleset never outlives the test.
+  let createdChatId: string | undefined;
   try {
+    const created = await request.post("/api/game/create", {
+      data: {
+        name: "Director ruleset",
+        setupConfig: {
+          genre: "Fantasy",
+          setting: "The road",
+          tone: "Adventure",
+          difficulty: "normal",
+          playerGoals: "Get through",
+          gmMode: "standalone",
+          rating: "sfw",
+          partyCharacterIds: [],
+          combatStyle: "classic",
+          combatDirector: true,
+          gmBossControl: false,
+          ruleset: { id: rulesetId, version: 1, packageId: null, options: {} },
+        },
+      },
+    });
+    expect(created.ok(), await created.text()).toBeTruthy();
+    const chatId = (await created.json()).sessionChat.id;
+    createdChatId = chatId;
     // A traveller at the top of the scale: three Brawn and six Toughness make thirteen Grit, which
     // is more than a cinder-moth can take off her before she puts it down.
     const sheets = await request.patch(`/api/chats/${chatId}/metadata`, {
@@ -417,7 +421,7 @@ test("Combat director ruleset: the ruleset's own menu resolves the fight and wri
     const live = (await sheet.json()).rulesetLive as Record<string, any>;
     expect(live?.juno?.pools?.grit?.value).toBe(survivor.health);
   } finally {
-    await request.delete(`/api/chats/${chatId}`);
+    if (createdChatId) await request.delete(`/api/chats/${createdChatId}`);
     await request.delete(`/api/game-rulesets?rulesetId=${encodeURIComponent(rulesetId)}&force=true`);
   }
 });

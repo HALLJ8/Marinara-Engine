@@ -49,9 +49,14 @@ export function RulesetCombatMenu({ view, budgetLabel, busy, onChoose, onFlee }:
   useEffect(() => {
     setStep(null);
   }, [view.actorId, view.round]);
+  // Focus follows a NEW stage or a new option, never every pick: choosing the second of three
+  // targets replaces `step`, and pulling focus back to the first button each time would take the
+  // keyboard away from somebody working down the list.
+  const stepStage = step?.stage;
+  const stepOption = step?.option.id;
   useEffect(() => {
-    if (step) first.current?.focus();
-  }, [step]);
+    if (stepStage) first.current?.focus();
+  }, [stepStage, stepOption]);
 
   if (!view.options) {
     return (

@@ -545,7 +545,7 @@ const line = (definition: RulesetDefinition, state: RulesetEncounterState, event
   const unionEnd = unionText.indexOf("\nexport ", unionStart + 1);
   assert.ok(unionStart >= 0 && unionEnd > unionStart, "the event union was not found where it used to be");
   const union = unionText.slice(unionStart, unionEnd);
-  const declared = new Set([...union.matchAll(/type:\s*"([a-z-]+)"/gu)].map((match) => match[1]!));
+  const declared = new Set([...union.matchAll(/\btype\??:\s*"([^"]+)"/gu)].map((match) => match[1]!));
   assert.ok(declared.size > 15, "the event union was not found where it used to be");
   for (const type of declared) {
     assert.ok(printed.has(type as RulesetCombatEvent["type"]), `no line is written for a "${type}" event`);
