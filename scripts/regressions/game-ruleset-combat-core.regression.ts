@@ -1319,12 +1319,74 @@ const labels = (definition: RulesetDefinition, state: RulesetEncounterState, id:
   });
 }
 
-// ── Capability API 1.26 ──
+// ── Capability API 1.26, read from the ruleset's own bytes ──
 {
   assert.ok(
     supportedCapabilityApi.major > 1 || supportedCapabilityApi.minor >= 26,
     "the host still advertises the combat seam introduced in API 1.26",
   );
+  const { getCapabilityPackageInstallIssue } =
+    await import("../../packages/server/src/services/capability-packages/package-manager.service.js");
+  const manifest = (minor: number) =>
+    ({
+      schemaVersion: 2,
+      capabilityApi: { major: 1, minor },
+      id: "ruleset-ember-roads",
+      kind: ["ruleset"],
+      permissions: [],
+      restartRequired: false,
+      contributions: { assets: { paths: ["ruleset.json", "catalogs/knacks.json"] } },
+    }) as any;
+
+  const combatOnly = variant(emberText, (doc) => delete doc.catalogs);
+  assert.match(
+    getCapabilityPackageInstallIssue(manifest(25), combatOnly) ?? "",
+    /A ruleset with a combat block requires schemaVersion 2 and capabilityApi 1\.26 or newer/,
+    "the block lives inside the ruleset file, so the gate reads the file",
+  );
+  assert.equal(getCapabilityPackageInstallIssue(manifest(26), combatOnly), null);
+  assert.equal(getCapabilityPackageInstallIssue(manifest(26), variant(emberText)), null);
+
+  // The mechanics a fight reads are new keys in the same strict file, inline in the ruleset or in a
+  // catalog asset beside it, so both are read the same way.
+  const inlineOnly = variant(emberText, (doc) => delete doc.combat);
+  assert.match(
+    getCapabilityPackageInstallIssue(manifest(25), inlineOnly) ?? "",
+    /catalog mechanics reach a fight requires schemaVersion 2 and capabilityApi 1\.26 or newer/,
+  );
+  const assetOnly = variant(emberText, (doc) => {
+    delete doc.combat;
+    doc.catalogs[0].entries = undefined;
+    delete doc.catalogs[0].entries;
+    doc.catalogs[0].asset = "catalogs/knacks.json";
+  });
+  const assetEntries = {
+    schemaVersion: 1,
+    catalog: "knacks",
+    entries: [
+      {
+        id: "coldfire-toss",
+        label: "Coldfire Toss",
+        rows: [{ list: "knacks", values: { name: "Coldfire Toss" } }],
+        mechanics: { kind: "attack", targetCount: 3 },
+      },
+    ],
+  };
+  const assets = new Map([["catalogs/knacks.json", assetEntries]]);
+  assert.match(
+    getCapabilityPackageInstallIssue(manifest(25), assetOnly, assets) ?? "",
+    /catalog mechanics reach a fight requires schemaVersion 2 and capabilityApi 1\.26 or newer/,
+  );
+  assert.equal(getCapabilityPackageInstallIssue(manifest(26), assetOnly, assets), null);
+
+  // A ruleset with neither installs on the declaration it always needed.
+  const plain = variant(emberText, (doc) => {
+    delete doc.combat;
+    delete doc.catalogs;
+    delete doc.battle;
+    delete doc.layers;
+  });
+  assert.equal(getCapabilityPackageInstallIssue(manifest(20), plain), null);
 }
 
 console.info("game ruleset combat core regressions passed.");
