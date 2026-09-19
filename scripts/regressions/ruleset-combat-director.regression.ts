@@ -590,7 +590,7 @@ for (const setup of [
       for (const [budget, left] of Object.entries(spent)) {
         const now = rulesetCombatant(state.rulesetFight!.encounter, actor)?.budgets[budget];
         if (now === undefined) continue;
-        assert.ok(now <= left || now === left, `${setup.what}: a budget went up mid-turn`);
+        assert.ok(now <= left, `${setup.what}: a budget went up mid-turn`);
       }
       const now = state.rulesetFight!.encounter;
       assert.ok(!!state.outcome || now.order[now.turn] !== actor, `${setup.what} seed ${seed}: the turn never ended`);

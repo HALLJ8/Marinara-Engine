@@ -159,7 +159,7 @@ export async function chooseGmCombatOption(
         .join("\n\n");
     }
   }
-  let messages = buildCombatBossPrompt(state, personality);
+  let messages: ReturnType<typeof buildCombatBossPrompt>;
   if (state.style === "ruleset") {
     const resolved = resolveGameRuleset(meta, await loadRulesetRegistry());
     // No rules, no decision: the route falls back to the Engine's own picker rather than asking a
@@ -167,6 +167,8 @@ export async function chooseGmCombatOption(
     if (resolved.status !== "ok" || !resolved.definition.combat)
       throw new Error("This game's ruleset is not available, so the boss decision uses the local picker.");
     messages = buildRulesetCombatBossPrompt(resolved.definition, state, personality);
+  } else {
+    messages = buildCombatBossPrompt(state, personality);
   }
   logDebugOverride(
     debugMode,

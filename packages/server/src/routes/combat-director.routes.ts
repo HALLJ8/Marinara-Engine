@@ -198,7 +198,7 @@ type RulesetSession = { definition: RulesetDefinition; packageId: string | null 
 async function loadFightCatalogs(
   packageId: string | null,
   definition: RulesetDefinition,
-  wanted: (catalog: RulesetDefinition["catalogs"] extends Array<infer T> | undefined ? T : never) => boolean,
+  wanted: (catalog: NonNullable<RulesetDefinition["catalogs"]>[number]) => boolean,
 ): Promise<RulesetCatalogEntriesById> {
   const catalogs: RulesetCatalogEntriesById = {};
   for (const catalog of definition.catalogs ?? []) {
