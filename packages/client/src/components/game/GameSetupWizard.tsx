@@ -525,6 +525,12 @@ export function GameSetupWizard({
   // different one clears them rather than carrying a name the new rules do not have.
   const [rulesetLayerIds, setRulesetLayerIds] = useState<string[]>([]);
   const activeRuleset = rulesets.find((entry) => entry.definition.id === rulesetId) ?? null;
+  // The checked ids the CURRENT definition still declares, read through the same resolution the pin
+  // gets. An installed package that updates under an open wizard can drop a layer, and a choice the
+  // chooser can no longer show must not be sent to a create call that would refuse it.
+  const activeLayerIds = activeRuleset
+    ? restoredRulesetLayers(activeRuleset.definition, rulesetLayerOptions(rulesetLayerIds))
+    : [];
   const [rulesetImportNotice, setRulesetImportNotice] = useState<string | null>(null);
   const experienceSeedInvalid = Boolean(experienceSetup?.seed && parseExperienceSeed(experienceSeed) === null);
   const [experienceImportNotice, setExperienceImportNotice] = useState<string | null>(null);
@@ -1335,7 +1341,7 @@ export function GameSetupWizard({
               version: activeRuleset.definition.version,
               packageId: activeRuleset.packageId,
               // Only the checked layers, so a ruleset with none sends the empty record it always did.
-              options: rulesetLayerOptions(rulesetLayerIds),
+              options: rulesetLayerOptions(activeLayerIds),
             },
           }
         : {}),
@@ -2044,7 +2050,7 @@ export function GameSetupWizard({
                         rulesets={rulesets}
                         activeId={activeRuleset?.definition.id ?? null}
                         combatStyle={combatStyle}
-                        layerIds={rulesetLayerIds}
+                        layerIds={activeLayerIds}
                         onSelect={(id) => {
                           setRulesetId(id);
                           setRulesetLayerIds([]);
