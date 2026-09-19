@@ -1347,6 +1347,36 @@ const labels = (definition: RulesetDefinition, state: RulesetEncounterState, id:
     ],
   );
 
+  // An entry that rolls to hit ROLLS, even in a list whose source names no bonus: nothing is added
+  // to the dice, and it can miss. Landing it without a roll would be a free hit.
+  {
+    const aimed = structuredClone(knacks);
+    aimed.find((entry) => entry.id === "coldfire-toss")!.mechanics!.attackRoll = true;
+    const aimedState = createRulesetEncounter({
+      definition: ember,
+      seed: 4242,
+      combatants: [
+        { ...traveller(), catalogs: { knacks: aimed } },
+        hound("ash", "Ash-hound"),
+        hound("cinder", "Cinder-hound"),
+      ],
+      // Two dice each for initiative, and the traveller goes first.
+      roller: dice(6, 5, 1, 1, 1, 1),
+    });
+    const aimedToss = rulesetCombatOptions(ember, aimedState, "juno").find(
+      (option) => option.label === "Coldfire Toss",
+    )!;
+    const missed = applyRulesetCombatChoice(
+      ember,
+      aimedState,
+      { actorId: "juno", optionId: aimedToss.id, targetIds: ["ash"] },
+      dice(1, 1),
+    );
+    const roll = firstOf(missed.events, "attack");
+    assert.deepEqual([roll.rolls, roll.modifier, roll.total, roll.outcome], [[1, 1], 0, 2, "miss"]);
+    assert.equal(eventsOf(missed.events, "damage").length, 0, "a miss deals nothing");
+  }
+
   // A condition the ruleset says any damage ends comes off the next time something lands.
   let shaken = thrown.state;
   assert.equal(who(shaken, "cinder").tracked[0]!.rounds, 2);

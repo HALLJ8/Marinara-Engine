@@ -319,7 +319,9 @@ function abilityAction(
   else if (scaled) action.damage = { ...scaled, ...(mechanics.damageType ? { type: mechanics.damageType } : {}) };
   const temporary = amountOf(mechanics.temporary);
   if (temporary) action.temporary = temporary;
-  if (mechanics.attackRoll && source.toHit) action.toHit = resolve(source.toHit);
+  // An entry that rolls to hit always rolls: a source that names no bonus adds nothing to the dice.
+  // Leaving `toHit` unset here would send it down the no-roll path and land it automatically.
+  if (mechanics.attackRoll) action.toHit = source.toHit ? resolve(source.toHit) : 0;
   if (mechanics.autoHit) action.autoHit = true;
   if (mechanics.save) {
     action.save = {

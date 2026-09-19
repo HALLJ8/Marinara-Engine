@@ -494,7 +494,10 @@ players today.
   ],
   "abilities": [{ "list": "knacks", "budget": "act" }],
   "standard": ["dodge", "help"],
-  "conditions": [{ "condition": "shaken", "effects": ["own-attacks-disadvantage", "ends-on-damage"] }]
+  "conditions": [
+    { "condition": "shaken", "effects": ["own-attacks-disadvantage", "ends-on-damage"] },
+    { "condition": "pinned", "effects": ["cannot-act", "speed-zero"] }
+  ]
 }
 ```
 

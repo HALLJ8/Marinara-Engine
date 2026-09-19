@@ -289,7 +289,7 @@
               "list": "knacks",
               "values": {
                 "name": "Hold the Line",
-                "notes": "Spend 1 Luck to steady one ally who can hear you. They shake off being Shaken, and in a fight they gain 2 temporary Grit."
+                "notes": "Spend 1 Luck to steady one ally who can hear you. In a fight they gain 2 temporary Grit."
               }
             }
           ],
