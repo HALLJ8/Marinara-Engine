@@ -29,6 +29,7 @@ import {
   rulesetCombatRoller,
   rulesetSheetBuildSchema,
   type RulesetCatalogEntriesById,
+  type RulesetLiveStates,
   type RulesetCatalogEntry,
   type RulesetDefinition,
   type RulesetSheetBuild,
@@ -168,7 +169,7 @@ interface StartInput {
   enemies: RulesetFightOpponent[];
   seed?: number;
   gm?: boolean;
-  live?: Record<string, unknown> | null;
+  live?: RulesetLiveStates | null;
 }
 type Started = { ok: true; state: CombatDirectorState } | { ok: false; error: string };
 
@@ -180,7 +181,7 @@ function start(input: StartInput): Started {
     enemies: input.enemies,
     cards: input.cards,
     playerName: null,
-    live: (input.live ?? null) as never,
+    live: input.live ?? null,
     partyCatalogs: input.partyCatalogs,
     bestiary: bestiaryOf(input.definition),
   });
@@ -642,6 +643,81 @@ for (const setup of [
   }
   assert.ok(blows > 50, `${blows} blows from opponents were looked at`);
   assert.equal(widest, 2, "an ability that may take three people took both members of a party of two");
+}
+
+// ── Whatever its temperament, an opponent that can strike does not stand there dodging ──
+{
+  const temperaments = [
+    "reckless",
+    "cautious",
+    "opportunistic",
+    "protective",
+    "supportive",
+    "disciplined",
+    "cowardly",
+    "patient",
+    "methodical",
+    "coordinated",
+  ] as const;
+  for (const adjective of temperaments) {
+    const state = started({
+      definition: fiveE,
+      cards: fiveECards,
+      partyCatalogs: spellCatalogs,
+      party: [fiveEParty[0]!],
+      // The sturdiest creature the example ships against a fighter: a blow takes a small share of
+      // either one's health, which is exactly where a standard action used to outscore every attack.
+      enemies: [{ id: "sentinel", name: "Hollow Sentinel" }],
+      seed: 11,
+    });
+    unitOf(state, "sentinel").tactics = {
+      version: 1,
+      seed: 11,
+      category: "other",
+      proficiency: "master",
+      role: "bulwark",
+      adjective,
+    };
+    commandRulesetCombatDirector(fiveE, state, { type: "control", unitId: "brenna", controller: "ai" });
+    let struck = 0;
+    let stood = 0;
+    for (let turn = 0; turn < 12 && !state.outcome; turn++) {
+      const before = state.rulesetFight!.encounter;
+      const actor = before.order[before.turn]!;
+      const seen = state.rulesetFight!.eventSeq;
+      assert.ok(commandRulesetCombatDirector(fiveE, state, { type: "continue" }).ok);
+      if (actor !== "sentinel") continue;
+      const fresh = state.rulesetFight!.events.filter((entry) => entry.seq > seen).map((entry) => entry.event);
+      if (fresh.some((event) => event.type === "attack" && event.actorId === "sentinel")) struck++;
+      if (fresh.some((event) => event.type === "standard")) stood++;
+    }
+    assert.ok(struck > 0, `a ${adjective} sentinel attacks`);
+    assert.equal(stood, 0, `a ${adjective} sentinel with a blow to land never spends its turn on a standard action`);
+  }
+}
+
+// ── A finished fight says so once ──
+{
+  const state = started({
+    definition: fiveE,
+    cards: fiveECards,
+    partyCatalogs: spellCatalogs,
+    party: fiveEParty,
+    enemies: [{ id: "a", name: "Thorn Lurker" }],
+    seed: 3,
+  });
+  for (const member of fiveEParty) {
+    commandRulesetCombatDirector(fiveE, state, { type: "control", unitId: member.id, controller: "ai" });
+  }
+  for (let turn = 0; turn < 200 && !state.outcome; turn++) {
+    assert.ok(commandRulesetCombatDirector(fiveE, state, { type: "continue" }).ok);
+  }
+  assert.ok(state.outcome, "the fight ends");
+  assert.equal(
+    state.rulesetFight!.events.filter((entry) => entry.event.type === "outcome").length,
+    1,
+    "and its log says how exactly once",
+  );
 }
 
 // ── Victory, defeat, and the Engine's own summary ──

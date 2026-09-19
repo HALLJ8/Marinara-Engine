@@ -418,6 +418,8 @@ function rulesetCandidates(
   definition: RulesetDefinition,
   encounter: RulesetEncounterState,
   actorId: string,
+  /** The Game Master's window is shown everything; the Engine's own picker is not (see the end). */
+  everything = false,
 ): Array<CombatAiCandidate<RulesetCandidate>> {
   const combat = definition.combat;
   const actor = rulesetCombatant(encounter, actorId);
@@ -430,9 +432,11 @@ function rulesetCandidates(
       continue;
     }
     if (option.targets.count <= 0) {
+      // Holding the thing it is already holding would end it and start it again for the same price.
+      if (actor.concentrating?.actionId === option.id) continue;
       candidates.push({
         action: { choice: { actorId, optionId: option.id, targetIds: [] }, option },
-        setup: option.kind === "standard" ? 0.25 : 0.4,
+        setup: option.kind === "standard" ? 0.05 : 0.4,
         cost: price,
       });
       continue;
@@ -465,7 +469,8 @@ function rulesetCandidates(
       } else if (average > 0) {
         // Never its own side, and never somebody who is already down: the rules let a blow land on
         // them, and a table where every opponent finishes off the dying is not one anybody plays
-        // at. A human, or a Game Master's boss, may still choose it; the picker does not.
+        // at. A human may still choose it; nothing the Engine enumerates for itself or for a Game
+        // Master's boss includes it.
         if (ally || target.down) continue;
         const others = spreads
           ? legal
@@ -481,6 +486,14 @@ function rulesetCandidates(
       else candidate.setup = 0.4;
       candidates.push(candidate);
     }
+  }
+  // Somebody who can hurt an opponent or help a friend does that. The scoring weighs a blow by the
+  // share of the target's health it takes, so against a sturdy target a careful creature would score
+  // a standard action (dodging, say) above every attack it has and stand there all fight. A
+  // standard action or an empty turn is what is left when there is nothing better, never a rival.
+  const useful = candidates.filter((candidate) => (candidate.damage ?? 0) > 0 || (candidate.healing ?? 0) > 0);
+  if (useful.length > 0 && !everything) {
+    return candidates.filter((candidate) => !candidate.hold && candidate.action.option.kind !== "standard");
   }
   return candidates;
 }
@@ -519,6 +532,8 @@ function applyChoice(
 }
 
 function advanceTurn(definition: RulesetDefinition, state: CombatDirectorState, fight: RulesetFightState): void {
+  // A fight that is over has no next turn, and saying so a second time would print the outcome twice.
+  if (rulesetEncounterOutcome(fight.encounter) !== "ongoing") return;
   const step = advanceRulesetTurn(definition, fight.encounter, rollerFor(fight));
   fight.encounter = step.state;
   record(fight, step.events);
@@ -557,7 +572,7 @@ function windowOptions(
   encounter: RulesetEncounterState,
   actorId: string,
 ): CombatDecisionOption[] {
-  return rulesetCandidates(definition, encounter, actorId).map((candidate, index) => ({
+  return rulesetCandidates(definition, encounter, actorId, true).map((candidate, index) => ({
     id: String(index),
     kind: windowKind(candidate.action.option.kind),
     actorId,

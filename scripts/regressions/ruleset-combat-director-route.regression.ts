@@ -168,10 +168,10 @@ async function newGame(options: { ruleset: boolean; gm?: boolean }) {
   return { chat, anchor };
 }
 
-const storedLive = async (chatId: string) =>
-  (await states.getLatest(chatId))?.rulesetLive
-    ? (JSON.parse((await states.getLatest(chatId))!.rulesetLive as string) as Record<string, unknown>)
-    : null;
+const storedLive = async (chatId: string) => {
+  const row = await states.getLatest(chatId);
+  return row?.rulesetLive ? (JSON.parse(row.rulesetLive as string) as Record<string, unknown>) : null;
+};
 const poolOf = (live: unknown, sheet: RulesetSheetBuild, key: string) =>
   readRulesetLive(definition, sheet, live).pools.find((entry) => entry.key === key);
 
@@ -266,31 +266,7 @@ try {
   });
   assert.equal(afterRefusal.json().session.revision, refusedRevision, "a refusal never bumps the revision");
 
-  // The party's own sheet state is written where the sheet reads it, and rides back on the answer.
-  const actorId = s.ruleset!.actorId!;
   const sheetOf = (id: string) => (id === "brenna" ? fighterBuild : wizardBuild);
-  const before = s.ruleset!.combatants.find((c) => c.id === actorId)!;
-  const spendable = s.ruleset!.options!.find((option) => (option.cost?.length ?? 0) > 0);
-  if (spendable) {
-    const response = await accept({
-      type: "ruleset",
-      optionId: spendable.id,
-      targetIds: [spendable.targetIds[0]!],
-    });
-    const payload = response.json() as { rulesetLive?: Record<string, unknown> };
-    assert.ok(payload.rulesetLive, "an accepted step carries the new live sheet state back");
-    const pool = spendable.cost![0]!.pool;
-    const left = poolOf(payload.rulesetLive![actorId], sheetOf(actorId), pool);
-    assert.ok(left, `the spent pool ${pool} is in the written state`);
-    assert.equal(
-      left!.value,
-      left!.max - 1,
-      "and it is one lower than a fresh sheet, because the fight spent it through the sheet's own rules",
-    );
-    const onDisk = await storedLive(game.chat.id);
-    assert.deepEqual(onDisk?.[actorId], payload.rulesetLive![actorId], "the row holds exactly what came back");
-  }
-  assert.ok(before.health.value > 0);
 
   // Play the rest out with nobody manual, and check a hit on a party member reaches the sheet.
   for (const member of ["brenna", "corwin"]) await accept({ type: "control", unitId: member, controller: "ai" });
@@ -401,16 +377,34 @@ try {
       });
       assert.equal(response.statusCode, 200, response.body);
       fight = response.json().session;
+      return response;
     };
     for (let guard = 0; guard < 20 && fight.ruleset!.controller !== "manual" && !fight.outcome; guard++) {
       await send({ type: "continue" });
     }
     const priced = fight.ruleset!.options?.find((option) => (option.cost?.length ?? 0) > 0);
     assert.ok(priced, "the wizard has something on the menu that spends a pool");
-    await send({ type: "ruleset", optionId: priced!.id, targetIds: [priced!.targetIds[0]!] });
+    // One wizard and one opponent, so who is on turn and what they can pay for is certain, whatever
+    // seed the route drew: this is where the write-back is checked number by number.
+    const answer = await send({ type: "ruleset", optionId: priced!.id, targetIds: [priced!.targetIds[0]!] });
+    const payload = answer.json() as { rulesetLive?: Record<string, unknown> };
+    assert.ok(payload.rulesetLive, "an accepted step carries the new live sheet state back");
+    const spentPool = poolOf(payload.rulesetLive!.corwin, wizardBuild, priced!.cost![0]!.pool);
+    assert.ok(spentPool, `the spent pool ${priced!.cost![0]!.pool} is in the written state`);
+    assert.equal(
+      spentPool!.value,
+      spentPool!.max - 1,
+      "one lower than a fresh sheet, because the fight spent it through the sheet's own rules",
+    );
     const liveOf = async (swipeIndex: number) =>
       (await states.getByChatAndMessage(swiped.chat.id, swiped.anchor.id, swipeIndex))?.rulesetLive ?? null;
-    assert.ok(await liveOf(0), "the spent pool is on the row the sheet shows");
+    const shownLive = await liveOf(0);
+    assert.ok(shownLive, "the spent pool is on the row the sheet shows");
+    assert.deepEqual(
+      (JSON.parse(shownLive as string) as Record<string, unknown>).corwin,
+      payload.rulesetLive!.corwin,
+      "and that row holds exactly what came back",
+    );
     assert.equal(await liveOf(1), null, "and the telling the player swiped away from is untouched");
   }
 
@@ -463,7 +457,7 @@ try {
     await send({ type: "control", unitId: "brenna", controller: "ai" });
     const callsBefore = bossCalls;
     let windows = 0;
-    for (let guard = 0; guard < 120 && !boss.outcome; guard++) {
+    for (let guard = 0; guard < 300 && !boss.outcome; guard++) {
       if (boss.window?.controller === "gm") {
         windows++;
         assert.equal(boss.stage, "decision");
