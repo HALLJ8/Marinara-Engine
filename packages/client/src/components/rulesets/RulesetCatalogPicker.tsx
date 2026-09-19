@@ -218,7 +218,7 @@ export function RulesetCatalogPicker({
               <p className="py-6 text-xs text-[var(--muted-foreground)]">{t("game.ruleset.catalog.noMatches")}</p>
             )}
             {visible.map((entry) => {
-              const added = catalogEntryAlreadyAdded(catalog.id, entry, catalog.feeds, build.lists);
+              const added = catalogEntryAlreadyAdded(catalog.id, entry, catalog.feeds ?? [], build.lists);
               const chips = entryChips(entry, catalog, t);
               return (
                 <label

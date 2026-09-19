@@ -227,7 +227,7 @@ export function planCatalogAddition(
     const fits = all.every((row, index) => {
       if (skipLists.has(row.list)) return true;
       const list = listById.get(row.list);
-      const values = entry.rows[index]?.values;
+      const values = entry.rows?.[index]?.values;
       return Boolean(list && values && rulesetListRowIssues(list, values).length === 0);
     });
     const built = all.filter((row) => !skipLists.has(row.list));
@@ -355,7 +355,7 @@ export function planCatalogRefresh(
     const refreshed: CatalogRefreshRow[] = [];
     for (const [ref, indexes] of marked) {
       const entry = byRef.get(ref)!;
-      const entryRows = entry.rows.filter((row) => row.list === list.id);
+      const entryRows = (entry.rows ?? []).filter((row) => row.list === list.id);
       const pairedWith = (position: number): RulesetCatalogEntryRow | undefined => {
         if (entryRows.length === indexes.length) return entryRows[position];
         return entryRows.length === 1 ? entryRows[0] : undefined;
