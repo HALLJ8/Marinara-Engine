@@ -1128,8 +1128,20 @@ function refineRulesetDefinition(def: RulesetDefinitionBase, ctx: z.RefinementCt
         issue(["resolution", key, "upTo"], `A ${key} face must be below the lowest target (${target.min})`);
       }
     }
+    // The most a roll can ever count: the largest pool, as many exploded dice again (the roller's
+    // cap), every one of them doubled. A number above it could never be reached at the table.
+    const reachable = (pool.max + (resolution.explode ? pool.max : 0)) * (resolution.double ? 2 : 1);
+    if (resolution.exceptional && resolution.exceptional.successes > reachable) {
+      issue(["resolution", "exceptional", "successes"], `The largest pool can count ${reachable} at most`);
+    }
     const adjustable = target.min < target.max;
     resolution.difficultyLadder.forEach((step, index) => {
+      if (step.successes > reachable) {
+        issue(
+          ["resolution", "difficultyLadder", index, "successes"],
+          `The largest pool can count ${reachable} at most`,
+        );
+      }
       if (step.target === undefined) return;
       const path = ["resolution", "difficultyLadder", index, "target"];
       if (!adjustable) issue(path, "A step names a target only where target.min is below target.max");

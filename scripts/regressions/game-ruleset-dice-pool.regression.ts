@@ -172,6 +172,18 @@ try {
       "a pool declares a die, never a dice-sum notation",
     );
 
+    // A number no roll could ever count is a typo: 15 dice, as many again exploded, none doubled.
+    refuses(
+      (doc) => (doc.resolution.exceptional = { successes: 31 }),
+      /^resolution\.exceptional\.successes: The largest pool can count 30 at most/,
+      "an exceptional result nobody could reach",
+    );
+    refuses(
+      (doc) => (doc.resolution.difficultyLadder[0].successes = 31),
+      /^resolution\.difficultyLadder\.0\.successes: The largest pool can count 30 at most/,
+      "a difficulty nobody could meet",
+    );
+
     // The sheet math both kinds share is checked for both: this one is the dice-sum rule read
     // through a pool ruleset.
     refuses(
@@ -532,6 +544,38 @@ try {
     assert.ok(result.rolls.length >= 8, "the sheet's own pool, not one d20 face");
     assert.doesNotMatch(blind.content, /pool="d20/, "no slot was recorded against a roll it did not decide");
     assert.deepEqual(session.pool.values.d20, before, "and no pool value was spent");
+
+    // A check nobody could roll keeps its whole ask, the declared threshold included, so whoever
+    // rolls it later counts with what the Game Master set.
+    const owed = await resolveSkillCheckTagsInContent(
+      `[skill_check: skill="Ward" dc="2" who="Bram the Quiet" threshold="8" bonus="+1" rolls="9|9" total="2"]`,
+      {
+        loadContext: async () => {
+          throw new Error("the pinned ruleset is not installed");
+        },
+        rulesetPinned: true,
+      },
+    );
+    assert.equal(owed.resolved, 0);
+    assert.match(owed.content, /threshold="8"/);
+    assert.match(owed.content, /bonus="\+1"/);
+    assert.doesNotMatch(owed.content, /rolls=|total=/, "and none of the numbers the model wrote");
+
+    // The blind roll applies what the record says it applied: the tag's own with=, bonus= and
+    // threshold= reach the roller even though the request was bound by the sighted pool's reader.
+    const blindAsk = await resolveSkillCheckTagsInContent(
+      `[skill_check: skill="Ward" dc="2" who="Bram the Quiet" with="Sinew" bonus="-2" threshold="9" pool="d20:1"]`,
+      { loadContext: async () => context, rulesetPinned: true, pool: session },
+    );
+    const blindAskResult = poolFaces(blindAsk.results![0]!);
+    assert.equal(
+      blindAskResult.rolls.length,
+      8 - 4 + 3 - 2 + blindAskResult.rolls.filter((face) => face >= 10).length,
+      "Sinew for Nerve and two dice fewer, exactly as without the sighted pool",
+    );
+    assert.equal(blindAsk.results![0]!.threshold, 9);
+    const blindRecord = resolvedTag(blindAsk.content);
+    assert.deepEqual([blindRecord.withAbility, blindRecord.bonusDice], ["Sinew", -2]);
 
     // This is the one path that reaches the resolver with an unbounded difficulty, because the
     // pool bounds a written DC before any ruleset is loaded. The ruleset's own ceiling holds.

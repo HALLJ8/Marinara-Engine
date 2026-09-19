@@ -594,9 +594,13 @@ export async function resolveSkillCheckTagsInContent(
   let keepWho = options.rulesetPinned === true;
   // The ask a rewrite keeps when the numbers go: who it was for, and the two per-check freedoms a
   // ruleset may grant. All three are only ever written by a ruleset game, so nothing else changes.
-  const askExtras = (tag: SkillCheckTag) => {
+  const askExtras = (tag: SkillCheckTag, sparse = false) => {
     if (!keepWho) return undefined;
     const extras = {
+      // Only a SPARSE rewrite keeps the declared threshold: nothing was rolled, so the ask is all
+      // there is, and whoever rolls it later should count with it. A resolved record writes the
+      // threshold the roll actually used, off the result, which may be the ruleset's clamp of it.
+      ...(sparse && tag.threshold != null && Number.isFinite(tag.threshold) ? { threshold: tag.threshold } : {}),
       ...(tag.who ? { who: tag.who } : {}),
       ...(tag.withAbility ? { with: tag.withAbility } : {}),
       ...(tag.bonusDice != null ? { bonus: tag.bonusDice } : {}),
@@ -758,7 +762,7 @@ export async function resolveSkillCheckTagsInContent(
                 disadvantage: tag.disadvantage,
                 declaredDice: tag.declaredDice,
               },
-              askExtras(tag),
+              askExtras(tag, true),
             ),
           });
           left += 1;
@@ -818,7 +822,7 @@ export async function resolveSkillCheckTagsInContent(
             disadvantage: entry.request.disadvantage,
             declaredDice: entry.tag.declaredDice,
           },
-          askExtras(entry.tag),
+          askExtras(entry.tag, true),
         );
       }
       const result = resolveSkillCheckWithContext(context, entry.request, options.rollD20);
@@ -871,7 +875,7 @@ export async function resolveSkillCheckTagsInContent(
           preRolledD20: entry.request.preRolledD20,
           declaredDice: entry.tag.declaredDice,
         },
-        askExtras(entry.tag),
+        askExtras(entry.tag, true),
       ),
     );
     return {
@@ -926,8 +930,13 @@ export function boundPoolCheckRequest(tag: SkillCheckTag): SkillCheckRequest | n
     dc,
     advantage: tag.advantage,
     disadvantage: tag.disadvantage,
-    // Read only by a ruleset game; the Engine's own rules ignore it and write the same bytes.
+    // Read only by a ruleset game; the Engine's own rules ignore them and write the same bytes.
+    // The three per-check freedoms ride along so the roll applies exactly what the record will
+    // say it applied, whether the pool serves the check or the Engine rolls it blind.
     who: tag.who,
+    withAbility: tag.withAbility,
+    threshold: tag.threshold,
+    bonusDice: tag.bonusDice,
     // Deliberately no `preRolledD20`: under the pool a number in `rolls=` is the model's
     // claim about a slot, not a die the player threw, and adopting it would be obeying
     // the one field the authority rule says is never obeyed.
