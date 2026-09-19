@@ -10670,9 +10670,7 @@ function GameSurfaceComponent({
       // Flee on round 1 means no round actually resolved — phrase it accordingly.
       const rounds = fought ? fought.ruleset.rounds : summary.rounds;
       const roundsPhrase =
-        outcome === "flee" && rounds <= 1
-          ? "before combat began"
-          : `after ${rounds} round${rounds === 1 ? "" : "s"}`;
+        outcome === "flee" && rounds <= 1 ? "before combat began" : `after ${rounds} round${rounds === 1 ? "" : "s"}`;
 
       const recapLines: string[] = [];
       recapLines.push(`OUTCOME: ${outcome.toUpperCase()} (${roundsPhrase})`);
