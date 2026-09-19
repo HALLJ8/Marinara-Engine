@@ -22,6 +22,8 @@ type TouchFolderDragState = {
   startY: number;
   lastX: number;
   lastY: number;
+  touchIdentifier: number;
+  scrollTouch: { identifier: number; lastY: number } | null;
   scrollTargets: AutoScrollTarget[];
   autoScrollFrame: number | null;
   chatResourcePayload: ChatResourceDragPayload | null;
@@ -226,7 +228,7 @@ export function useTouchFolderDrag({
   const getAutoScrollDelta = useCallback((drag: TouchFolderDragState) => {
     const edgePx = optionsRef.current.autoScrollEdgePx;
     const maxSpeedPx = optionsRef.current.autoScrollMaxSpeedPx;
-    if (edgePx <= 0) return null;
+    if (edgePx <= 0 || drag.scrollTouch) return null;
 
     for (const target of drag.scrollTargets) {
       const { top, bottom } = target.getBounds();
@@ -277,7 +279,7 @@ export function useTouchFolderDrag({
       drag.active = true;
       drag.sourceElement.style.touchAction = TOUCH_DRAG_ACTIVE_TOUCH_ACTION;
       createPreviewElement(drag);
-      if (drag.chatResourcePayload) beginChatResourceTouchDrag(drag.chatResourcePayload);
+      if (drag.chatResourcePayload) beginChatResourceTouchDrag(drag.chatResourcePayload, drag.touchIdentifier);
       optionsRef.current.onActivate(drag.id);
       scheduleAutoScroll(drag);
     },
@@ -323,11 +325,23 @@ export function useTouchFolderDrag({
     [clearDragTimer, removeListeners, restoreSourceElement, stopAutoScroll],
   );
 
+  const handleTouchStart = useCallback(
+    (event: TouchEvent) => {
+      const drag = dragRef.current;
+      if (!drag || drag.scrollTouch) return;
+      const touch = Array.from(event.touches).find((touch) => touch.identifier !== drag.touchIdentifier);
+      if (!touch) return;
+      drag.scrollTouch = { identifier: touch.identifier, lastY: touch.clientY };
+      stopAutoScroll(drag);
+    },
+    [stopAutoScroll],
+  );
+
   const handleTouchMove = useCallback(
     (event: TouchEvent) => {
       const drag = dragRef.current;
       if (!drag) return;
-      const touch = event.touches[0] ?? event.changedTouches[0];
+      const touch = Array.from(event.touches).find((touch) => touch.identifier === drag.touchIdentifier);
       if (!touch) return;
 
       if (event.cancelable) event.preventDefault();
@@ -344,6 +358,16 @@ export function useTouchFolderDrag({
       }
 
       if (drag.active) {
+        const scrollTouch = Array.from(event.touches).find(
+          (touch) => touch.identifier === drag.scrollTouch?.identifier,
+        );
+        if (scrollTouch && drag.scrollTouch) {
+          const deltaY = drag.scrollTouch.lastY - scrollTouch.clientY;
+          drag.scrollTouch.lastY = scrollTouch.clientY;
+          if (deltaY !== 0) {
+            drag.scrollTargets.find((target) => target.canScroll(deltaY < 0 ? -1 : 1))?.scrollBy(deltaY);
+          }
+        }
         updatePreviewPosition(drag);
         scheduleAutoScroll(drag);
       }
@@ -354,15 +378,41 @@ export function useTouchFolderDrag({
   const handleTouchEnd = useCallback(
     (event: TouchEvent) => {
       const drag = dragRef.current;
-      if (drag?.active) {
+      if (!drag) return;
+      if (drag.active) {
         if (event.cancelable) event.preventDefault();
       }
+      const touch = Array.from(event.changedTouches).find((touch) => touch.identifier === drag.touchIdentifier);
+      if (!touch) {
+        if (Array.from(event.changedTouches).some((touch) => touch.identifier === drag.scrollTouch?.identifier)) {
+          drag.scrollTouch = null;
+          if (drag.active) scheduleAutoScroll(drag);
+        }
+        return;
+      }
+      drag.lastX = touch.clientX;
+      drag.lastY = touch.clientY;
       cancelTouchDrag(true);
     },
-    [cancelTouchDrag],
+    [cancelTouchDrag, scheduleAutoScroll],
   );
 
-  const handleTouchCancel = useCallback(() => cancelTouchDrag(false), [cancelTouchDrag]);
+  const handleTouchCancel = useCallback(
+    (event: TouchEvent) => {
+      const drag = dragRef.current;
+      if (!drag) return;
+      if (
+        !event.changedTouches ||
+        Array.from(event.changedTouches).some((touch) => touch.identifier === drag.touchIdentifier)
+      ) {
+        cancelTouchDrag(false);
+      } else if (Array.from(event.changedTouches).some((touch) => touch.identifier === drag.scrollTouch?.identifier)) {
+        drag.scrollTouch = null;
+        if (drag.active) scheduleAutoScroll(drag);
+      }
+    },
+    [cancelTouchDrag, scheduleAutoScroll],
+  );
   const handleContextMenu = useCallback(
     (event: Event) => {
       const drag = dragRef.current;
@@ -376,6 +426,7 @@ export function useTouchFolderDrag({
 
   const attachListeners = useCallback(() => {
     removeListeners();
+    window.addEventListener("touchstart", handleTouchStart, { capture: true, passive: true });
     window.addEventListener("touchmove", handleTouchMove, { passive: false });
     window.addEventListener("touchend", handleTouchEnd, { passive: false });
     window.addEventListener("touchcancel", handleTouchCancel, { passive: false });
@@ -383,6 +434,7 @@ export function useTouchFolderDrag({
     window.addEventListener("blur", handleInterruptedTouchDrag);
     window.addEventListener("pagehide", handleInterruptedTouchDrag);
     removeListenersRef.current = () => {
+      window.removeEventListener("touchstart", handleTouchStart, { capture: true });
       window.removeEventListener("touchmove", handleTouchMove);
       window.removeEventListener("touchend", handleTouchEnd);
       window.removeEventListener("touchcancel", handleTouchCancel);
@@ -396,6 +448,7 @@ export function useTouchFolderDrag({
     handleTouchCancel,
     handleTouchEnd,
     handleTouchMove,
+    handleTouchStart,
     removeListeners,
   ]);
 
@@ -441,6 +494,8 @@ export function useTouchFolderDrag({
         startY: touch.clientY,
         lastX: touch.clientX,
         lastY: touch.clientY,
+        touchIdentifier: touch.identifier,
+        scrollTouch: null,
         scrollTargets: getAutoScrollTargets(sourceElement),
         autoScrollFrame: null,
         chatResourcePayload: options?.chatResourcePayload ?? null,
