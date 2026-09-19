@@ -1258,15 +1258,87 @@
     "threat": {
       "$comment": "The scale an opponent is picked from, in plain numbers, following the published monster statistics by challenge rating. It is read when creatures arrive, so nothing a Game Master proposes lands off the scale.",
       "tiers": [
-        { "id": "cr_0", "label": "CR 0", "health": [1, 6], "defense": 13, "toHit": 3, "damagePerRound": [0, 1], "saveDifficulty": 13 },
-        { "id": "cr_1_8", "label": "CR 1/8", "health": [7, 35], "defense": 13, "toHit": 3, "damagePerRound": [2, 3], "saveDifficulty": 13 },
-        { "id": "cr_1_4", "label": "CR 1/4", "health": [36, 49], "defense": 13, "toHit": 3, "damagePerRound": [4, 5], "saveDifficulty": 13 },
-        { "id": "cr_1_2", "label": "CR 1/2", "health": [50, 70], "defense": 13, "toHit": 3, "damagePerRound": [6, 8], "saveDifficulty": 13 },
-        { "id": "cr_1", "label": "CR 1", "health": [71, 85], "defense": 13, "toHit": 3, "damagePerRound": [9, 14], "saveDifficulty": 13 },
-        { "id": "cr_2", "label": "CR 2", "health": [86, 100], "defense": 13, "toHit": 3, "damagePerRound": [15, 20], "saveDifficulty": 13 },
-        { "id": "cr_3", "label": "CR 3", "health": [101, 115], "defense": 13, "toHit": 4, "damagePerRound": [21, 26], "saveDifficulty": 13 },
-        { "id": "cr_4", "label": "CR 4", "health": [116, 130], "defense": 14, "toHit": 5, "damagePerRound": [27, 32], "saveDifficulty": 14 },
-        { "id": "cr_5", "label": "CR 5", "health": [131, 145], "defense": 15, "toHit": 6, "damagePerRound": [33, 38], "saveDifficulty": 15 }
+        {
+          "id": "cr_0",
+          "label": "CR 0",
+          "health": [1, 6],
+          "defense": 13,
+          "toHit": 3,
+          "damagePerRound": [0, 1],
+          "saveDifficulty": 13
+        },
+        {
+          "id": "cr_1_8",
+          "label": "CR 1/8",
+          "health": [7, 35],
+          "defense": 13,
+          "toHit": 3,
+          "damagePerRound": [2, 3],
+          "saveDifficulty": 13
+        },
+        {
+          "id": "cr_1_4",
+          "label": "CR 1/4",
+          "health": [36, 49],
+          "defense": 13,
+          "toHit": 3,
+          "damagePerRound": [4, 5],
+          "saveDifficulty": 13
+        },
+        {
+          "id": "cr_1_2",
+          "label": "CR 1/2",
+          "health": [50, 70],
+          "defense": 13,
+          "toHit": 3,
+          "damagePerRound": [6, 8],
+          "saveDifficulty": 13
+        },
+        {
+          "id": "cr_1",
+          "label": "CR 1",
+          "health": [71, 85],
+          "defense": 13,
+          "toHit": 3,
+          "damagePerRound": [9, 14],
+          "saveDifficulty": 13
+        },
+        {
+          "id": "cr_2",
+          "label": "CR 2",
+          "health": [86, 100],
+          "defense": 13,
+          "toHit": 3,
+          "damagePerRound": [15, 20],
+          "saveDifficulty": 13
+        },
+        {
+          "id": "cr_3",
+          "label": "CR 3",
+          "health": [101, 115],
+          "defense": 13,
+          "toHit": 4,
+          "damagePerRound": [21, 26],
+          "saveDifficulty": 13
+        },
+        {
+          "id": "cr_4",
+          "label": "CR 4",
+          "health": [116, 130],
+          "defense": 14,
+          "toHit": 5,
+          "damagePerRound": [27, 32],
+          "saveDifficulty": 14
+        },
+        {
+          "id": "cr_5",
+          "label": "CR 5",
+          "health": [131, 145],
+          "defense": 15,
+          "toHit": 6,
+          "damagePerRound": [33, 38],
+          "saveDifficulty": 15
+        }
       ]
     }
   },
