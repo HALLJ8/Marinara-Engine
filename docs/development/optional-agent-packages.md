@@ -664,6 +664,28 @@ Desktop uses a browse list with an adjacent detail region. Mobile uses one pane 
 
 An extraction is complete only when the base production client and server bundles no longer contain the package implementation, a fresh install cannot activate it without downloading the package, an upgraded install retains it, and package install/update/uninstall passes on desktop, mobile, and Termux-compatible filesystems.
 
+### Capability API 1.24: the dice-pool resolution kind
+
+A ruleset's `resolution` may declare `"kind": "dice-pool"` instead of `"dice-sum"`. The check then throws
+the character sheet's own number of dice and counts the ones that reach a target, with optional doubled
+faces, exploding faces, cancelling faces, botches, exceptional successes and a range of situational dice
+the Game Master may add or take for one check.
+
+```json
+{
+  "capabilityApi": { "major": 1, "minor": 24 },
+  "kind": ["ruleset"],
+  "contributions": { "assets": { "paths": ["ruleset.json"] } }
+}
+```
+
+The sheet is the same sheet: what `dice-sum` adds to the roll is, here, the number of dice. So the kind
+brings no new sheet vocabulary, no editor slot and no package code.
+
+Not a soft seam, for the same reason as 1.20 through 1.23: an Engine that knows only `dice-sum` refuses
+the whole ruleset file, so install reads the verified bytes of `ruleset.json` and refuses a `dice-pool`
+resolution under an older declaration. No permission, and no change for a ruleset that sums its dice.
+
 ### Capability API 1.23: scaled catalog values
 
 A catalog entry's row may carry an optional `scaled` map: up to four of that row's own number columns
