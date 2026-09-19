@@ -104,10 +104,9 @@ function promptSafeText(max: number) {
     });
 }
 
-const sheetId = z
-  .string()
-  .max(40)
-  .regex(/^[a-z][a-z0-9_]*$/, "An id is lowercase letters, digits and underscores, starting with a letter");
+const SHEET_ID_MESSAGE = "An id is lowercase letters, digits and underscores, starting with a letter";
+const SHEET_ID_PATTERN = /^[a-z][a-z0-9_]*$/;
+const sheetId = z.string().max(40).regex(SHEET_ID_PATTERN, SHEET_ID_MESSAGE);
 const label = promptSafeText(80);
 
 // ── Value references: the closed vocabulary a derived value, pool maximum or bonus can read ──
@@ -597,6 +596,40 @@ const catalogFilterSchema = z
   })
   .strict();
 
+/** How many columns of one row the ruleset may set for the player. A row is a row, not a second
+ *  place to declare derived values: anything bigger belongs in `sheet.derived`, pointed at by `from`. */
+export const RULESET_SCALED_MAX_COLUMNS = 4;
+
+/** A number column whose value follows the sheet: the reference's own number, or that number looked
+ *  up in `table` (a maximum that grows with a level). The sheet editor writes it when the build
+ *  changes; nothing recomputes it at read time, so a stored row is always the number it says. */
+const catalogScaledColumnSchema = z.object({ from: rulesetValueRefSchema, table: stepTableSchema.optional() }).strict();
+
+const catalogScaledSchema = z.record(catalogScaledColumnSchema).superRefine((scaled, ctx) => {
+  const keys = Object.keys(scaled);
+  if (keys.length > RULESET_SCALED_MAX_COLUMNS) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: `At most ${RULESET_SCALED_MAX_COLUMNS} columns of a row can be scaled`,
+    });
+  }
+  for (const key of keys) {
+    if (key.length > 40 || !SHEET_ID_PATTERN.test(key)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: [key], message: SHEET_ID_MESSAGE });
+    }
+  }
+});
+
+const catalogEntryRowSchema = z
+  .object({
+    list: sheetId,
+    values: z.record(sheetScalar),
+    /** Optional. `values` still holds what the row starts as, because a catalog is picked before
+     *  anything knows which sheet it lands on. */
+    scaled: catalogScaledSchema.optional(),
+  })
+  .strict();
+
 const catalogEntrySchema = z
   .object({
     id: z.string().max(80).regex(RULESET_ID_PATTERN, "An entry id is lowercase letters, digits and single hyphens"),
@@ -608,10 +641,7 @@ const catalogEntrySchema = z
       .optional(),
     /** What picking the entry writes. One entry may fill several lists: a feature plus the counter
      *  that tracks its uses is one pick, not two. */
-    rows: z
-      .array(z.object({ list: sheetId, values: z.record(sheetScalar) }).strict())
-      .min(1)
-      .max(6),
+    rows: z.array(catalogEntryRowSchema).min(1).max(6),
     mechanics: catalogMechanicsSchema.optional(),
   })
   .strict();
@@ -742,6 +772,71 @@ function equalsIssue(
   return typeof equals === "string" ? null : `"${item.id}" is a text ${noun}, so equals must be a string`;
 }
 
+/** The declared names a value reference may point at, gathered once per sheet. */
+interface RulesetSheetNames {
+  fields: ReadonlyMap<string, RulesetField>;
+  abilities: ReadonlySet<string>;
+  skills: ReadonlySet<string>;
+  saves: ReadonlySet<string>;
+  /** Every derived value the sheet declares, whatever a given reader may read. */
+  derived: ReadonlySet<string>;
+}
+
+function rulesetSheetNames(sheet: RulesetSheetSchema): RulesetSheetNames {
+  return {
+    fields: new Map(sheet.fields.map((field) => [field.id, field])),
+    abilities: new Set(sheet.abilities.map((ability) => ability.id)),
+    skills: new Set(sheet.skills.map((skill) => skill.id)),
+    saves: new Set(sheet.saves.map((save) => save.id)),
+    derived: new Set(sheet.derived.map((derived) => derived.id)),
+  };
+}
+
+/** Why a value reference cannot be resolved against this sheet, one entry per key that is wrong.
+ *  Shared on purpose: the sheet's own derived values, a live pool's maximum and a catalog entry's
+ *  scaled column are all held to the same rule, so a reference that is good in one is good in all.
+ *  `readable` is the derived values THIS reference may read: while the sheet's own derived list is
+ *  checked that is the ones declared above the reader, which makes a cycle unrepresentable; every
+ *  reader outside that order may name any declared one. */
+function rulesetValueRefIssues(
+  ref: RulesetValueRef,
+  names: RulesetSheetNames,
+  readable: ReadonlySet<string>,
+): Array<{ key: (typeof VALUE_REF_KEYS)[number]; message: string }> {
+  const issues: Array<{ key: (typeof VALUE_REF_KEYS)[number]; message: string }> = [];
+  const add = (key: (typeof VALUE_REF_KEYS)[number], message: string) => issues.push({ key, message });
+
+  if (ref.field !== undefined) {
+    const field = names.fields.get(ref.field);
+    if (!field) add("field", `Unknown field "${ref.field}"`);
+    else if (field.type !== "number") add("field", `Field "${ref.field}" is not a number`);
+  }
+  if (ref.derived !== undefined && !readable.has(ref.derived)) {
+    add(
+      "derived",
+      names.derived.has(ref.derived)
+        ? `Derived value "${ref.derived}" must be declared above the value that reads it`
+        : `Unknown derived value "${ref.derived}"`,
+    );
+  }
+  for (const key of ["abilityScore", "abilityMod"] as const) {
+    const id = ref[key];
+    if (id !== undefined && !names.abilities.has(id)) add(key, `Unknown ability "${id}"`);
+  }
+  if (ref.abilityModFromField !== undefined) {
+    const field = names.fields.get(ref.abilityModFromField);
+    if (!field) add("abilityModFromField", `Unknown field "${ref.abilityModFromField}"`);
+    else if (field.type !== "enum") add("abilityModFromField", "The field must be an enum of ability ids");
+  }
+  if (ref.skillMod !== undefined && !names.skills.has(ref.skillMod)) {
+    add("skillMod", `Unknown skill "${ref.skillMod}"`);
+  }
+  if (ref.saveMod !== undefined && !names.saves.has(ref.saveMod)) {
+    add("saveMod", `Unknown save "${ref.saveMod}"`);
+  }
+  return issues;
+}
+
 function refineRulesetDefinition(def: RulesetDefinitionBase, ctx: z.RefinementCtx): void {
   const issue = (path: (string | number)[], message: string) =>
     ctx.addIssue({ code: z.ZodIssueCode.custom, path, message });
@@ -850,34 +945,11 @@ function refineRulesetDefinition(def: RulesetDefinitionBase, ctx: z.RefinementCt
 
   // A value reference may read a derived value only when it is declared ABOVE the reader, which
   // makes a cycle unrepresentable and lets evaluation run once, top to bottom.
-  const checkRef = (ref: RulesetValueRef, path: (string | number)[], derivedAbove: Set<string>) => {
-    if (ref.field !== undefined) {
-      const field = fieldById.get(ref.field);
-      if (!field) issue([...path, "field"], `Unknown field "${ref.field}"`);
-      else if (field.type !== "number") issue([...path, "field"], `Field "${ref.field}" is not a number`);
+  const names: RulesetSheetNames = { fields: fieldById, abilities, skills, saves, derived: derivedIds };
+  const checkRef = (ref: RulesetValueRef, path: (string | number)[], derivedAbove: ReadonlySet<string>) => {
+    for (const entry of rulesetValueRefIssues(ref, names, derivedAbove)) {
+      issue([...path, entry.key], entry.message);
     }
-    if (ref.derived !== undefined && !derivedAbove.has(ref.derived)) {
-      issue(
-        [...path, "derived"],
-        derivedIds.has(ref.derived)
-          ? `Derived value "${ref.derived}" must be declared above the value that reads it`
-          : `Unknown derived value "${ref.derived}"`,
-      );
-    }
-    for (const key of ["abilityScore", "abilityMod"] as const) {
-      const id = ref[key];
-      if (id !== undefined && !abilities.has(id)) issue([...path, key], `Unknown ability "${id}"`);
-    }
-    if (ref.abilityModFromField !== undefined) {
-      const field = fieldById.get(ref.abilityModFromField);
-      if (!field) issue([...path, "abilityModFromField"], `Unknown field "${ref.abilityModFromField}"`);
-      else if (field.type !== "enum")
-        issue([...path, "abilityModFromField"], "The field must be an enum of ability ids");
-    }
-    if (ref.skillMod !== undefined && !skills.has(ref.skillMod))
-      issue([...path, "skillMod"], `Unknown skill "${ref.skillMod}"`);
-    if (ref.saveMod !== undefined && !saves.has(ref.saveMod))
-      issue([...path, "saveMod"], `Unknown save "${ref.saveMod}"`);
   };
   const refsOf = (derived: z.infer<typeof rulesetDerivedSchema>): RulesetValueRef[] =>
     derived.op === "stepTable" ? [derived.from] : derived.op === "scale" ? [derived.of] : derived.of;
@@ -1195,9 +1267,19 @@ export function parseRulesetDefinition(input: unknown): RulesetParseResult {
 
 export type RulesetCatalogHeader = z.infer<typeof catalogSchema>;
 export type RulesetCatalogEntry = z.infer<typeof catalogEntrySchema>;
+export type RulesetCatalogEntryRow = z.infer<typeof catalogEntryRowSchema>;
+/** The columns of one entry row the ruleset sets, keyed by column id. */
+export type RulesetCatalogScaled = z.infer<typeof catalogScaledSchema>;
+export type RulesetCatalogScaledColumn = z.infer<typeof catalogScaledColumnSchema>;
 export type RulesetCatalogFilter = z.infer<typeof catalogFilterSchema>;
 export type RulesetCatalogMechanics = z.infer<typeof catalogMechanicsSchema>;
 export type RulesetList = RulesetSheetSchema["lists"][number];
+
+/** The entries of every catalog the caller fetched, keyed by catalog id. Fetching is the caller's
+ *  job: a catalog may live in an asset behind a route, and nothing that reads this does I/O. It sits
+ *  here rather than beside one of its readers because the combat bridge, the scaled-row recompute
+ *  and the `use` command all take it. */
+export type RulesetCatalogEntriesById = Record<string, readonly RulesetCatalogEntry[]>;
 
 /** Whether a row of values could be stored in a list, column by column. Shared on purpose: the
  *  schema runs it over every catalog entry, and the client runs it again over the rows a player
@@ -1250,6 +1332,7 @@ export function rulesetCatalogEntryIssues(
   const issues: RulesetCatalogEntryIssue[] = [];
   const add = (path: (string | number)[], message: string) => issues.push({ path, message });
   const listById = new Map(definition.sheet.lists.map((list) => [list.id, list]));
+  const names = rulesetSheetNames(definition.sheet);
   const feeds = new Set(catalog.feeds);
   const filterById = new Map((catalog.filters ?? []).map((filter) => [filter.id, filter]));
   const saves = new Set(definition.sheet.saves.map((save) => save.id));
@@ -1282,12 +1365,32 @@ export function rulesetCatalogEntryIssues(
       }
     }
 
+    // How many rows this entry writes into each list, because a row the ruleset keeps up to date
+    // has to be the entry's only one there: a marked row on a sheet is then matched to its spec
+    // without guessing which of two identical marks it came from.
+    const rowsPerList = new Map<string, number>();
+    for (const row of entry.rows) rowsPerList.set(row.list, (rowsPerList.get(row.list) ?? 0) + 1);
+
     entry.rows.forEach((row, rowIndex) => {
       const path = [index, "rows", rowIndex];
       if (!feeds.has(row.list)) return add([...path, "list"], `"${row.list}" is not one of this catalog's feeds`);
       const list = listById.get(row.list);
       if (!list) return add([...path, "list"], `Unknown list "${row.list}"`);
       for (const message of rulesetListRowIssues(list, row.values)) add([...path, "values"], message);
+      if (!row.scaled) return;
+      if ((rowsPerList.get(row.list) ?? 0) > 1) {
+        add([...path, "scaled"], `A scaled row must be this entry's only row for the list "${row.list}"`);
+      }
+      for (const [columnId, scaled] of Object.entries(row.scaled)) {
+        const column = list.columns.find((candidate) => candidate.id === columnId);
+        if (!column) add([...path, "scaled", columnId], `Unknown column "${columnId}"`);
+        else if (column.type !== "number") add([...path, "scaled", columnId], `Column "${columnId}" is not a number`);
+        // A scaled column reads the sheet exactly as a live pool's maximum does, so any declared
+        // derived value is fair game: there is no top-to-bottom order to sit inside out here.
+        for (const refIssue of rulesetValueRefIssues(scaled.from, names, names.derived)) {
+          add([...path, "scaled", columnId, "from", refIssue.key], refIssue.message);
+        }
+      }
     });
 
     const mechanics = entry.mechanics;

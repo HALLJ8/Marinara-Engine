@@ -14,6 +14,7 @@ import type { CombatSkill } from "../../types/game.js";
 import {
   catalogRowRef,
   RULESET_CATALOG_ROW_KEY,
+  type RulesetCatalogEntriesById,
   type RulesetCatalogEntry,
   type RulesetCatalogMechanics,
   type RulesetDefinition,
@@ -52,10 +53,6 @@ export interface RulesetCombatOutcome {
   mp?: number;
   spellSlots?: Record<string, number>;
 }
-
-/** The entries of every catalog the caller fetched, keyed by catalog id. Fetching is the caller's
- *  job: a catalog may live in an asset behind a route, and nothing in this file does I/O. */
-export type RulesetCatalogEntriesById = Record<string, readonly RulesetCatalogEntry[]>;
 
 export interface RulesetCombatWriteBack {
   /** The new stored blob, or null when no operation applied and the caller should write nothing. */

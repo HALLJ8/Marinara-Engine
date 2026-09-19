@@ -219,7 +219,12 @@
                 "notes": "Spend 1 Grit to give a downed friend 3 Grit back. Once between camps."
               }
             },
-            { "list": "tricks", "values": { "name": "Last Ember", "uses": 1, "recharge": "camp" } }
+            {
+              "$comment": "The uses follow the character's Heart, so the row is right after a level-up without anyone editing it. The value is fitted to the column, so a Heart of 3 gives 3 uses and a Heart below 0 leaves the trick with none.",
+              "list": "tricks",
+              "values": { "name": "Last Ember", "uses": 1, "recharge": "camp" },
+              "scaled": { "uses": { "from": { "abilityScore": "heart" } } }
+            }
           ],
           "mechanics": {
             "kind": "heal",
