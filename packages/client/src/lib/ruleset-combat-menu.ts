@@ -36,6 +36,17 @@ export function rulesetMenuGroups(options: DirectedRulesetOption[] | undefined):
   return groups;
 }
 
+/**
+ * What an option is called on screen. An attack, an ability and a stat block's action are named by
+ * the ruleset, so the label it sent is the label: nothing here touches them. The moves the KIND
+ * implements are the Engine's own closed vocabulary and are named here, as is ending a turn.
+ */
+export function rulesetOptionLabel(option: DirectedRulesetOption, t: TFunction): string {
+  if (option.kind === "end-turn") return t("game.combat.ruleset.menu.endTurn", { defaultValue: option.label });
+  if (option.kind !== "standard") return option.label;
+  return t(`game.combat.ruleset.standard.${option.label}`, { defaultValue: option.label });
+}
+
 /** What one option spends, in the ruleset's own words: its budget, the pools it draws on, and how
  *  many times it is left. Every name comes off the option the server built. */
 export function rulesetOptionCostText(

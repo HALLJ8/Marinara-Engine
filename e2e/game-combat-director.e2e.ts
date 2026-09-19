@@ -253,7 +253,7 @@ test("Combat director ruleset: the ruleset's own menu resolves the fight and wri
         combatStyle: "classic",
         combatDirector: true,
         gmBossControl: false,
-        ruleset: { id: rulesetId, options: {} },
+        ruleset: { id: rulesetId, version: 1, packageId: null, options: {} },
       },
     },
   });

@@ -13,6 +13,7 @@ import {
   rulesetMenuGroups,
   rulesetOptionCostText,
   rulesetOptionForecastText,
+  rulesetOptionLabel,
   rulesetOptionNeedsTargets,
   rulesetPickTarget,
   rulesetSendsOnPick,
@@ -101,7 +102,9 @@ export function RulesetCombatMenu({ view, budgetLabel, busy, onChoose, onFlee }:
     const option = step.option;
     return (
       <div className="flex flex-col gap-2 p-3">
-        <p className="text-xs text-white/60">{t("game.combat.ruleset.upcast.prompt", { label: option.label })}</p>
+        <p className="text-xs text-white/60">
+          {t("game.combat.ruleset.upcast.prompt", { label: rulesetOptionLabel(option, t) })}
+        </p>
         <div className="flex flex-wrap gap-2">
           <button
             ref={first}
@@ -138,8 +141,11 @@ export function RulesetCombatMenu({ view, budgetLabel, busy, onChoose, onFlee }:
       <div className="flex flex-col gap-2 p-3">
         <p className="text-xs text-amber-200" id="ruleset-target-prompt">
           {many
-            ? t("game.combat.ruleset.target.promptMany", { label: option.label, count: option.targets.count })
-            : t("game.combat.ruleset.target.prompt", { label: option.label })}
+            ? t("game.combat.ruleset.target.promptMany", {
+                label: rulesetOptionLabel(option, t),
+                count: option.targets.count,
+              })
+            : t("game.combat.ruleset.target.prompt", { label: rulesetOptionLabel(option, t) })}
         </p>
         <div className="flex flex-wrap gap-2" role="group" aria-labelledby="ruleset-target-prompt">
           {targets.map((combatant, index) => {
@@ -213,7 +219,7 @@ export function RulesetCombatMenu({ view, budgetLabel, busy, onChoose, onFlee }:
                     "border-white/10 bg-white/5 text-white/80 hover:border-white/25 hover:bg-white/10 hover:text-white",
                   )}
                 >
-                  <span className="block font-semibold text-white/90">{option.label}</span>
+                  <span className="block font-semibold text-white/90">{rulesetOptionLabel(option, t)}</span>
                   {cost && <span className="mt-0.5 block text-[0.65rem] text-white/45">{cost}</span>}
                   {forecast && <span className="block text-[0.65rem] text-white/45">{forecast}</span>}
                 </button>

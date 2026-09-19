@@ -52,6 +52,7 @@ import {
   rulesetMenuGroups,
   rulesetOptionCostText,
   rulesetOptionForecastText,
+  rulesetOptionLabel,
   rulesetOptionNeedsTargets,
   rulesetPickTarget,
   rulesetSendsOnPick,
@@ -584,8 +585,21 @@ const line = (definition: RulesetDefinition, state: RulesetEncounterState, event
     "an option of a kind this Engine does not know is left out rather than drawn without a heading",
   );
 
+  // The ruleset names what it carries; the kind's own closed list of moves, and ending a turn, are
+  // this Engine's vocabulary and are the only labels it writes.
+  const dodge = menu.find((option) => option.label === "dodge")!;
+  assert.ok(dodge, "the kind's own standard actions are on the menu as the resolver named them");
+  assert.equal(rulesetOptionLabel(dodge, t), "Dodge");
+  assert.equal(rulesetOptionLabel(menu.find((option) => option.kind === "end-turn")!, t), "End turn");
+  assert.equal(
+    rulesetOptionLabel({ ...dodge, label: "somersault" }, t),
+    "somersault",
+    "a move this Engine has no word for prints the one the resolver sent",
+  );
+
   const budgetLabel = (id: string) => fiveE.combat!.economy.budgets.find((budget) => budget.id === id)?.label ?? id;
   const sword = menu.find((option) => option.label === "Longsword")!;
+  assert.equal(rulesetOptionLabel(sword, t), "Longsword", "a weapon off the sheet keeps the sheet's own name");
   assert.equal(rulesetOptionCostText(sword, budgetLabel, t), "Spends Action");
   const forecast = rulesetOptionForecastText(sword, t);
   assert.match(forecast, /^\d+% to hit, about \d+ damage$/u, `the forecast reads oddly: ${forecast}`);
@@ -640,11 +654,9 @@ const line = (definition: RulesetDefinition, state: RulesetEncounterState, event
   const endTurn = menu.find((option) => option.kind === "end-turn")!;
   assert.ok(!rulesetOptionNeedsTargets(endTurn));
   assert.deepEqual(rulesetDefaultTargets(endTurn), []);
-  const dodge = menu.find((option) => option.targets.side === "self");
-  if (dodge) {
-    assert.ok(!rulesetOptionNeedsTargets(dodge), "aiming at yourself is not a choice");
-    assert.deepEqual(rulesetDefaultTargets(dodge), dodge.targetIds.slice(0, dodge.targets.count));
-  }
+  assert.equal(dodge.targets.side, "self");
+  assert.ok(!rulesetOptionNeedsTargets(dodge), "aiming at yourself is not a choice");
+  assert.deepEqual(rulesetDefaultTargets(dodge), dodge.targetIds.slice(0, dodge.targets.count));
   assert.deepEqual(rulesetDefaultTargets(sword), [], "something that IS a choice sends nothing until it is made");
 }
 
