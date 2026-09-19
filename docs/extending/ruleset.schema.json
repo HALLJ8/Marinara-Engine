@@ -2764,7 +2764,19 @@
           "label",
           "feeds"
         ],
-        "additionalProperties": false
+        "additionalProperties": false,
+        "oneOf": [
+          {
+            "required": [
+              "entries"
+            ]
+          },
+          {
+            "required": [
+              "asset"
+            ]
+          }
+        ]
       },
       "maxItems": 12
     },
