@@ -277,7 +277,7 @@ Characters travel on their own. A card exported with a community sheet keeps it,
 
 ## Proposed: the rest of catalogs
 
-Status: the format, the route, Capability API 1.21 and the sheet editor's picker are built (§ What slice 8a settled). The first-party content and the combat bridge are still ahead. Raised by the first hands-on use of the 5e sheet: entering spells, attacks and class features row by row is miserable, and a community author will want to ship their system's content the same way.
+Status: the format, the route, Capability API 1.21 and the sheet editor's picker are built (§ What slice 8a settled). The first-party SRD content shipped as the `ruleset-5e-2014` package 0.2.0, and the combat bridge is built (§ What the combat bridge settled). Level-scaled maximums, Refresh from ruleset and the cast helper are still ahead. Raised by the first hands-on use of the 5e sheet: entering spells, attacks and class features row by row is miserable, and a community author will want to ship their system's content the same way.
 
 **The picker.** The sheet editor gains an **Add from catalog** button on every list a catalog feeds. It opens a searchable picker with the catalog's declared filters, multi-select, and a mark on entries the sheet already has, read from the `_catalog` key the picked rows carry. It reads the entries from the catalog route when it opens, never before. A later **Refresh from ruleset** action can use the same mark to offer the newer text of an entry the author has changed.
 
@@ -289,7 +289,7 @@ Status: the format, the route, Capability API 1.21 and the sheet editor's picker
 
 **First-party content for `5e-2014`** once the format exists: SRD 5.1 spells, the SRD class features with their resource counters (Second Wind, Action Surge, Rage, Ki, Channel Divinity, Bardic Inspiration, Sorcery Points, Wild Shape, Lay on Hands, Arcane Recovery), and the SRD weapon table as ready-made attack rows. SRD 5.1 is CC-BY-4.0, so the text may ship with the attribution the package already carries. It must be built from an authoritative machine-readable copy of the SRD, never typed from memory.
 
-**Slices.** 8a, Engine: the catalog format, the asset loader and the route, and the sheet editor's **Add from catalog** picker, with regressions on a second non-5e ruleset. Built. 8b, Agents: `ruleset-5e-2014` 0.2.0 with the SRD catalogs. 8c, Engine: level-scaled maximums, Refresh from ruleset, the cast helper. Community catalogs in files of their own (§ What slice 8a settled records why they are not here) would be another.
+**Slices.** 8a, Engine: the catalog format, the asset loader and the route, and the sheet editor's **Add from catalog** picker, with regressions on a second non-5e ruleset. Built. 8b, Agents: `ruleset-5e-2014` 0.2.0 with the SRD catalogs. Shipped. 8c, Engine: level-scaled maximums, Refresh from ruleset, the cast helper. Community catalogs in files of their own (§ What slice 8a settled records why they are not here) would be another.
 
 ## Slices and exit evidence
 
