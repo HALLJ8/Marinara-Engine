@@ -48,6 +48,18 @@ function translate(key: string, params: Record<string, unknown> = {}): string {
 }
 const t = translate as unknown as Parameters<typeof formatCatalogMechanics>[2];
 
+/** A translator that says WHICH key was asked for and with what, instead of rendering English. The
+ *  mechanics line is asserted through it, so rewording a string in en.json cannot fail a test that
+ *  is about which parts the line has and in what order. */
+function describeKey(key: string, params: Record<string, unknown> = {}): string {
+  const name = key.replace("game.ruleset.catalog.", "");
+  const shown = Object.keys(params)
+    .sort()
+    .map((param) => `${param}=${String(params[param])}`);
+  return shown.length > 0 ? `${name}(${shown.join(",")})` : name;
+}
+const keyed = describeKey as unknown as Parameters<typeof formatCatalogMechanics>[2];
+
 // ── Every key the picker asks for exists ──
 
 const keyPattern = /"(game\.ruleset\.catalog\.[a-zA-Z0-9_.]+)"/gu;
@@ -261,10 +273,17 @@ assert.equal(labels.units?.distance?.label, "paces");
 
 const coldfire = entries.find((entry) => entry.id === "coldfire-toss")!;
 assert.equal(
-  formatCatalogMechanics(coldfire.mechanics!, labels, t),
-  "Attack · range 12 paces · burst 4 paces · anyone · hits friends too · 2d6 coldfire",
+  formatCatalogMechanics(coldfire.mechanics!, labels, keyed),
+  "kind.attack · mechanics.range(distance=mechanics.distance(unit=paces,value=12)) · mechanics.area(distance=mechanics.distance(unit=paces,value=4),shape=shape.burst) · targets.any · mechanics.friendlyFire · mechanics.amountOfType(amount=2d6,type=coldfire)",
 );
-assert.equal(formatCatalogMechanics(lastEmber.mechanics!, labels, t), "Healing · self or touch · allies · 3 · Grit: 1");
+assert.equal(
+  formatCatalogMechanics(lastEmber.mechanics!, labels, keyed),
+  "kind.heal · mechanics.selfOrTouch · targets.ally · 3 · mechanics.cost(count=1,pool=Grit)",
+);
+// One line through the shipped English, to prove the keys render as a sentence at all. Its wording
+// is free to change: only the ruleset's own words are looked for.
+const shipped = formatCatalogMechanics(lastEmber.mechanics!, labels, t);
+assert.ok(shipped.includes("Grit") && !shipped.includes("{{"), shipped);
 
 // Nothing in the line is hard-coded to one system: the save and the pool are named by the RULESET,
 // the unit by the CATALOG, and every other word by a localization key.
@@ -285,9 +304,9 @@ assert.equal(
       cost: [{ pool: "slots3", amount: 1 }],
     },
     d20Labels,
-    t,
+    keyed,
   ),
-  "Attack · range 150 ft · burst 20 ft · 8d6 fire · Dexterity: half on a success · Slots (3rd): 1",
+  "kind.attack · mechanics.range(distance=mechanics.distance(unit=ft,value=150)) · mechanics.area(distance=mechanics.distance(unit=ft,value=20),shape=shape.burst) · mechanics.amountOfType(amount=8d6,type=fire) · mechanics.saveHalf(save=Dexterity) · mechanics.cost(count=1,pool=Slots (3rd))",
 );
 
 // The remaining vocabulary still renders, and an unknown save or pool falls back to its own id
@@ -305,15 +324,15 @@ assert.equal(
       reaction: true,
     },
     d20Labels,
-    t,
+    keyed,
   ),
-  "Debuff · enemies · attack roll · 1d8+3 · 2 more for each step of extra cost · grit: nothing on a success · concentration · reaction",
+  "kind.debuff · targets.enemy · mechanics.attackRoll · 1d8+3 · mechanics.perStep(amount=2) · mechanics.saveNegates(save=grit) · mechanics.concentration · mechanics.reaction",
 );
-assert.equal(formatCatalogMechanics({ kind: "utility" }, d20Labels, t), "Utility");
+assert.equal(formatCatalogMechanics({ kind: "utility" }, d20Labels, keyed), "kind.utility");
 // A catalog that declares no distance unit still reads, with bare numbers.
 assert.equal(
-  formatCatalogMechanics({ kind: "buff", range: 4 }, { units: undefined, saves: {}, pools: {} }, t),
-  "Buff · range 4",
+  formatCatalogMechanics({ kind: "buff", range: 4 }, { units: undefined, saves: {}, pools: {} }, keyed),
+  "kind.buff · mechanics.range(distance=4)",
 );
 
 // ── The lane stays hooked up ──
