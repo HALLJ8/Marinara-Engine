@@ -9,6 +9,7 @@ import {
   type BuiltInAgentManifest,
   type InstalledCapabilityPackage,
   type InstalledRuleset,
+  type RulesetCatalogPayload,
 } from "@marinara-engine/shared";
 import { api } from "../lib/api-client";
 import {
@@ -25,6 +26,8 @@ export const capabilityPackageKeys = {
   pendingUpdates: () => [...capabilityPackageKeys.all, "pending-updates"] as const,
   agents: () => [...capabilityPackageKeys.all, "agents"] as const,
   rulesets: () => [...capabilityPackageKeys.all, "rulesets"] as const,
+  rulesetCatalog: (rulesetId: string, catalogId: string, version: number | undefined) =>
+    [...capabilityPackageKeys.rulesets(), "catalog", rulesetId, catalogId, version ?? "latest"] as const,
   releaseNotes: (id: string) => [...capabilityPackageKeys.all, "release-notes", id] as const,
 };
 
@@ -34,6 +37,24 @@ export function useInstalledRulesets(enabled = true) {
     queryKey: capabilityPackageKeys.rulesets(),
     queryFn: () => api.get<InstalledRuleset[]>("/capability-packages/rulesets"),
     enabled,
+  });
+}
+
+/** One ruleset catalog's entries, for the sheet editor's picker. Only fetched while a picker is
+ *  open, and cached for a long time: a catalog changes only when the package or an import does, and
+ *  both invalidate `capabilityPackageKeys.rulesets()`, which this key sits under. The version is the
+ *  one the sheet is being edited against, so a game keeps picking from its own version. */
+export function useRulesetCatalog(rulesetId: string, catalogId: string, version: number | undefined, enabled: boolean) {
+  return useQuery({
+    queryKey: capabilityPackageKeys.rulesetCatalog(rulesetId, catalogId, version),
+    queryFn: () => {
+      const query = new URLSearchParams({ rulesetId, catalogId });
+      if (version !== undefined) query.set("version", String(version));
+      return api.get<RulesetCatalogPayload>(`/capability-packages/rulesets/catalog?${query.toString()}`);
+    },
+    enabled: enabled && !!rulesetId && !!catalogId,
+    staleTime: 30 * 60_000,
+    retry: 1,
   });
 }
 

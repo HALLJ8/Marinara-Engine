@@ -1,8 +1,8 @@
 // Generic editor for a Game Mode ruleset character sheet. Everything it shows comes from the
 // ruleset definition: no ruleset ships client code, and nothing here knows a system by name.
 // Values are clamped to the ruleset's bounds when they are edited, never when they are read.
-import { Plus, Trash2 } from "lucide-react";
-import { useMemo } from "react";
+import { BookOpen, Plus, Trash2 } from "lucide-react";
+import { useMemo, useState } from "react";
 import { useTranslation as useUiTranslation } from "react-i18next";
 import {
   defaultRulesetSheetBuild,
@@ -14,6 +14,7 @@ import {
   type RulesetSheetBuild,
   type RulesetSheetEnvelope,
 } from "@marinara-engine/shared";
+import { RulesetCatalogPicker } from "./RulesetCatalogPicker";
 import { DraftNumberInput } from "../ui/DraftNumberInput";
 import { DraftTextarea } from "../ui/DraftTextarea";
 
@@ -227,6 +228,11 @@ export function RulesetSheetEditor({
   const { sheet, resolution } = definition;
   const build = useMemo(() => readBuild(definition, envelope), [definition, envelope]);
   const evaluated = useMemo(() => evaluateRulesetSheet(definition, build), [definition, build]);
+  // Which catalog's picker is open. A ruleset that ships none, and a listing that carries none
+  // (an older Engine, a stubbed response), simply never offers the button.
+  const [pickerId, setPickerId] = useState<string | null>(null);
+  const catalogs = definition.catalogs ?? [];
+  const openPicker = catalogs.find((catalog) => catalog.id === pickerId);
 
   const commit = (patch: Partial<RulesetSheetBuild>) =>
     onChange({ ...envelope, v: sheet.version, build: { ...build, ...patch } });
@@ -251,6 +257,9 @@ export function RulesetSheetEditor({
     }))
     .filter((group) => group.fields.length + group.derived.length + group.lists.length > 0);
 
+  // The row is SPREAD, so a key the editor does not draw survives an edit. That is what keeps the
+  // reserved catalog mark on a picked row: a column id can never start with "_", so the mark is
+  // never a column and never rendered, and editing or deleting a picked row needs nothing special.
   const updateRow = (listId: string, rows: ListRow[], index: number, columnId: string, value: Scalar) =>
     commit({
       lists: { ...build.lists, [listId]: rows.map((row, i) => (i === index ? { ...row, [columnId]: value } : row)) },
@@ -318,35 +327,59 @@ export function RulesetSheetEditor({
           )}
           {lists.map((list) => {
             const rows = (Array.isArray(build.lists[list.id]) ? build.lists[list.id] : []) as ListRow[];
+            const feeding = catalogs.filter((catalog) => catalog.feeds.includes(list.id));
+            const atLimit = rows.length >= list.maxItems;
             return (
               <div key={list.id} className="space-y-1.5">
-                <div className="flex items-center justify-between gap-2">
+                <div className="flex flex-wrap items-center justify-between gap-2">
                   <span className={labelClass}>
                     {list.label} ({rows.length}/{list.maxItems})
                   </span>
-                  <button
-                    type="button"
-                    disabled={rows.length >= list.maxItems}
-                    onClick={() =>
-                      commit({
-                        lists: {
-                          ...build.lists,
-                          [list.id]: [
-                            ...rows,
-                            Object.fromEntries(
-                              list.columns
-                                .filter((column) => column.default !== undefined)
-                                .map((column) => [column.id, column.default as Scalar]),
-                            ),
-                          ],
-                        },
-                      })
-                    }
-                    className="inline-flex items-center gap-1 rounded-lg border border-[var(--border)] px-2 py-1 text-[0.6875rem] text-[var(--foreground)] hover:bg-[var(--accent)] disabled:opacity-50"
-                  >
-                    <Plus size={12} aria-hidden="true" />
-                    {t("ui.rulesets.sheet.addRow")}
-                  </button>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {/* One button per catalog that feeds this list, named when there is more than one. */}
+                    {feeding.map((catalog) => (
+                      <button
+                        key={catalog.id}
+                        type="button"
+                        disabled={atLimit}
+                        title={
+                          atLimit
+                            ? t("game.ruleset.catalog.listFull", { list: list.label, max: list.maxItems })
+                            : undefined
+                        }
+                        onClick={() => setPickerId(catalog.id)}
+                        className="inline-flex items-center gap-1 rounded-lg border border-[var(--border)] px-2 py-1 text-[0.6875rem] text-[var(--foreground)] hover:bg-[var(--accent)] disabled:opacity-50"
+                      >
+                        <BookOpen size={12} aria-hidden="true" />
+                        {feeding.length > 1
+                          ? t("game.ruleset.catalog.addFromNamed", { name: catalog.label })
+                          : t("game.ruleset.catalog.addFrom")}
+                      </button>
+                    ))}
+                    <button
+                      type="button"
+                      disabled={atLimit}
+                      onClick={() =>
+                        commit({
+                          lists: {
+                            ...build.lists,
+                            [list.id]: [
+                              ...rows,
+                              Object.fromEntries(
+                                list.columns
+                                  .filter((column) => column.default !== undefined)
+                                  .map((column) => [column.id, column.default as Scalar]),
+                              ),
+                            ],
+                          },
+                        })
+                      }
+                      className="inline-flex items-center gap-1 rounded-lg border border-[var(--border)] px-2 py-1 text-[0.6875rem] text-[var(--foreground)] hover:bg-[var(--accent)] disabled:opacity-50"
+                    >
+                      <Plus size={12} aria-hidden="true" />
+                      {t("ui.rulesets.sheet.addRow")}
+                    </button>
+                  </div>
                 </div>
                 {rows.map((row, index) => (
                   <div
@@ -411,6 +444,19 @@ export function RulesetSheetEditor({
         onTier={(id, tier) => commit({ saves: { ...build.saves, [id]: tier } })}
         onBonus={(id, bonus) => commit({ bonuses: { ...build.bonuses, [id]: bonus } })}
       />
+
+      {openPicker && (
+        <RulesetCatalogPicker
+          open
+          onClose={() => setPickerId(null)}
+          definition={definition}
+          catalog={openPicker}
+          build={build}
+          // Every list the pick touches moves in ONE envelope change, so a two-list entry can never
+          // land half-applied.
+          onAdd={(lists) => commit({ lists: { ...build.lists, ...lists } })}
+        />
+      )}
     </div>
   );
 }
