@@ -38,7 +38,7 @@ Vor dem Speichern zeigt jeder Import, welche Fähigkeiten der Agent anfordert. B
 
 Eigene Repositorys sind standardmäßig deaktiviert, denn ihre Prompts und Tool-Auswahlen sind ungeprüfte Inhalte von Dritten. Setze `ENABLE_CUSTOM_AGENT_REPOS=true`, aktiviere **Allow custom Agent imports** in der Danger Zone und öffne dann **Agents → Download Agents → Custom Sources**, um ein öffentliches GitHub-Repository in der Vorschau anzusehen. Sowohl das Hinzufügen einer Quelle als auch jede spätere Inhaltsänderung musst du ausdrücklich bestätigen. Die Synchronisierung läuft manuell; Marinara klont keine Repositorys und fragt sie auch nicht im Hintergrund ab.
 
-Im Wurzelordner des Repositorys muss ein Array `agents.json` liegen, das dasselbe Agent-Definitionsformat verwendet wie herunterladbare Agent-Pakete. Eine minimale Datei sieht so aus:
+Ein Repository kann Agenten, Game Mode-Regelsätze oder beides veröffentlichen; mindestens eine Art ist erforderlich. Die optionale Datei `agents.json` im Stammverzeichnis enthält ein Array im Format herunterladbarer Agentendefinitionen. Minimales Beispiel:
 
 ```json
 [
@@ -54,7 +54,11 @@ Im Wurzelordner des Repositorys muss ein Array `agents.json` liegen, das dasselb
 ]
 ```
 
-Marinara akzeptiert ausschließlich URLs von GitHub-Repository-Wurzeln und prüft sowohl das größenbegrenzte Archiv als auch jede einzelne Agent-Definition, bevor die Vorschau erscheint. Beim Synchronisieren ersetzen die entfernten Werte für Prompt, Einstellungen und Tools die vom Repository verwalteten Werte aus dieser Vorschau. Verbindung und Bildauswahl bleiben lokal. Verschwindet ein Agent auf der Gegenseite, behält Marinara ihn als gewöhnlichen lokalen eigenen Agenten und entfernt nur die Verknüpfung zum Repository. Beim Entfernen einer Quelle gilt dieselbe Regel.
+Im Stammordner `rulesets` sind bis zu 32 `.json`-Dateien mit je einem Regelsatz und höchstens 256 KB erlaubt. Unterordner werden ignoriert. Die Vorschau zeigt Name, Version und Abdeckung. GM-Hinweise gelangen bei jedem Spiel mit diesem Regelsatz ins Modell; installiere deshalb nur Pakete vertrauenswürdiger Autoren.
+
+IDs enthalten den Repository-Eigentümer, etwa `alice/my-5e`. Sie ersetzen weder offizielle Regelsätze noch den Regelsatz `v20` eines anderen Autors. Jede importierte Version bleibt gespeichert; Spiele verwenden genau ihre festgelegte Version. Andere Inhalte unter derselben Versionsnummer ersetzen keine Installation: Die App verlangt eine neue Versionsnummer. Ungültige Dateien werden mit einer Erklärung übersprungen; der Rest lässt sich installieren.
+
+Nur URLs zum Stamm eines GitHub-Repositorys werden unterstützt. Die App prüft Archivgrößen und Definitionen vor der Vorschau. Synchronisierung ersetzt vom Repository verwaltete Prompts, Einstellungen und Werkzeuge durch die Vorschauwerte; Verbindungen und Bilder bleiben lokal. Ein upstream entfernter Agent bleibt als normaler lokaler Agent ohne Repository-Verknüpfung erhalten. Das Entfernen der Quelle löst dieselbe Verknüpfung; ihre Regelsätze bleiben für bestehende Spiele installiert.
 
 ### External Extensions
 

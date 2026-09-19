@@ -49,6 +49,25 @@ Clique em **Edit Sheet** (editar a ficha) para alterar a ficha você mesmo. No m
 
 Ao terminar, clique em **Save Sheet** (salvar a ficha). Clique em **Cancel** para descartar as alterações.
 
+<a id="the-ruleset-sheet"></a>
+
+### A ficha do conjunto
+
+Em uma [partida com conjunto de regras](dice-and-skill-checks.md#games-that-use-a-ruleset), cada ficha começa com **Ruleset sheet**. A disposição depende do conjunto; sem conjunto, esse bloco não aparece.
+
+- **Resources** mostra valor atual e máximo de saúde, espaços de magia ou recursos de classe. Use mais, menos ou digite um valor. **Temp** é uma reserva temporária.
+- **Tracks** são contadores limitados, como exaustão.
+- **Notes** guarda notas curtas, como concentração.
+- **Conditions** ativa e desativa condições.
+- Os descansos recuperam o que o conjunto determina. Em 5e (SRD 5.1), o descanso longo recupera saúde, espaços de magia e metade dos dados de vida, no mínimo um.
+- Abaixo há um resumo de atributos, perícias e salvaguardas treinadas e valores escolhidos, como classe de armadura.
+
+O GM registra gastos, dano, cura, condições e descansos; o motor valida cada mudança. Uma operação inválida, como magia sem espaço disponível, é rejeitada por completo com um aviso.
+
+Usar uma entrada do catálogo paga todo o custo e um uso de cada contador de linha associado. O espaço de magia é gasto no nível declarado. O GM pode pedir um nível maior, mas o motor nunca aumenta sozinho. Se faltar qualquer parte do custo, nada é gasto. Ações gratuitas, como truques, são apenas narradas. Máximos por nível e usos por atributo são recalculados na edição.
+
+O estado pertence à mensagem. Trocar a variante da resposta ou regenerar restaura a ficha anterior ao turno para evitar gastos duplicados. **Edit sheet** usa o mesmo editor e catálogos do cartão para configuração, listas, treinamento e bônus, incluindo valores somente leitura e **Review** para textos novos. **Save sheet** altera apenas a cópia dessa partida. O botão separado **Edit Sheet** continua editando a ficha geral. Pacote ausente ou antigo mostra um aviso e bloqueia testes até ser restaurado.
+
 ## Recrutar e remover integrantes da equipe
 
 O Game Master controla quem está na equipe conforme a história avança. Não existe um botão manual de "adicionar companheiro". Em vez disso, o GM inclui ou remove integrantes pela narração, de acordo com o que acontece na cena.

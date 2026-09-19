@@ -41,6 +41,14 @@ Den Kampf startest du nicht selbst. Der GM eröffnet ihn, sobald die Geschichte 
 
 Auf dem Kampfbildschirm steht deine Party auf der einen Seite, die Gegner stehen auf der anderen. Jeder Kämpfer hat eine Lebensleiste (HP, Trefferpunkte) und, sofern er Fertigkeiten einsetzt, eine Magieleiste (MP, Magiepunkte). Oben zeigt **Next:** an, wer als Nächstes am Zug ist. Ein Rundenzähler nennt **Round** und die aktuelle Rundennummer.
 
+<a id="games-that-use-a-ruleset"></a>
+
+### Spiele mit einem Regelsatz
+
+Wenn der Regelsatz seinen [Bogen](party-and-npcs.md#the-ruleset-sheet) für Kämpfe freigibt, beginnt der Kampf mit dessen aktuellen Ressourcen und Zauberplätzen. Katalogfähigkeiten werden nur übernommen, soweit Marinara Engine sie ausführen kann. Nicht für Kämpfe gedachte Einträge, Reaktionen und nicht unterstützte Kosten bleiben außen vor.
+
+Gesundheit wird als Anteil am Maximum übertragen: Ein halb gesunder Bogen beginnt mit einem halben Kampfbalken. Nach dem Kampf wird der Gesundheitsanteil zurückgeschrieben; Ressourcen und Zauberplätze werden direkt übernommen. Die Kampfberechnung bleibt die von Marinara Engine, ohne Angriffs-, Rettungs- oder Konzentrationswürfe des Tischrollenspiels. Das Löschen der kampfstartenden Nachricht schreibt nichts zurück. Ohne Kampfdeklaration bleibt das hier beschriebene Verhalten unverändert.
+
 ## Das Aktionsmenü
 
 Bist du am Zug, wählst du genau eine Aktion aus dem Menü. Es gibt sechs davon:

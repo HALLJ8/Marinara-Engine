@@ -49,6 +49,25 @@ Haz clic en **Edit Sheet** (Editar hoja) para cambiar la hoja tú mismo. En el m
 
 Cuando termines, haz clic en **Save Sheet** (Guardar hoja). Haz clic en **Cancel** (Cancelar) para descartar tus cambios.
 
+<a id="the-ruleset-sheet"></a>
+
+### La ficha del conjunto
+
+En una [partida con conjunto de reglas](dice-and-skill-checks.md#games-that-use-a-ruleset), la ficha de cada personaje empieza con **Ruleset sheet**. Su estructura depende del conjunto; sin conjunto no aparece.
+
+- **Resources** muestra valor actual y máximo de salud, espacios de conjuro o recursos de clase. Usa los botones de más y menos o escribe un número. **Temp** es un margen temporal.
+- **Tracks** son contadores limitados, como agotamiento.
+- **Notes** guarda notas cortas, como concentración.
+- **Conditions** activa y desactiva estados.
+- Los descansos recuperan lo que indica el conjunto. En 5e (SRD 5.1), un descanso largo recupera salud, espacios y la mitad de los dados de golpe, con un mínimo de uno.
+- Debajo se resumen atributos, habilidades y salvaciones entrenadas y valores elegidos, como la clase de armadura.
+
+El GM puede registrar gasto de recursos, daño, curación, estados y descansos; el motor valida los cambios. Una operación imposible, como lanzar sin espacios disponibles, se rechaza completa con un aviso.
+
+Usar una entrada de catálogo paga todo su coste y un uso de cada contador de fila asociado. El espacio de conjuro se paga al nivel declarado; el GM puede pedir uno superior, pero el motor nunca lo aumenta por su cuenta. Si falta cualquier parte del coste, no se gasta nada. Las acciones gratuitas, como trucos, solo se narran. Los máximos por nivel y usos por atributo se recalculan al editar.
+
+El estado pertenece al mensaje. Cambiar la variante de respuesta o regenerarla restaura la ficha anterior al turno, evitando gastos dobles. **Edit sheet** modifica configuración, listas, entrenamiento y bonos con el mismo editor y catálogo de la tarjeta, valores de solo lectura y **Review** para textos nuevos. **Save sheet** cambia solo la copia de esta partida. El botón separado **Edit Sheet** sigue editando la ficha general. Si el paquete falta o es antiguo, aparece una advertencia y las pruebas se bloquean hasta restaurarlo.
+
 ## Reclutar y quitar miembros del grupo
 
 El Game Master controla quién está en tu grupo a medida que se desarrolla la historia. No hay un botón manual de "añadir compañero". En su lugar, el GM agrega o quita miembros del grupo mediante la narración, según lo que ocurre en la escena.

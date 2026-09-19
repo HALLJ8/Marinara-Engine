@@ -118,6 +118,29 @@ Quando um dos dois está ativo, a faixa mostra o modo ao lado da DC e indica qua
 
 Você pode deixar um `d20` na fila pelo menu de dados antes de o teste acontecer. Nesse caso, o teste de perícia usa o número que você tirou, em vez de rolar um dado novo. Os modificadores de perícia e de atributo continuam sendo somados por cima.
 
+<a id="games-that-use-a-ruleset"></a>
+
+## Partidas com um conjunto de regras
+
+Escolha o conjunto uma vez em **Rules** ao criar a partida; veja [Escolher as regras](getting-started.md#choosing-rules). Sem conjunto, valem as regras acima, incluindo paradas simples de sucessos sem dados explosivos ou outras regras especiais.
+
+- O GM indica a perícia ou salvaguarda e uma dificuldade da escala do conjunto. A escala pode ultrapassar 1–40; a resolução de contingência de um teste pendente em turno salvo continua limitada a 1–40.
+- O motor rola os dados do conjunto e obtém o modificador da ficha: atributo, treinamento (múltiplo de proficiência, valor fixo ou ambos) e bônus extra. Não usa atributos nem bônus de perícia integrados.
+- `who="Name"` seleciona um integrante; sem esse campo, seleciona o jogador. Integrantes sem ficha usam os padrões. Nomes desconhecidos ou ambíguos geram uma rolagem sem modificador. O nome da persona sempre indica o jogador, mesmo que coincida com um integrante. Nenhuma ficha alheia é usada como substituta.
+- Resultados naturais seguem o conjunto. Em 5e (SRD 5.1), 20 e 1 naturais não têm efeito especial em testes ou salvaguardas; um 20 pode falhar.
+- Números escritos pelo GM são validados. Modificador, quantidade ou tipo de dados, dado escolhido ou resultado natural inválidos fazem o motor rolar novamente e substituir o resultado.
+- Uma rolagem manual anterior só é aproveitada para um único d20. Outros dados, como 2d6 ou uma parada, são rolados novamente.
+- `with="Ability"` permite outro atributo declarado pelo conjunto; atributos desconhecidos são ignorados. Marcadores podem nomear atributos, perícias, salvaguardas e `PROF`, se houver bônus de proficiência.
+- Pacote ausente ou antigo deixa o teste pendente, sem números. O motor não troca de sistema. Veja recursos, condições e descansos em [A ficha do conjunto](party-and-npcs.md#the-ruleset-sheet).
+
+### Conjuntos com paradas de dados
+
+O valor da ficha indica quantos dados rolar: atributo 3 e perícia 2 dão cinco dados. Editor e contexto do GM mostram "5 dice", não "+5". A dificuldade é a quantidade de sucessos necessária, como três, não uma soma de 15.
+
+O conjunto define limiar, sucessos duplos, explosões, cancelamentos por resultados baixos, falhas críticas e sucessos excepcionais. O cartão mostra todos os dados, destaca os sucessos e compara sua quantidade com a meta. Paradas grandes ocupam mais linhas sem diminuir os dados nem inventar uma soma.
+
+O GM só pode ajustar o limiar por dado ou a quantidade da parada dentro dos limites do conjunto. Resultados inventados pelo modelo sempre são substituídos por uma rolagem real. Vantagem, rolagens manuais anteriores e a prévia de d20 para o GM não se aplicam; o motor rola a parada sem prévia.
+
 ## Guias relacionados
 
 - [Game Mode: combate](combat.md)

@@ -42,6 +42,20 @@ Cuando termines, haz clic en **Start Game**.
 
 En partidas Tactical, dejar vacías las opciones del campo permite que el GM elija una descripción adecuada a la escena y que el motor genere el tablero. Una semilla fija reproduce la generación con las mismas entradas del encuentro; las indicaciones piden al GM elementos como un muro en ruinas o un claro del bosque. Consulta [Game Mode: Combate](combat.md#tactical-battles-and-terrain) para las reglas de movimiento, las bonificaciones del terreno y los errores de generación.
 
+<a id="choosing-rules"></a>
+
+### Elegir las reglas
+
+**Rules** (reglas) aparece al crear una partida si hay algún conjunto de reglas instalado. Determina las pruebas y las fichas; **Combat Preference** elige por separado la presentación del combate. **Marinara's own rules** usa las pruebas d20 y los seis atributos integrados. Cada conjunto, como **5e (SRD 5.1)**, indica su cobertura. Si no cubre el combate, el asistente explica que se mantienen las reglas de combate de Marinara Engine y la preferencia elegida. No puedes añadir ni cambiar el conjunto después de empezar.
+
+Algunos conjuntos ofrecen **layers** (capas): variantes como Low magic o Hard winter. Sus interruptores explican qué cambian: dificultades, opciones de la ficha, entradas visibles del catálogo y orientaciones para el GM y la creación del mundo. El asistente impide combinar capas incompatibles. La selección queda fijada para toda la partida; los valores ya guardados en una ficha se conservan aunque una capa los retire de la lista.
+
+Instala conjuntos oficiales desde **Download Agents**, identificados con **Rules**. Los de la comunidad se importan desde un archivo o el repositorio GitHub de su autor; llevan un identificador de origen, como `local/ember-roads` o `alice/v20`. Requieren **Allow custom Agent imports**. Desactivar esa opción los oculta en partidas nuevas, pero las existentes siguen usando su versión fijada. Consulta [Escribir conjuntos de reglas](../extending/writing-rulesets.md).
+
+El paso **Party** muestra la persona y los compañeros con **Has a sheet** (tiene ficha) o **Starts on a blank sheet** (empieza con una ficha vacía). Añade fichas en **Stats** del editor de personajes o personas; consulta [Fichas de conjuntos de reglas](../characters/colors-and-stats.md#ruleset-sheets). Al generar el mundo, la partida copia esas fichas. Los cambios durante la partida no modifican la tarjeta. Sin ficha se usan los valores predeterminados del conjunto, no puntuaciones inventadas por la IA.
+
+Las configuraciones exportadas recuerdan el conjunto. Si falta al importar o la versión es demasiado antigua, el asistente avisa y usa las reglas propias de Marinara Engine, salvo que instales y selecciones el conjunto adecuado.
+
 ### Valores predeterminados que conviene conocer
 
 Estos son los valores iniciales en los pasos **World**, **Party** y **Features**. Puedes cambiar cualquiera de ellos.

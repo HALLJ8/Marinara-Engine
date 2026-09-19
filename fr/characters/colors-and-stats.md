@@ -57,6 +57,24 @@ Le premier bloc, **Persona Status Bars** (barres d'état du persona), s'active a
 
 Le second bloc, **RPG Attributes**, s'active avec **Enable RPG Attributes**. Il fonctionne comme sur une fiche de personnage. Il donne au persona des **Pools** (HP et MP à 100 sur 100 au départ) et des **Attributes** (STR, DEX, CON, INT, WIS et CHA à 10 au départ).
 
+<a id="ruleset-sheets"></a>
+
+### Fiches d'ensembles de règles
+
+Avec un ensemble installé, comme 5e (SRD 5.1), les deux onglets **Stats** présentent **Ruleset sheets** (fiches d'ensembles de règles), avec une entrée dépliable par ensemble. Le bloc reste visible si la carte contient la fiche d'un ensemble désormais absent.
+
+1. Déplie une entrée et clique sur **Add a sheet** pour charger les valeurs par défaut.
+2. Renseigne caractéristiques, champs, listes d'attaques ou de sorts, entraînement et bonus de compétences et sauvegardes. L'ensemble détermine la structure. Les valeurs calculées, comme la maîtrise ou la Perception passive, changent pendant la saisie et restent en lecture seule.
+3. Enregistre le personnage ou la persona normalement.
+
+Il s'agit de la configuration initiale. Une nouvelle partie copie la fiche ; les changements en jeu ne modifient pas la carte. **Add from catalog** ouvre un sélecteur avec recherche de sorts, attaques et capacités prêts à l'emploi. Les lignes ajoutées sont des copies modifiables.
+
+Les nombres liés au niveau ou aux caractéristiques sont en lecture seule, avec "Set by the ruleset", et recalculés à la modification. Quand le catalogue propose un texte plus récent, **Review** affiche les textes enregistré et nouveau côte à côte. **Update selected** ne remplace que le texte des lignes choisies. Nombres, interrupteurs, autres colonnes et lignes non choisies restent intacts.
+
+Une fiche dont l'ensemble manque reste enregistrée et exportée avec la carte, sans être envoyée à l'IA. Réinstalle l'ensemble pour la modifier ou utilise **Remove**. La limite est de 64 KB par fiche. Une fiche illisible provenant d'une version plus récente reste aussi conservée ; seul **Remove this sheet** est proposé pour éviter son écrasement accidentel.
+
+Ces fiches sont indépendantes de **Enable RPG Stats** et **Enable RPG Attributes**. Les règles propres à Marinara Engine les ignorent ; une partie avec ensemble les utilise à la place des attributs habituels pour ses tests.
+
 ## Comment les agents mettent à jour les caractéristiques
 
 Les valeurs de l'onglet **Stats** ne sont que des valeurs de départ. Pour que les caractéristiques évoluent pendant un chat, active l'agent correspondant. Un agent est une IA qui travaille en parallèle du chat.

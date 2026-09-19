@@ -13,6 +13,14 @@
 
 ## 安装和启动问题
 
+### Termux：构建客户端时 JavaScript 堆内存不足
+
+如果 Vite 报 `Reached heap limit` 或 `JavaScript heap out of memory` 后退出，说明客户端构建耗尽了 Node.js 堆内存，与缺少原生 Rollup 二进制文件不同。更新后重新运行 `start-termux.sh`：构建会将较小的自动堆上限临时提高到接近 1536 MiB，但不超过已知设备 RAM 的一半，并保留 1024 MiB 下限。服务器继续使用按配置文件大小确定的较小上限。`NODE_OPTIONS` 中明确设置的上限对两个进程都优先，因此请检查是否残留旧的 1024 MiB 设置。
+
+RAM 上限按 128 MiB 向下取整。如果设备 RAM 的一半低于 1024 MiB，则优先采用 1024 MiB 下限。
+
+重试前关闭其他应用。低内存设备仍可能失败，或被 Android 终止进程；报告时保留完整启动输出。不要为了修复构建而删除聊天或配置文件。
+
 ### 更新后页面空白，或 JavaScript 被当作 HTML 返回
 
 带有 `text/html` MIME 类型的“Failed to load module script”等错误，可能表示浏览器请求了已安装构建中缺失的 JavaScript 文件。上次会话的退出警告并不能定位这个问题，删除写入租约（writer lease）或用户数据也无法修复这些文件。

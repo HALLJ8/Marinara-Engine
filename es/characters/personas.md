@@ -122,6 +122,8 @@ La pestaña **Stats** (Estadísticas) tiene dos bloques separados. Ambos aliment
 
 Los valores que estableces aquí son los predeterminados de inicio para los chats nuevos. No se actualizan por sí solos. Las actualizaciones automáticas necesitan que el agente correspondiente esté activado para el chat. Para la explicación completa, consulta [Colores de personaje y estadísticas RPG](colors-and-stats.md).
 
+Cuando hay un conjunto de reglas de Game Mode instalado, o la persona conserva una de sus fichas, aparece **Ruleset sheets** debajo de ambas secciones. Es la configuración inicial por conjunto que se copia a cada partida nueva. Consulta [Fichas de conjuntos de reglas](colors-and-stats.md#ruleset-sheets).
+
 ## Historial de versiones
 
 Cada vez que guardas un cambio en los campos de tarjeta de una persona, Marinara guarda una instantánea automáticamente. El panel **Version history** en la pestaña **Metadata** lista estas versiones guardadas con una marca de tiempo.

@@ -118,6 +118,29 @@ Quand l'un des deux est actif, le bandeau affiche le mode à côté du DC et sig
 
 Rien ne t'empêche de mettre ton propre `d20` en attente depuis le menu des dés avant que le jet n'arrive. Dans ce cas, le jet de compétence reprend ton résultat au lieu de lancer un nouveau dé. Tes modificateurs de compétence et de caractéristique s'ajoutent par-dessus.
 
+<a id="games-that-use-a-ruleset"></a>
+
+## Parties utilisant un ensemble de règles
+
+Choisis l'ensemble une fois dans **Rules** à la création ; voir [Choisir les règles](getting-started.md#choosing-rules). Sans ensemble, les règles précédentes restent valables, notamment les réserves simples de succès sans dés explosifs ni autres règles spéciales.
+
+- Le GM indique une compétence ou un jet de sauvegarde et une difficulté de l'échelle de l'ensemble. Cette échelle peut dépasser 1–40 ; le traitement de secours d'un test en attente dans un tour enregistré reste limité à 1–40.
+- Le moteur lance les dés prévus et tire le modificateur de la fiche : caractéristique, entraînement (multiple du bonus de maîtrise, valeur fixe ou les deux) et bonus supplémentaire. Il n'utilise pas les attributs et bonus de compétence intégrés.
+- `who="Name"` désigne un compagnon ; sans ce champ, le joueur est visé. Un compagnon sans fiche utilise les valeurs par défaut. Un nom inconnu ou ambigu donne un jet sans modificateur. Le nom de la persona désigne toujours le joueur, même si un compagnon porte le même nom. Aucune autre fiche n'est empruntée.
+- Les résultats naturels suivent l'ensemble. En 5e (SRD 5.1), 20 et 1 naturels n'ont pas d'effet spécial sur les tests et sauvegardes ; un 20 peut échouer.
+- Les nombres écrits par le GM sont vérifiés. Un modificateur, nombre ou type de dés, dé choisi ou résultat naturel non valable entraîne un nouveau jet qui remplace le résultat.
+- Un jet manuel préparé n'est réutilisé que pour un seul d20. Les autres dés, comme 2d6 ou une réserve, sont relancés.
+- `with="Ability"` autorise une autre caractéristique déclarée par l'ensemble ; une caractéristique inconnue est ignorée. Les marqueurs de jet peuvent nommer caractéristiques, compétences, sauvegardes et `PROF` si le bonus de maîtrise existe.
+- Un paquet absent ou trop ancien laisse le test en attente, sans nombres. Le moteur ne remplace pas les règles par un autre système. Voir ressources, états et repos dans [Fiche de l'ensemble de règles](party-and-npcs.md#the-ruleset-sheet).
+
+### Ensembles avec réserves de dés
+
+Le score de la fiche indique le nombre de dés : caractéristique 3 et compétence 2 donnent cinq dés. L'éditeur et le contexte GM affichent "5 dice" plutôt que "+5". La difficulté compte les succès nécessaires, par exemple trois, et non une somme de 15.
+
+L'ensemble définit seuils, doubles succès, explosions, annulations par des résultats bas, échecs critiques et succès exceptionnels. La carte montre tous les dés, distingue les succès et compare leur nombre à l'objectif. Les grandes réserves passent sur plusieurs lignes sans réduire les dés ni inventer une somme.
+
+Le GM ne peut modifier le seuil par dé ou la taille de la réserve que dans les limites de l'ensemble. Les résultats inventés par le modèle sont toujours remplacés par un vrai jet. Avantage, jet manuel préparé et aperçu des d20 pour le GM ne s'appliquent pas ; la réserve est lancée sans aperçu.
+
 ## Guides associés
 
 - [Game Mode : le combat](combat.md)

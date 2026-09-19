@@ -42,6 +42,20 @@ Zum Schluss klickst du auf **Start Game**.
 
 Wenn du bei Tactical-Spielen die Schlachtfeldoptionen leer lässt, wählt der GM eine zur Szene passende Vorgabe und die Engine erzeugt das Spielfeld. Ein fester Seed reproduziert die Generierung bei gleichen Begegnungseingaben; mit Geländehinweisen bittest du den GM etwa um eine verfallene Mauer oder Waldlichtung. [Game Mode: Kampf](combat.md#tactical-battles-and-terrain) beschreibt Bewegungsregeln, Geländeboni und Generierungsfehler.
 
+<a id="choosing-rules"></a>
+
+### Regeln auswählen
+
+**Rules** (Regeln) erscheint nur beim Anlegen eines Spiels, wenn mindestens ein Regelsatz installiert ist. Hier legst du Proben und Charakterbögen fest; **Combat Preference** bestimmt unabhängig davon die Darstellung von Kämpfen. **Marinara's own rules** verwendet die eingebauten d20-Proben und sechs Attribute. Ein Regelsatz wie **5e (SRD 5.1)** beschreibt seinen Umfang. Deckt er keine Kämpfe ab, weist der Assistent darauf hin, dass Marinara Engine weiterhin seine Kampfregeln mit deiner **Combat Preference** verwendet. Nach Spielbeginn lässt sich der Regelsatz weder hinzufügen noch wechseln.
+
+Manche Regelsätze bieten **layers** (Ebenen): benannte Varianten wie Low magic oder Hard winter. Die Schalter erklären ihre Wirkung. Ebenen können Schwierigkeiten verschärfen, Auswahlwerte im Bogen einschränken, Katalogeinträge ausblenden und dem GM Hinweise für Spiel und Welterstellung geben. Unvereinbare Ebenen schließen sich im Assistenten aus. Die Auswahl bleibt für das ganze Spiel bestehen. Bereits gespeicherte Bogenwerte bleiben erhalten, auch wenn eine Ebene sie aus der Auswahl entfernt.
+
+Offizielle Regelsätze findest du unter **Download Agents**, mit der Kennzeichnung **Rules**. Community-Regelsätze importierst du aus einer Datei oder dem GitHub-Repository des Autors; ihre IDs enthalten die Herkunft, etwa `local/ember-roads` oder `alice/v20`. Dafür muss **Allow custom Agent imports** eingeschaltet sein. Schaltest du es aus, verschwinden diese Regelsätze aus der Auswahl für neue Spiele; bestehende Spiele behalten ihre festgelegte Version. Eigene Regelsätze erklärt [Regelsätze schreiben](../extending/writing-rulesets.md).
+
+Unter **Party** siehst du bei Persona und Gruppenmitgliedern **Has a sheet** (Bogen vorhanden) oder **Starts on a blank sheet** (beginnt mit leerem Bogen). Lege Bögen im Reiter **Stats** des Charakter- oder Persona-Editors an; siehe [Regelsatzbögen](../characters/colors-and-stats.md#ruleset-sheets). Bei der Welterstellung kopiert das Spiel diese Bögen. Änderungen im Spiel ändern die Karte nicht. Ohne Bogen gelten die Standardwerte des Regelsatzes; die KI erfindet keine Werte.
+
+Exportierte Spielkonfigurationen merken sich den Regelsatz. Fehlt er beim Import oder ist die installierte Version zu alt, warnt der Assistent und fällt auf die eigenen Regeln von Marinara Engine zurück, sofern du nicht den passenden Regelsatz installierst und auswählst.
+
 ### Standardwerte, die du kennen solltest
 
 Das sind die Startwerte in den Schritten **World**, **Party** und **Features**. Ändern lässt sich jeder davon.

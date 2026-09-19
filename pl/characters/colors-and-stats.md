@@ -57,6 +57,24 @@ Pierwszy blok to **Persona Status Bars**, włączany przełącznikiem **Enable P
 
 Drugi blok to **RPG Attributes**, włączany przełącznikiem **Enable RPG Attributes**. Działa tak samo jak w karcie postaci. Daje personie sekcję **Pools** (na starcie HP i MP na poziomie 100 ze 100) oraz sekcję **Attributes** (na starcie STR, DEX, CON, INT, WIS i CHA o wartości 10).
 
+<a id="ruleset-sheets"></a>
+
+### Arkusze zestawów zasad
+
+Po instalacji zestawu, np. 5e (SRD 5.1), obie zakładki **Stats** otrzymują blok **Ruleset sheets** (arkusze zestawów zasad), po jednym rozwijanym wpisie na zestaw. Blok jest widoczny również wtedy, gdy karta przechowuje arkusz nieobecnego już zestawu.
+
+1. Otwórz wpis i kliknij **Add a sheet** (dodaj arkusz), aby otrzymać wartości domyślne.
+2. Uzupełnij cechy, pola sekcji, listy ataków lub zaklęć, wyszkolenie i dodatkowe premie umiejętności oraz rzutów obronnych. Układ określa zestaw. Wartości obliczane, np. premia biegłości lub pasywna Percepcja, aktualizują się podczas pisania i nie podlegają bezpośredniej edycji.
+3. Zapisz postać lub personę jak zwykle.
+
+To początkowa konfiguracja postaci. Nowa gra kopiuje arkusz; zmiany w grze nie wracają na kartę. **Add from catalog** (dodaj z katalogu) otwiera wyszukiwarkę gotowych zaklęć, ataków i zdolności. Dodane wiersze są edytowalnymi kopiami.
+
+Wartości zależne od poziomu lub cechy są tylko do odczytu z opisem "Set by the ruleset" i przeliczają się przy edycji arkusza. Gdy katalog ma nowszy tekst, **Review** (przejrzyj) pokazuje obok siebie zapisany i nowy opis oraz wybór wierszy. **Update selected** (aktualizuj wybrane) zmienia tylko tekst zaznaczonych wierszy. Liczby, przełączniki, inne kolumny i odznaczone wiersze pozostają nietknięte.
+
+Arkusz brakującego zestawu pozostaje zapisany, eksportuje się razem z kartą, nie trafia do AI i ponownie podlega edycji po instalacji zestawu. Ma przycisk **Remove** (usuń). Limit arkusza wynosi 64 KB. Nieczytelny arkusz z nowszej wersji też pozostaje zapisany; jedyna opcja to **Remove this sheet** (usuń ten arkusz), więc dodanie nowego nie nadpisze go przypadkiem.
+
+Arkusze są niezależne od **Enable RPG Stats** i **Enable RPG Attributes**. Własne zasady aplikacji Marinara Engine je ignorują; gra z zestawem używa ich zamiast zwykłych atrybutów do testów.
+
 ## Jak agenci aktualizują statystyki
 
 Wartości w zakładce **Stats** to wyłącznie punkt wyjścia. Żeby statystyki zmieniały się w trakcie czatu, trzeba włączyć odpowiedniego agenta. Agent to pomocnik AI działający w tle czatu.

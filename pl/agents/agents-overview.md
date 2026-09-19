@@ -28,6 +28,8 @@ Katalog w aplikacji opiera się na publicznym [repozytorium Marinara-Agents](htt
 
 W katalogu znajdziesz agentów czatu od twórców aplikacji, World Maps, rozmowy audio i wideo w trybie Conversation oraz wszystkie opcjonalne gry trybu Conversation. Zainstalowani agenci trafiają do grup **Writer Agents**, **Tracker Agents** i **Misc Agents**, a dodatkowo jest sekcja **Custom Agents** na agentów własnych. Odinstalowanie pakietu z katalogu usuwa jego kod i ustawienia z aplikacji, ale zachowuje wiadomości i historię czatów. Usunięcie własnego agenta jest nieodwracalne.
 
+Pakiet oznaczony **Rules** (zasady) dodaje zestaw zasad Game Mode, np. 5e (SRD 5.1), a nie agenta; nie wlicza się do powyższych liczb agentów. Wybiera się go podczas tworzenia nowej gry w **Rules**; zobacz [Wybór zasad](../game/getting-started.md#choosing-rules). Nie ma przełącznika włączania w czacie. Pakiet 5e jest wersją podglądową, więc na razie katalog pokazuje go tylko w aplikacji Engine na gałęzi `staging`.
+
 Przy aktualizacji z wersji, która miała te funkcje wbudowane, Marinara pobiera odpowiednie pakiety jeden raz i zachowuje dotychczasowy wybór agentów w czatach, ich ustawienia, zapisane dane działania oraz historię. Jeśli podczas takiej migracji katalog jest nieosiągalny, próba powtarza się przy następnym starcie i nic nie ginie.
 
 Automatyczne aktualizacje przy starcie nigdy nie instalują pakietu, który nie został wybrany. Instalacje na komputerze, w kontenerze Docker oraz w systemie Android i w środowisku Termux aktualizują pakiety zapisane przez swój lokalny serwer. Klienty na iOS, iPadOS i w innych przeglądarkach korzystają z pakietów zainstalowanych i aktualizowanych przez serwer Marinara, z którym się łączą.

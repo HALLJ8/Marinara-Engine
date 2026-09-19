@@ -122,6 +122,8 @@ Der Tab **Stats** besteht aus zwei getrennten Blöcken. Beide speisen die Wertea
 
 Die Werte hier sind die Startvorgaben für neue Chats. Von selbst ändern sie sich nicht. Automatische Aktualisierungen brauchen den passenden Agenten, aktiviert für den jeweiligen Chat. Die vollständige Erklärung steht unter [Charakterfarben und RPG-Werte](colors-and-stats.md).
 
+Ist ein Game Mode-Regelsatz installiert oder enthält die Persona noch einen zugehörigen Bogen, erscheint unter beiden Bereichen **Ruleset sheets** (Regelsatzbögen). Dies ist die Startkonfiguration der Persona je Regelsatz; ein neues Spiel kopiert sie. Siehe [Regelsatzbögen](colors-and-stats.md#ruleset-sheets).
+
 ## Versionsverlauf
 
 Speicherst du eine Änderung an den Kartenfeldern einer Persona, legt Marinara automatisch einen Schnappschuss an. Das Panel **Version history** im Tab **Metadata** listet diese gespeicherten Versionen mit Zeitstempel auf.

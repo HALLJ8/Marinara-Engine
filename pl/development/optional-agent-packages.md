@@ -233,6 +233,131 @@ Na komputerze widać listę do przeglądania i sąsiadujący z nią obszar szcze
 
 Wydzielenie jest kompletne dopiero wtedy, gdy podstawowe produkcyjne paczki klienta i serwera nie zawierają już implementacji pakietu, świeża instalacja nie potrafi jej aktywować bez pobrania pakietu, instalacja po aktualizacji ją zachowuje, a instalacja, aktualizacja i odinstalowanie pakietu przechodzą pomyślnie na komputerze, telefonie i systemach plików zgodnych z Termux.
 
+### Capability API 1.20: zestawy zasad Game Mode
+
+Zestaw zasad to sprawdzone dane: obsługiwany przez Engine sposób rozstrzygania testów, arkusz z zamkniętego zbioru elementów, odpoczynki i wskazówki do promptu GM. Pakiet dostarcza zastrzeżony zasób `ruleset.json`, wykrywany tak jak `gm-verbs.json`: wpisany w `contributions.assets.paths` i powiązany z hashem w `files[]`.
+
+```json
+{
+  "schemaVersion": 2,
+  "capabilityApi": { "major": 1, "minor": 20 },
+  "id": "ruleset-5e-2014",
+  "kind": ["ruleset"],
+  "permissions": [],
+  "entrypoints": {},
+  "contributions": { "assets": { "paths": ["ruleset.json"] } },
+  "files": [{ "path": "ruleset.json", "sha256": "<sha256 of the file>", "bytes": 25767 }]
+}
+```
+
+Przykład pokazuje tylko pola istotne dla zestawu. Nadal wymagane są `name`, `version`, `description`, `engine` i `builtAgainst`. Nie potrzeba uprawnień, agenta ani punktów wejścia klienta lub serwera. Typ `ruleset` wymaga `ruleset.json`, a ten plik wymaga tego typu. Plik nie wykonuje kodu ani wyrażeń tekstowych; nowa mechanika rozstrzygania wymaga zmiany Engine. Format i przykład 5e opisuje [`game-rulesets-and-sheets-implementation.md`](game-rulesets-and-sheets-implementation.md).
+
+To twarda granica zgodności: manifest z tym zasobem musi deklarować API 1.20; starszy Engine odmawia instalacji. Engine odrzuca deklarowany rozmiar powyżej 256 KB przed odczytem, ponownie sprawdza hash instalacji i waliduje plik ścisłym schematem `packages/shared/src/schemas/ruleset.schema.ts`. Nieprawidłowy plik zostaje pominięty z jednym wpisem dziennika wskazującym pakiet i pierwsze błędy `path: message`. Przy powtórzonym identyfikatorze wygrywa pierwszy pakiet według kolejności identyfikatorów pakietów; drugi jest pomijany z wpisem dziennika. `engine-legacy` i `traditional` są zastrzeżone dla Engine.
+
+Gra zapisuje wybór raz w `chat.metadata.gameRuleset`. Brak przypisania oznacza dotychczasowe zasady Engine. Brak pakietu lub starsza definicja oznaczają niedostępny zestaw, nie zastąpienie go innymi zasadami. Przypisanie sprawdza identyfikator zestawu oraz pakiet dostawcy, więc inny pakiet nie przejmie gry przez powtórzenie identyfikatora.
+
+### Capability API 1.21: katalogi zestawów zasad
+
+Katalogi dostarczają gotowe zaklęcia, zdolności klas i ekwipunek do selektora w edytorze arkusza. Nagłówek znajduje się w `ruleset.json` pod `catalogs`; wpisy mogą być tam bezpośrednio lub w osobnym zastrzeżonym zasobie:
+
+```json
+{
+  "capabilityApi": { "major": 1, "minor": 21 },
+  "kind": ["ruleset"],
+  "contributions": { "assets": { "paths": ["ruleset.json", "catalogs/spells.json"] } },
+  "files": [
+    { "path": "ruleset.json", "sha256": "<sha256>", "bytes": 25767 },
+    { "path": "catalogs/spells.json", "sha256": "<sha256>", "bytes": 418204 }
+  ]
+}
+```
+
+Nazwa `catalogs/<id>.json` odpowiada identyfikatorowi katalogu; katalog nie może wskazać pliku innego katalogu. Zasób ma hash w `files[]`, występuje tylko obok deklarującego go `ruleset.json` i jest odrzucany przed odczytem przy deklarowanym rozmiarze powyżej 1 MB. Walidacja względem tego samego arkusza jest taka sama dla wpisów wbudowanych i plikowych. Limit to 12 katalogów na zestaw i 2000 wpisów na katalog.
+
+Klient pobiera katalog dopiero po otwarciu selektora przez `GET /api/capability-packages/rulesets/catalog?rulesetId=&catalogId=&version=`. Lista zainstalowanych zestawów zawiera liczbę wpisów, nie ich treść. Tekst katalogu nie trafia do promptu: GM widzi tylko to, co wskazuje `gm.sheetSummary`, więc katalog sam nie zużywa tokenów. Zasób katalogu wymaga API 1.21; instalacja sprawdza też deklarację przy kluczu `catalogs` wewnątrz zweryfikowanego `ruleset.json`. Starszy ścisły schemat odrzuciłby cały plik. Uprawnienia nie są potrzebne.
+
+### Capability API 1.22: blok battle
+
+Opcjonalny `battle` wskazuje bieżącą pulę zdrowia, opcjonalną pulę MP, pule komórek zaklęć oraz listy, których wiersze z katalogu stają się `CombatSkill`. Po walce zdrowie, energia i komórki wracają przez te same operacje arkusza, których używają przyciski gracza.
+
+```json
+{
+  "capabilityApi": { "major": 1, "minor": 22 },
+  "kind": ["ruleset"],
+  "contributions": { "assets": { "paths": ["ruleset.json"] } }
+}
+```
+
+To połączenie danych z walką Engine, nie pełny adapter systemu stołowego. Obliczenia obrażeń pozostają wbudowane; most nie używa `attackRoll`, `save`, `concentration` ani `perCostStep` wpisu katalogu. Dokładne zasady systemu należą do osobnego przekazania walki adapterom. `coverage.combat` zachowuje własne znaczenie i nie jest odczytywane przez most. Instalacja sprawdza zweryfikowaną zawartość `ruleset.json` i odrzuca `battle` przy deklaracji poniżej API 1.22, tak jak `catalogs` poniżej 1.21. Bez uprawnień i bez zmian dla zestawu bez tego bloku.
+
+### Capability API 1.23: skalowane wartości katalogu
+
+Wiersz wpisu katalogu może mieć `scaled`: mapę maksymalnie czterech własnych kolumn liczbowych, które utrzymuje zestaw. Każda używa zwykłego odwołania do wartości i opcjonalnej tabeli progów, np. zasób klasy zależny od poziomu lub użycia zależne od cechy, bez nowej arytmetyki formatu.
+
+```json
+{
+  "capabilityApi": { "major": 1, "minor": 23 },
+  "kind": ["ruleset"],
+  "contributions": { "assets": { "paths": ["ruleset.json", "catalogs/spells.json"] } }
+}
+```
+
+Wartość jest przeliczana przy edycji, nie przy odczycie. Stan gry, prompt GM i most walki czytają zapisaną liczbę. Wiersz może być w `ruleset.json` lub `catalogs/<id>.json`; oba pliki są zasobami manifestu. Instalacja sprawdza ich zweryfikowaną treść i odrzuca `scaled` poniżej API 1.23, tak jak wcześniejsze bramki katalogów i walki. Bez uprawnień i bez zmian dla katalogów bez skalowania.
+
+Ta wersja dodaje też `[sheet: op="use" name="..."]`, opłacające `mechanics.cost` wpisu oraz po jednym użyciu każdej puli wiersza utworzonej przez ten wpis. Polecenie nie wymaga nowej deklaracji: czyta już obsługiwane katalogi.
+
+### Capability API 1.24: pule kości
+
+`resolution` może deklarować `"kind": "dice-pool"` zamiast `"dice-sum"`. Liczba z arkusza określa liczbę kości; silnik liczy wyniki osiągające próg. Zestaw może określać podwójne sukcesy, eksplodujące i anulujące wyniki, pech, wyjątkowe sukcesy oraz zakres kości dodawanych lub odejmowanych przez GM za okoliczności.
+
+```json
+{
+  "capabilityApi": { "major": 1, "minor": 24 },
+  "kind": ["ruleset"],
+  "contributions": { "assets": { "paths": ["ruleset.json"] } }
+}
+```
+
+Arkusz pozostaje ten sam: wartość dodawana do rzutu w `dice-sum` oznacza tutaj liczbę kości. Nie powstają nowe elementy arkusza, slot edytora ani kod pakietu. Instalacja odczytuje zweryfikowany `ruleset.json` i odrzuca `dice-pool` przy deklaracji poniżej 1.24; starszy Engine obsługujący tylko `dice-sum` odrzuciłby cały plik. Bez uprawnień i bez zmian dla zestawu sumującego kości.
+
+### Capability API 1.25: warstwy i wskazówki świata
+
+Opcjonalne `layers` to nazwane warianty wybierane przy tworzeniu gry i utrwalane w jej przypisaniu na cały czas gry. Opcjonalny tekst `gm.worldGuidance` jest czytany raz podczas tworzenia świata, aby pasował on do zasad drużyny.
+
+```json
+{
+  "capabilityApi": { "major": 1, "minor": 25 },
+  "kind": ["ruleset"],
+  "contributions": { "assets": { "paths": ["ruleset.json"] } }
+}
+```
+
+Zamknięty zbiór efektów warstw pozwala dopisywać wskazówki po wskazówkach zestawu, usuwać wartości pól wyliczeniowych, zastępować skalę trudności skalą tego samego rodzaju rozstrzygania i ukrywać wpisy katalogu w selektorze arkusza. Nie dodaje nowych elementów arkusza, więc arkusze pozostają czytelne niezależnie od warstw. Brak kodu pakietu i dodatkowego wywołania modelu. Warstwy innych autorów są planowane później. Instalacja odrzuca `layers` i `gm.worldGuidance` poniżej API 1.25 po sprawdzeniu zweryfikowanej treści. Bez uprawnień i bez zmian dla zestawów bez obu pól.
+
+### Capability API 1.26–1.27: format walki i bestiariusze
+
+API 1.26 dodaje opcjonalny `combat`: rzuty, cele, ekonomię akcji, listy ataków i zdolności, stany, koncentrację, zasady przy zerowym zdrowiu, typy obrażeń i skalę przeciwników. `mechanics` wpisów katalogu może opisywać liczbę celów, pewne trafienie, stany, punkty tymczasowe, skalowanie z arkuszem i zużywany budżet.
+
+```json
+{
+  "capabilityApi": { "major": 1, "minor": 26 },
+  "kind": ["ruleset"],
+  "contributions": { "assets": { "paths": ["ruleset.json"] } }
+}
+```
+
+API 1.27 pozwala katalogowi deklarować `"holds": "creatures"`. Bloki stworzeń używają liczb z `combat`: zdrowia jako liczby lub rzutu na początku walki, obrony, inicjatywy, cech i obron według identyfikatorów arkusza, odporności, podatności i niewrażliwości na obrażenia, niewrażliwości na stany, poziomu zagrożenia oraz cech pokazywanych GM. Akcje mogą trafiać, wymuszać obronę, nakładać stan, mieć limit użyć, odnawiać się rzutem, wykonywać sekwencję innych akcji za jeden budżet albo kosztować własne punkty specjalne stworzenia.
+
+```json
+{
+  "capabilityApi": { "major": 1, "minor": 27 },
+  "kind": ["ruleset"],
+  "contributions": { "assets": { "paths": ["ruleset.json", "catalogs/beasts.json"] } }
+}
+```
+
+Katalog stworzeń nie deklaruje `feeds` i nie pojawia się w selektorze arkusza. Obie wersje wprowadzają format i wspólny mechanizm rozstrzygania. Serwer potrafi już rozstrzygać i zapisywać walki zestawu zasad, aktualizując arkusze po każdym działaniu. Nie ma jeszcze odpowiedniego ekranu bitwy, więc gracze nadal korzystają z dotychczasowego interfejsu walki. Instalacja sprawdza zweryfikowane `ruleset.json` i zadeklarowane `catalogs/<id>.json`, odrzucając `combat` i nowe klucze `mechanics` poniżej 1.26 oraz `holds` i `creature` poniżej 1.27. Starszy ścisły schemat odrzuciłby plik. Nie ma nowych uprawnień ani zmian dla zestawów bez tych pól.
+
 ### Capability API 1.18: konfiguracja Experience w kreatorze Game
 
 Pakiet `game-surface` może zadeklarować `contributions.gameSurface.setup` przy schemacie w wersji 2 i Capability API 1.18. Engine zachowuje siedem zwykłych kroków konfiguracji, w tym **Party** (Drużyna), cele, modele i lorebooki. Experiences są dostępne tylko przy nowych grach; ponowne otwarcie konfiguracji istniejącej gry zachowuje jej Experience i konfigurację pakietu. Pakiety bez tej deklaracji zachowują dawny dialog konfiguracji.

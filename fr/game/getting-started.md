@@ -42,6 +42,20 @@ Une fois l'assistant terminé, clique sur **Start Game**.
 
 Dans une partie Tactical, laisse les options du champ de bataille vides pour que le GM choisisse une description adaptée à la scène et que le moteur génère le plateau. Une graine fixe reproduit la génération pour les mêmes données de rencontre ; les indications demandent au GM des éléments comme un mur en ruine ou une clairière. Consulte [Game Mode : le combat](combat.md#tactical-battles-and-terrain) pour les règles de déplacement, les bonus de terrain et les échecs de génération.
 
+<a id="choosing-rules"></a>
+
+### Choisir les règles
+
+Le champ **Rules** (règles) apparaît uniquement à la création d'une partie, si au moins un ensemble de règles est installé. Il détermine les tests et les fiches ; **Combat Preference** choisit séparément la présentation des combats. **Marinara's own rules** utilise les tests d20 et les six attributs intégrés. Un ensemble comme **5e (SRD 5.1)** indique ce qu'il couvre. S'il ne couvre pas le combat, l'assistant précise que Marinara Engine conserve ses règles de combat et la préférence choisie. Après le début de la partie, tu ne peux plus ajouter ni changer l'ensemble.
+
+Certains ensembles proposent des **layers** (couches), variantes nommées comme Low magic ou Hard winter. Les interrupteurs expliquent leurs effets : difficultés, choix dans la fiche, entrées du catalogue et consignes au GM, y compris pour créer le monde. L'assistant empêche les combinaisons incompatibles. Le choix reste fixé pour toute la partie. Les valeurs déjà enregistrées dans une fiche sont conservées même si une couche les retire des choix proposés.
+
+Installe les ensembles officiels dans **Download Agents**, où ils portent l'étiquette **Rules**. Ceux de la communauté s'importent depuis un fichier ou le dépôt GitHub de leur auteur, avec un identifiant d'origine comme `local/ember-roads` ou `alice/v20`. Ils nécessitent **Allow custom Agent imports**. Désactiver cette option les masque pour les nouvelles parties ; les parties existantes conservent leur version exacte. Consulte [Écrire des ensembles de règles](../extending/writing-rulesets.md).
+
+L'étape **Party** affiche la persona et les compagnons avec **Has a sheet** (fiche présente) ou **Starts on a blank sheet** (fiche vierge au départ). Ajoute une fiche dans **Stats** de l'éditeur de personnage ou de persona ; voir [Fiches d'ensembles de règles](../characters/colors-and-stats.md#ruleset-sheets). La création du monde copie ces fiches. Les changements en jeu ne modifient pas la carte. Sans fiche, les valeurs par défaut de l'ensemble sont utilisées ; l'IA n'invente pas les scores.
+
+Les configurations exportées mémorisent l'ensemble. S'il manque à l'importation ou si sa version est trop ancienne, l'assistant avertit et utilise les règles propres à Marinara Engine, sauf si tu installes et sélectionnes le bon ensemble.
+
 ### Valeurs par défaut à connaître
 
 Voici les valeurs de départ des étapes **World**, **Party** et **Features**. Tu peux toutes les modifier.

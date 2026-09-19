@@ -122,6 +122,8 @@ Zakładka **Stats** dzieli się na dwa osobne bloki. Oba zasilają ekranowy pase
 
 Ustawione tu wartości są domyślnymi wartościami startowymi dla nowych czatów. Same się nie aktualizują. Automatyczne zmiany wymagają włączenia w czacie odpowiedniego agenta. Pełne wyjaśnienie zawiera przewodnik [Kolory postaci i statystyki RPG](colors-and-stats.md).
 
+Gdy jest zainstalowany zestaw zasad Game Mode lub persona nadal przechowuje jego arkusz, pod obiema sekcjami pojawia się **Ruleset sheets** (arkusze zestawów zasad). To konfiguracja początkowa persony dla każdego zestawu, kopiowana do nowej gry. Zobacz [Arkusze zestawów zasad](colors-and-stats.md#ruleset-sheets).
+
 ## Historia wersji
 
 Za każdym razem, gdy zapisujesz zmianę w polach karty persony, Marinara automatycznie zapisuje migawkę. Panel **Version history** w zakładce **Metadata** wypisuje te zapisane wersje wraz ze znacznikiem czasu.

@@ -49,6 +49,25 @@ Clique sur le bouton **Edit Sheet** (modifier la feuille) pour retoucher la feui
 
 Une fois terminé, clique sur le bouton **Save Sheet** (enregistrer la feuille). Le bouton **Cancel** abandonne les modifications.
 
+<a id="the-ruleset-sheet"></a>
+
+### Fiche de l'ensemble de règles
+
+Dans une [partie avec ensemble de règles](dice-and-skill-checks.md#games-that-use-a-ruleset), chaque fiche commence par **Ruleset sheet**. Sa disposition dépend de l'ensemble. Sans ensemble, ce bloc n'apparaît pas.
+
+- **Resources** présente valeur actuelle et maximum de santé, emplacements de sorts ou ressources de classe. Utilise plus, moins ou la saisie directe. **Temp** représente une réserve temporaire.
+- **Tracks** contient des compteurs bornés, comme l'épuisement.
+- **Notes** contient de courtes notes, comme la concentration.
+- **Conditions** active et désactive les états.
+- Les repos récupèrent les valeurs prévues. En 5e (SRD 5.1), un repos long restaure santé, emplacements de sorts et moitié des dés de vie, au minimum un.
+- Un résumé présente ensuite caractéristiques, compétences et sauvegardes maîtrisées, ainsi que les valeurs choisies, comme la classe d'armure.
+
+Le GM peut enregistrer dépenses, dégâts, soins, états et repos ; le moteur les valide. Une opération interdite, par exemple un sort sans emplacement disponible, est entièrement rejetée avec un message.
+
+Utiliser une entrée de catalogue paie son coût complet et une utilisation de chaque compteur de ligne associé. Un emplacement de sort est dépensé au niveau déclaré. Le GM peut demander un niveau supérieur ; le moteur ne le choisit jamais seul. S'il manque une partie du coût, rien n'est dépensé. Une action gratuite, comme un tour de magie, est seulement racontée. Les maxima liés au niveau et les utilisations liées aux caractéristiques sont recalculés à l'édition.
+
+L'état appartient au message. Changer de variante de réponse ou régénérer restaure la fiche d'avant le tour pour éviter les doubles dépenses. **Edit sheet** utilise le même éditeur et les mêmes catalogues que la carte pour la configuration, les listes, l'entraînement et les bonus, avec valeurs en lecture seule et **Review** pour les nouveaux textes. **Save sheet** ne change que la copie de cette partie. Le bouton distinct **Edit Sheet** modifie toujours la fiche générale. Un paquet absent ou ancien affiche un avertissement et bloque les tests jusqu'à son rétablissement.
+
 ## Recruter et retirer des membres de l'équipe
 
 Le Game Master décide qui compose l'équipe au fil de l'histoire. Il n'existe pas de bouton "ajouter un compagnon". Le GM fait entrer ou sortir les membres de l'équipe par la narration, selon ce qui se passe dans la scène.

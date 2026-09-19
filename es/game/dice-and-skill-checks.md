@@ -118,6 +118,29 @@ Cuando cualquiera de las dos está activa, el banner muestra el modo junto a la 
 
 Puedes poner en cola tu propio `d20` desde el menú de dados antes de que ocurra la prueba. Cuando lo haces, la prueba de habilidad usa tu número tirado en lugar de tirar un dado nuevo. Tus modificadores de habilidad y de atributo se aplican igualmente por encima de él.
 
+<a id="games-that-use-a-ruleset"></a>
+
+## Partidas con un conjunto de reglas
+
+Elige el conjunto una sola vez en **Rules** al crear la partida; consulta [Elegir las reglas](getting-started.md#choosing-rules). Sin conjunto se mantienen las reglas anteriores, incluidas las reservas simples de éxitos sin dados explosivos ni otras reglas especiales.
+
+- El GM indica la habilidad o salvación y una dificultad de la escala del conjunto. Esta puede superar 1–40; la resolución de emergencia de una prueba pendiente en un turno guardado sigue limitada a 1–40.
+- El motor tira los dados del conjunto. El modificador sale de su ficha: atributo, entrenamiento (múltiplo de competencia, valor fijo o ambos) y bonificación adicional. No usa los atributos ni las bonificaciones de habilidad integrados.
+- `who="Name"` selecciona un compañero; sin ese campo se usa al jugador. Un compañero sin ficha recibe valores predeterminados. Un nombre desconocido o ambiguo produce una tirada sin modificador. El nombre de la persona siempre identifica al jugador, aunque coincida con un compañero. Nunca se toma prestada otra ficha.
+- Los resultados naturales dependen del conjunto. En 5e (SRD 5.1), un 20 o un 1 natural no tiene efecto especial en pruebas ni salvaciones; un 20 puede fallar.
+- Los números escritos por el GM se validan. Un modificador, cantidad o tipo de dados, dado elegido o resultado natural no válido provoca una nueva tirada que sustituye el resultado.
+- Una tirada manual previa solo se reutiliza para una d20 individual. Otros dados, como 2d6 o una reserva, se vuelven a tirar.
+- `with="Ability"` permite usar otro atributo declarado por el conjunto; los desconocidos se ignoran. Los marcadores de tirada pueden nombrar atributos, habilidades, salvaciones y `PROF` si existe bonificación de competencia.
+- Si falta el paquete o es demasiado antiguo, la prueba queda pendiente y sin números. El motor no la resuelve con otro sistema. Consulta los recursos, estados y descansos en [La ficha del conjunto](party-and-npcs.md#the-ruleset-sheet).
+
+### Conjuntos con reservas de dados
+
+La puntuación de la ficha determina cuántos dados se tiran: atributo 3 y habilidad 2 dan cinco dados. El editor y el contexto del GM muestran "5 dice" en lugar de "+5". La dificultad es el número de éxitos necesario, por ejemplo tres, no una suma de 15.
+
+El conjunto define el umbral, éxitos dobles, explosiones, cancelaciones por resultados bajos, pifias y éxitos excepcionales. La tarjeta muestra todos los dados, destaca los éxitos y compara su cantidad con el objetivo. Las reservas grandes ocupan más filas sin encoger los dados ni mostrar una suma ficticia.
+
+El GM solo puede modificar el umbral de cada dado o el tamaño de la reserva dentro de los límites del conjunto. Los resultados inventados por el modelo siempre se sustituyen por tiradas reales. No se aplican ventaja, tiradas manuales previas ni la vista previa de d20 del GM; el motor tira la reserva sin mostrarla de antemano.
+
 ## Guías relacionadas
 
 - [Game Mode: Combate](combat.md)

@@ -122,6 +122,8 @@
 
 这里设置的数值是新聊天的起始默认值，本身不会自动变化。想让它们自动更新，需要在聊天里启用对应的智能体。完整说明见[角色颜色与 RPG 属性](colors-and-stats.md)。
 
+安装了 Game Mode 规则集，或 Persona 仍保存其角色表时，两部分下方会出现 **Ruleset sheets**。这是 Persona 在各规则集下的初始配置，会复制到新游戏中。参见[规则集角色表](colors-and-stats.md#ruleset-sheets)。
+
 ## 版本历史
 
 每次保存对用户角色字段的改动，Marinara 都会自动存一份快照。**Metadata** 选项卡上的 **Version history** 面板会按时间戳列出这些保存过的版本。

@@ -13,6 +13,14 @@ Jeśli piszesz do zespołu po pomoc, najpierw włącz **Debug mode** (tryb diagn
 
 ## Problemy z instalacją i uruchamianiem
 
+### Termux: brak pamięci podczas budowania klienta
+
+Jeśli Vite kończy pracę z `Reached heap limit` lub `JavaScript heap out of memory`, zabrakło pamięci sterty Node.js podczas budowania klienta. To inny problem niż brak natywnego pliku Rollup. Zaktualizuj aplikację i uruchom ponownie `start-termux.sh`: budowanie klienta tymczasowo podnosi mniejszy automatyczny limit sterty w kierunku 1536 MiB, nie przekraczając połowy znanej pamięci RAM urządzenia, z dolną granicą 1024 MiB. Serwer zachowuje mniejszy limit zależny od profilu. Jawny limit w `NODE_OPTIONS` ma pierwszeństwo dla obu procesów; sprawdź, czy nie pozostało tam wcześniejsze ograniczenie 1024 MiB.
+
+Limit wynikający z RAM jest zaokrąglany w dół do wielokrotności 128 MiB. Jeżeli połowa pamięci urządzenia jest mniejsza niż 1024 MiB, pierwszeństwo ma dolna granica 1024 MiB.
+
+Przed ponowną próbą zamknij inne aplikacje. Na urządzeniach z małą pamięcią nadal może jej zabraknąć lub Android może zatrzymać proces; do zgłoszenia dołącz pełny zapis uruchamiania. Nie usuwaj czatów ani profilu, aby naprawić błąd budowania.
+
 ### Pusta strona lub JavaScript zwracany jako HTML po aktualizacji
 
 Błąd taki jak "Failed to load module script" z typem MIME `text/html` może oznaczać, że przeglądarka zażądała pliku JavaScript, którego brakuje w zainstalowanej kompilacji. Ostrzeżenie o zamknięciu poprzedniej sesji nie wskazuje tej przyczyny, a usunięcie blokady zapisu (writer lease) lub własnych danych nie naprawi plików aplikacji.

@@ -42,6 +42,20 @@ Game Mode 是 Marinara 的聊天模式之一，另外两种是 Conversation(对�
 
 在 Tactical 游戏中留空战场选项，GM 会选择符合场景的简述，引擎据此生成棋盘。固定种子可在遭遇输入相同时复现生成结果；地形指引则向 GM 请求残墙或林间空地等要素。移动规则、地形加成和生成失败说明见 [Game Mode：战斗](combat.md#tactical-battles-and-terrain)。
 
+<a id="choosing-rules"></a>
+
+### 选择规则
+
+只有安装了至少一个规则集，创建游戏时才会出现 **Rules**（规则）。它决定检定和角色表的规则；**Combat Preference** 单独决定战斗的呈现方式。默认的 **Marinara's own rules** 使用内置 d20 检定和六项属性。每个规则集（如 **5e (SRD 5.1)**）都会说明覆盖范围。如果不包含战斗，向导会说明仍使用 Marinara Engine 的战斗规则，并保留所选战斗偏好。游戏开始后不能添加或更换规则集。
+
+部分规则集提供 **layers**（层），即 Low magic、Hard winter 等具名变体。开关会说明其效果：调整难度、缩小角色表选项范围、隐藏目录条目，以及为 GM 和世界创建提供指引。互斥的层不能同时选择。选择会固定到游戏结束；角色表中已经保存的值不会因层将其移出选项而丢失。
+
+通过 **Download Agents** 安装标为 **Rules** 的官方规则集。社区规则集可从文件或作者的 GitHub 仓库导入，ID 带有来源前缀，如 `local/ember-roads` 或 `alice/v20`。这需要启用 **Allow custom Agent imports**。关闭后，社区规则集不再出现在新游戏的选项中，但已有游戏仍使用原先固定的版本。编写方法见[编写规则集](../extending/writing-rulesets.md)。
+
+**Party** 步骤会为 Persona 和队友显示 **Has a sheet**（已有角色表）或 **Starts on a blank sheet**（从空白角色表开始）。在角色或 Persona 编辑器的 **Stats** 中添加角色表，详见[规则集角色表](../characters/colors-and-stats.md#ruleset-sheets)。创建世界时，游戏会复制这些表；游戏内的修改不会写回角色卡。没有角色表时使用规则集默认值，不让 AI 编造数值。
+
+导出的游戏配置会记住规则集。导入时若缺失或版本过旧，向导会警告并改用 Marinara Engine 自身规则，除非你安装并选中正确的规则集。
+
 ### 值得先了解的默认值
 
 下面是 **World**、**Party**、**Features** 三步里的初始值，全部都能改。

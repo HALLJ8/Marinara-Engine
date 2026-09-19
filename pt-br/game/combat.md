@@ -41,6 +41,14 @@ O combate nunca começa por sua iniciativa. É o GM que inicia a luta quando a h
 
 A tela de batalha mostra a equipe de um lado e os inimigos do outro. Cada combatente tem uma barra de vida (HP, pontos de vida) e, se usar habilidades, uma barra de magia (MP, pontos de magia). A ordem dos turnos aparece no topo, como **Next:** seguido do nome de quem age em seguida. Um contador mostra **Round** e o número da rodada atual.
 
+<a id="games-that-use-a-ruleset"></a>
+
+### Partidas com um conjunto de regras
+
+Se o conjunto permite que o combate use sua [ficha](party-and-npcs.md#the-ruleset-sheet), a batalha começa com os recursos e espaços atuais. Habilidades de catálogo só entram se o combate do Marinara Engine puder executá-las. Entradas fora de combate, reações e custos incompatíveis são ignorados.
+
+A saúde passa como proporção do máximo: metade na ficha significa meia barra na batalha. Ao terminar, essa proporção volta à ficha; recursos e espaços são transferidos diretamente. O cálculo continua sendo o combate integrado, sem rolagens de ataque, salvaguarda ou concentração do sistema de mesa. Excluir a mensagem que iniciou a batalha não grava resultados na ficha. Sem declaração de combate, as regras descritas aqui não mudam.
+
 ## O menu de ações
 
 No seu turno, escolha uma ação do menu. As seis ações são:

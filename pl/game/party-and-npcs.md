@@ -49,6 +49,25 @@ Kliknij przycisk **Edit Sheet** (edycja arkusza), żeby poprawić arkusz samodzi
 
 Na koniec kliknij przycisk **Save Sheet** (zapisanie arkusza). Przycisk **Cancel** odrzuca wprowadzone zmiany.
 
+<a id="the-ruleset-sheet"></a>
+
+### Arkusz zestawu zasad
+
+W [grze z zestawem zasad](dice-and-skill-checks.md#games-that-use-a-ruleset) arkusz każdej postaci zaczyna się od **Ruleset sheet** (arkusz zestawu zasad). Jego układ zależy od systemu; bez zestawu tego bloku nie ma.
+
+- **Resources** (zasoby) pokazują stan i maksimum, np. zdrowia, komórek zaklęć lub zasobu klasy. Użyj plusa, minusa lub wpisz liczbę. **Temp** oznacza bufor tymczasowy.
+- **Tracks** (liczniki) zmieniają się w swoim zakresie, np. wyczerpanie.
+- **Notes** (notatki) to krótkie pola, np. na koncentrację.
+- **Conditions** (stany) włącza się i wyłącza przyciskami.
+- Przyciski odpoczynku przywracają to, co określa zestaw. Długi odpoczynek w 5e (SRD 5.1) odnawia zdrowie, komórki zaklęć i połowę kości wytrzymałości, co najmniej jedną.
+- Niżej znajduje się podsumowanie cech, wyszkolonych umiejętności i rzutów obronnych oraz wybranych wartości, np. klasy pancerza.
+
+GM zapisuje wydawanie zasobów, obrażenia, leczenie, stany i odpoczynki; silnik sprawdza zmiany. Niedozwolona zmiana, np. zaklęcie bez wolnej komórki, zostaje odrzucona z komunikatem, bez zmiany stanu.
+
+Użycie wpisu katalogu opłaca cały koszt oraz po jednym użyciu każdego dołączonego licznika. Komórka zaklęcia ma poziom wskazany w zestawie; GM może poprosić o wyższy, ale silnik nigdy nie podnosi go sam. Brak dowolnego składnika odrzuca całą operację bez wydatków. Darmowe działanie, np. sztuczka, jest tylko opisywane. Maksima zasobów zależne od poziomu i użycia zależne od cech przeliczają się przy edycji arkusza.
+
+Stan należy do wiadomości: zmiana wariantu odpowiedzi lub regeneracja cofa arkusz do stanu sprzed tury, aby niczego nie wydać dwa razy. **Edit sheet** (edytuj arkusz) zmienia konfigurację, listy, wyszkolenie i premie. Używa tego samego edytora i katalogów co karta, z komórkami tylko do odczytu i przyciskiem **Review** dla nowszych opisów. **Save sheet** (zapisz arkusz) zmienia wyłącznie kopię tej gry. Osobny **Edit Sheet** nadal edytuje ogólny arkusz, nie arkusz zestawu. Brak pakietu lub zbyt stara wersja wyświetla ostrzeżenie i blokuje rzuty do czasu przywrócenia pakietu.
+
 ## Werbowanie i usuwanie członków drużyny
 
 O składzie drużyny decyduje postać Game Master w miarę rozwoju historii. Nie ma osobnego przycisku dodawania towarzysza. Zamiast tego postać GM dodaje i usuwa członków drużyny przez samą narrację, zgodnie z tym, co dzieje się w scenie.

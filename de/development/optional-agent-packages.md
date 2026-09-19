@@ -234,6 +234,131 @@ Am Desktop steht neben der Übersichtsliste ein Detailbereich. Auf dem Handy gib
 
 Eine Auslagerung gilt erst dann als abgeschlossen, wenn die produktiven Basis-Bundles von Client und Server die Paket-Implementierung nicht mehr enthalten, eine frische Installation sie ohne Download des Pakets nicht aktivieren kann, eine aktualisierte Installation sie behält und Installation, Update und Deinstallation des Pakets am Desktop, auf dem Handy und auf Termux-kompatiblen Dateisystemen durchlaufen.
 
+### Capability API 1.20: Game Mode-Regelsätze
+
+Ein Regelsatz liefert validierte Daten: eine von der Engine unterstützte Probenauflösung, einen Bogen aus fest definierten Bausteinen, Rasten und GM-Hinweise. Die reservierte Datei `ruleset.json` wird wie `gm-verbs.json` über `contributions.assets.paths` erkannt und in `files[]` mit Hash erfasst.
+
+```json
+{
+  "schemaVersion": 2,
+  "capabilityApi": { "major": 1, "minor": 20 },
+  "id": "ruleset-5e-2014",
+  "kind": ["ruleset"],
+  "permissions": [],
+  "entrypoints": {},
+  "contributions": { "assets": { "paths": ["ruleset.json"] } },
+  "files": [{ "path": "ruleset.json", "sha256": "<sha256 of the file>", "bytes": 25767 }]
+}
+```
+
+Das Beispiel zeigt nur regelsatzrelevante Felder; `name`, `version`, `description`, `engine` und `builtAgainst` bleiben Pflicht. Berechtigungen, Agenten und Client- oder Server-Einstiegspunkte sind nicht nötig. Der Typ `ruleset` und `ruleset.json` setzen einander voraus. Die Datei führt weder Code noch Ausdruckszeichenfolgen aus; neue Auflösungsmechaniken brauchen Engine-Änderungen. Format und 5e-Beispiel stehen in [`game-rulesets-and-sheets-implementation.md`](game-rulesets-and-sheets-implementation.md).
+
+Das ist eine feste Kompatibilitätsgrenze: Der Manifest-Eintrag verlangt API 1.20; ältere Engines verweigern die Installation. Die Engine lehnt deklarierte Größen über 256 KB vor dem Lesen ab, prüft den Installationshash erneut und validiert gegen `packages/shared/src/schemas/ruleset.schema.ts`. Ungültige Dateien werden mit einem Logeintrag zu Paket und ersten `path: message`-Fehlern übersprungen. Bei doppelten IDs gewinnt das erste Paket in der Reihenfolge der Paket-IDs; das andere wird mit einem Logeintrag übersprungen. `engine-legacy` und `traditional` sind reserviert.
+
+Das Spiel speichert die Auswahl einmal in `chat.metadata.gameRuleset`. Ohne Bindung gelten die bisherigen Regeln. Fehlende oder ältere Definitionen machen den Regelsatz nicht verfügbar, ohne ihn zu ersetzen. Die Bindung prüft Regelsatz-ID und Anbieterpaket, sodass ein anderes Paket das Spiel nicht durch eine gleiche ID übernehmen kann.
+
+### Capability API 1.21: Regelsatzkataloge
+
+Kataloge liefern fertige Zauber, Klassenfähigkeiten und Ausrüstung für die Bogenauswahl. Der Kopf steht in `ruleset.json` unter `catalogs`; Einträge stehen inline oder in einer reservierten Datei:
+
+```json
+{
+  "capabilityApi": { "major": 1, "minor": 21 },
+  "kind": ["ruleset"],
+  "contributions": { "assets": { "paths": ["ruleset.json", "catalogs/spells.json"] } },
+  "files": [
+    { "path": "ruleset.json", "sha256": "<sha256>", "bytes": 25767 },
+    { "path": "catalogs/spells.json", "sha256": "<sha256>", "bytes": 418204 }
+  ]
+}
+```
+
+`catalogs/<id>.json` muss zur Katalog-ID passen und darf nicht auf einen fremden Katalog zeigen. Die Datei braucht einen Hash in `files[]` und das deklarierende `ruleset.json`. Deklarierte Größen über 1 MB werden vor dem Lesen abgelehnt. Inline- und Dateieinträge werden gegen denselben Bogen geprüft. Grenzen: 12 Kataloge je Regelsatz, 2000 Einträge je Katalog.
+
+Der Client lädt Inhalte erst beim Öffnen der Auswahl über `GET /api/capability-packages/rulesets/catalog?rulesetId=&catalogId=&version=`. Die installierte Liste enthält nur Anzahlen. Katalogtext wird nicht automatisch in Prompts eingefügt; der GM sieht nur die von `gm.sheetSummary` gewählten Angaben. Katalogdateien verlangen API 1.21. Der Installer prüft auch `catalogs` im hashgeprüften `ruleset.json`; ein älteres striktes Schema würde die ganze Datei ablehnen. Keine Berechtigungen nötig.
+
+### Capability API 1.22: battle-Block
+
+Der optionale Block `battle` benennt Gesundheit, optional MP, Zauberplatzpools und Listen, deren Katalogzeilen zu `CombatSkill` werden. Nach dem Kampf werden Werte mit denselben Bogenoperationen zurückgeschrieben wie bei Spieleraktionen.
+
+```json
+{
+  "capabilityApi": { "major": 1, "minor": 22 },
+  "kind": ["ruleset"],
+  "contributions": { "assets": { "paths": ["ruleset.json"] } }
+}
+```
+
+Das verbindet Daten mit dem Engine-Kampf und ist kein vollständiger Tischrollenspieladapter. Die eingebaute Schadensberechnung liest weder `attackRoll`, `save`, `concentration` noch `perCostStep`. Systemgetreue Kämpfe gehören zur getrennten Adapteranbindung. `coverage.combat` bleibt unabhängig und wird von dieser Verbindung nicht gelesen. Der Installer prüft hashgeprüftes `ruleset.json` und lehnt `battle` unter API 1.22 ab, wie `catalogs` unter 1.21. Ohne Berechtigungen; Regelsätze ohne Block bleiben unverändert.
+
+### Capability API 1.23: skalierte Katalogwerte
+
+`scaled` ordnet einer Katalogzeile bis zu vier eigene Zahlenspalten zu, die der Regelsatz verwaltet. Jede verwendet eine vorhandene Wertreferenz und optional eine Stufentabelle, etwa für stufenabhängige Ressourcen oder attributabhängige Nutzungen, ohne neue Rechenoperationen.
+
+```json
+{
+  "capabilityApi": { "major": 1, "minor": 23 },
+  "kind": ["ruleset"],
+  "contributions": { "assets": { "paths": ["ruleset.json", "catalogs/spells.json"] } }
+}
+```
+
+Die Berechnung geschieht beim Bearbeiten, nicht beim Lesen. Spielzustand, GM-Prompt und Kampf lesen die gespeicherte Zahl. Inline-Zeilen und `catalogs/<id>.json` werden als Manifest-Dateien anhand ihres geprüften Inhalts kontrolliert; `scaled` verlangt API 1.23. Keine neuen Berechtigungen oder Änderungen an unskalierten Katalogen.
+
+Zusätzlich bezahlt `[sheet: op="use" name="..."]` die `mechanics.cost` eines Eintrags und eine Nutzung jedes von ihm angelegten Zeilenpools. Der Befehl braucht keine neue Deklaration, da er vorhandene Kataloge nutzt.
+
+### Capability API 1.24: Würfelpools
+
+`resolution` kann `"kind": "dice-pool"` statt `"dice-sum"` angeben. Der Bogenwert zählt Würfel; Ergebnisse ab der Schwelle zählen als Erfolge. Der Regelsatz kann doppelte Erfolge, Explosionen, gestrichene Erfolge, Patzer, außergewöhnliche Erfolge und Grenzen für situative Pooländerungen des GM festlegen.
+
+```json
+{
+  "capabilityApi": { "major": 1, "minor": 24 },
+  "kind": ["ruleset"],
+  "contributions": { "assets": { "paths": ["ruleset.json"] } }
+}
+```
+
+Der Bogen bleibt gleich: Der bisherige Summenmodifikator wird zur Würfelanzahl. Keine neuen Bogentypen, Editor-Slots oder Paketcodes. Der Installer lehnt `dice-pool` in geprüftem `ruleset.json` unter API 1.24 ab; ältere Engines mit nur `dice-sum` würden die ganze Datei ablehnen. Keine Berechtigungen oder Änderungen für Summenregelsätze.
+
+### Capability API 1.25: Ebenen und Welthinweise
+
+Optionale `layers` sind benannte Varianten, die bei Spielbeginn ausgewählt und dauerhaft in der Bindung gespeichert werden. `gm.worldGuidance` wird einmal bei der Welterstellung gelesen, damit die Welt zu den Gruppenregeln passt.
+
+```json
+{
+  "capabilityApi": { "major": 1, "minor": 25 },
+  "kind": ["ruleset"],
+  "contributions": { "assets": { "paths": ["ruleset.json"] } }
+}
+```
+
+Die geschlossene Effektmenge kann Hinweise nach den Regelsatzhinweisen ergänzen, Enum-Werte entfernen, die Schwierigkeitsskala durch eine zum selben Auflösungstyp passende ersetzen und Katalogeinträge ausblenden. Neue Bogenelemente sind nicht erlaubt; vorhandene Bögen bleiben mit jeder Ebenenauswahl lesbar. Kein Paketcode, kein zusätzlicher Modellaufruf. Fremde Ebenen sind für später vorgesehen. Beide Felder verlangen nach Inhaltsprüfung API 1.25. Keine Berechtigungen oder Änderungen für Regelsätze ohne diese Felder.
+
+### Capability API 1.26–1.27: Kampfformat und Kreaturenkataloge
+
+API 1.26 ergänzt `combat` für Würfe, Ziele, Aktionsbudget, Angriffs- und Fähigkeitslisten, Zustände, Konzentration, Verhalten bei null Gesundheit, Schadenstypen und Gegnerstufen. Katalog-`mechanics` kann Ziele, sichere Treffer, Zustände, temporäre Punkte, Bogenskalierung und Budgetverbrauch beschreiben.
+
+```json
+{
+  "capabilityApi": { "major": 1, "minor": 26 },
+  "kind": ["ruleset"],
+  "contributions": { "assets": { "paths": ["ruleset.json"] } }
+}
+```
+
+API 1.27 erlaubt `"holds": "creatures"`. Kreaturenwerte verwenden `combat`: feste oder zu Kampfbeginn gewürfelte Gesundheit, Verteidigung, Initiative, Attribute und Rettungswürfe mit Bogen-IDs, Resistenzen, Schwächen, Immunitäten, Gefahrenstufe und GM-Merkmale. Aktionen können treffen, Rettungswürfe verlangen, Zustände anwenden, begrenzte Nutzungen haben, sich durch Würfe aufladen, mehrere Aktionen mit einem Budget ausführen oder eigene Spezialpunkte verbrauchen.
+
+```json
+{
+  "capabilityApi": { "major": 1, "minor": 27 },
+  "kind": ["ruleset"],
+  "contributions": { "assets": { "paths": ["ruleset.json", "catalogs/beasts.json"] } }
+}
+```
+
+Kreaturenkataloge haben kein `feeds` und erscheinen nicht in der Bogenauswahl. Diese Versionen liefern Format und gemeinsame Auflösung. Der Server kann Regelsatzkämpfe bereits ausführen und speichern, einschließlich Bogenänderungen nach jeder Aktion. Der zugehörige Kampfbildschirm fehlt noch; Spieler verwenden weiterhin die bestehende Kampfoberfläche. Nach Hashprüfung von `ruleset.json` und deklarierten `catalogs/<id>.json` lehnt der Installer `combat` und neue `mechanics`-Schlüssel unter 1.26 sowie `holds` und `creature` unter 1.27 ab. Ältere strikte Schemas würden die Dateien ablehnen. Keine neuen Berechtigungen oder Änderungen für Regelsätze ohne diese Felder.
+
 ### Capability API 1.18: Experience-Einrichtung im Game-Assistenten
 
 Ein `game-surface`-Paket kann mit Schemaversion 2 und Capability API 1.18 `contributions.gameSurface.setup` deklarieren. Die Engine behält ihre üblichen sieben Einrichtungsschritte bei, einschließlich **Party** (Gruppe), Zielen, Modellen und Lorebooks. Experiences werden nur für neue Spiele angeboten; beim erneuten Öffnen der Einrichtung eines bestehenden Spiels bleiben dessen Experience und Paketkonfiguration erhalten. Pakete ohne diese Deklaration behalten ihren bisherigen Einrichtungsdialog.

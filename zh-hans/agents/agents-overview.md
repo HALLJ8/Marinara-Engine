@@ -28,6 +28,8 @@
 
 目录里收录了官方聊天智能体、World Maps、Conversation 的音视频通话，以及全部可选的 Conversation 游戏。已安装的智能体会分成 **Writer Agents**(写作智能体)、**Tracker Agents**(追踪器智能体) 和 **Misc Agents**(其他智能体) 三组，自己做的则放在 **Custom Agents**(自定义智能体) 分区。卸载目录里的包，会从 Engine 中删掉它的代码和设置，聊天消息和历史记录仍然保留。删除自定义智能体则是彻底删除。
 
+标为 **Rules** 的包提供 Game Mode 规则集（如 5e (SRD 5.1)），而不是智能体，因此不计入上文的智能体数量。创建游戏时在 **Rules** 中选择，参见[选择规则](../game/getting-started.md#choosing-rules)。它没有按聊天启用的开关。5e 包仍是预览版，目前只出现在 `staging` 分支 Engine 的目录中。
+
 从内置这些功能的旧版 Engine 升级上来时，Marinara 会把对应的包下载一次，并保留已有的聊天选择、智能体设置、存储的运行时数据和历史记录。如果这次迁移连不上目录，它会在下次启动时重试，不会丢弃任何东西。
 
 启动时的自动更新绝不会安装你没有选择的包。桌面端、Docker 和 Android/Termux 安装会更新本地服务器保存的包。iOS、iPadOS 和其他浏览器客户端使用的，是它们所连接的那台 Marinara 服务器安装并更新的包。

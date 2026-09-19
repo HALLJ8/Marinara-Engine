@@ -42,6 +42,20 @@ Na koniec kliknij przycisk **Start Game** (rozpoczęcie gry).
 
 W grach Tactical puste opcje pola bitwy pozwalają postaci GM dobrać opis do sceny, a silnikowi wygenerować planszę. Stałe ziarno pozwala odtworzyć wynik dla tych samych danych starcia; wskazówki dotyczące terenu proszą postać GM o elementy takie jak zrujnowana ściana czy polana. Zasady ruchu, premie terenu i błędy generowania opisuje przewodnik [Game Mode: walka](combat.md#tactical-battles-and-terrain).
 
+<a id="choosing-rules"></a>
+
+### Wybór zasad
+
+Pole **Rules** (zasady) pojawia się tylko przy tworzeniu gry i tylko wtedy, gdy jest zainstalowany przynajmniej jeden zestaw zasad. Określa działanie testów i arkuszy postaci; osobne **Combat Preference** wybiera sposób prezentacji walki. Domyślne **Marinara's own rules** to wbudowane testy d20 i arkusz sześciu atrybutów. Zestaw, np. **5e (SRD 5.1)**, opisuje swój zakres. Jeżeli nie obejmuje walki, kreator wyjaśnia, że pozostaje walka aplikacji Marinara Engine, zgodna z wybranym **Combat Preference**. Po rozpoczęciu gry zestawu nie można dodać ani zmienić.
+
+Niektóre zestawy oferują **layers** (warstwy), czyli nazwane warianty, np. Low magic lub Hard winter. Przełączniki opisują ich działanie: mogą zaostrzać trudności, zawężać wybór w arkuszu, ukrywać wpisy katalogu i dodawać wskazówki dla GM, także podczas tworzenia świata. Kreator wyłącza wzajemnie sprzeczne warstwy. Wybór pozostaje stały przez całą grę, a istniejący arkusz zachowuje wartości wykluczone przez warstwę.
+
+Oficjalne zestawy instaluje się przez **Download Agents**, gdzie mają oznaczenie **Rules**. Zestawy społeczności można importować z pliku lub repozytorium GitHub autora; otrzymują identyfikator źródła, np. `local/ember-roads` lub `alice/v20`. Wymagają **Allow custom Agent imports**. Wyłączenie tej opcji ukrywa je w nowych grach, ale istniejące nadal działają na dokładnie tej wersji, z którą powstały. Własny zestaw opisuje przewodnik [Tworzenie zestawów zasad](../extending/writing-rulesets.md).
+
+Krok **Party** pokazuje personę i członków drużyny z oznaczeniem **Has a sheet** (ma arkusz) lub **Starts on a blank sheet** (zaczyna z pustym arkuszem). Arkusz dodaje się w **Stats** edytora postaci lub persony; zobacz [Arkusze zestawów zasad](../characters/colors-and-stats.md#ruleset-sheets). Przy tworzeniu świata gra kopiuje te arkusze. Zmiany w grze nie wracają na kartę; brak arkusza oznacza wartości domyślne zestawu, a nie wyniki wymyślone przez AI.
+
+Eksport konfiguracji zapamiętuje zestaw. Jeżeli przy imporcie brakuje go lub jego wersja jest za stara, kreator pokazuje ostrzeżenie i używa zasad aplikacji Marinara Engine, chyba że zainstalujesz i wybierzesz właściwy zestaw.
+
 ### Wartości domyślne, które warto znać
 
 Oto wartości startowe w krokach **World**, **Party** i **Features**. Każdą z nich można zmienić.

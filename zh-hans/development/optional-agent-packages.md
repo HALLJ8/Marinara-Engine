@@ -217,6 +217,131 @@ Agents(智能体) 面板里有一个 `Download Agents` 控件，与 Card Browser
 
 只有同时满足以下几点，抽离才算完成：基础版的生产客户端和服务器打包产物里不再含有该包的实现；全新安装的应用不下载这个包就无法激活它；升级上来的安装仍然保留它；而且包的安装、更新、卸载在桌面端、移动端和 Termux 兼容的文件系统上都能跑通。
 
+### Capability API 1.20：Game Mode 规则集
+
+规则集提供经验证的数据：Engine 已支持的检定方式、由固定元素组成的角色表、休息和 GM 指引。保留资源 `ruleset.json` 与 `gm-verbs.json` 一样，通过 `contributions.assets.paths` 发现，并在 `files[]` 中记录哈希。
+
+```json
+{
+  "schemaVersion": 2,
+  "capabilityApi": { "major": 1, "minor": 20 },
+  "id": "ruleset-5e-2014",
+  "kind": ["ruleset"],
+  "permissions": [],
+  "entrypoints": {},
+  "contributions": { "assets": { "paths": ["ruleset.json"] } },
+  "files": [{ "path": "ruleset.json", "sha256": "<sha256 of the file>", "bytes": 25767 }]
+}
+```
+
+示例只列出规则集相关字段；`name`、`version`、`description`、`engine`、`builtAgainst` 仍为必填。不需要权限、智能体或客户端、服务器入口。`ruleset` 类型与 `ruleset.json` 必须同时存在。文件不执行代码或字符串表达式；新的检定机制需要修改 Engine。格式及 5e 示例见 [`game-rulesets-and-sheets-implementation.md`](game-rulesets-and-sheets-implementation.md)。
+
+清单必须声明 API 1.20，旧 Engine 会拒绝安装。Engine 在读取前拒绝声明大小超过 256 KB 的文件，再检查安装哈希，并按严格模式 `packages/shared/src/schemas/ruleset.schema.ts` 验证。无效文件会跳过，并用一条日志指出包及最先出现的 `path: message` 错误。ID 重复时，按包 ID 顺序保留第一个包，跳过另一个并记录日志。`engine-legacy` 与 `traditional` 为保留 ID。
+
+游戏在 `chat.metadata.gameRuleset` 中保存一次选择。没有绑定时继续使用旧规则。包缺失或定义版本过旧时，规则集不可用，不会换成其他规则。绑定同时检查规则集 ID 和提供包，防止另一个包用相同 ID 接管游戏。
+
+### Capability API 1.21：规则集目录
+
+目录为角色表编辑器提供现成法术、职业能力和装备。头信息位于 `ruleset.json` 的 `catalogs` 中；条目可内联，也可使用保留资源：
+
+```json
+{
+  "capabilityApi": { "major": 1, "minor": 21 },
+  "kind": ["ruleset"],
+  "contributions": { "assets": { "paths": ["ruleset.json", "catalogs/spells.json"] } },
+  "files": [
+    { "path": "ruleset.json", "sha256": "<sha256>", "bytes": 25767 },
+    { "path": "catalogs/spells.json", "sha256": "<sha256>", "bytes": 418204 }
+  ]
+}
+```
+
+`catalogs/<id>.json` 必须对应自己的目录 ID，不能指向其他目录。文件需要 `files[]` 中的哈希，以及声明它的 `ruleset.json`。声明大小超过 1 MB 会在读取前被拒绝。内联和外部条目使用相同角色表验证。每个规则集最多 12 个目录，每个目录最多 2000 条。
+
+客户端在打开选择器时才通过 `GET /api/capability-packages/rulesets/catalog?rulesetId=&catalogId=&version=` 加载内容。安装列表只包含条目数量。目录文本不会自动进入提示词；GM 只看到 `gm.sheetSummary` 选择的内容。目录资源及经哈希验证的 `ruleset.json` 内的 `catalogs` 均要求 API 1.21。旧的严格模式会拒绝整个文件。不需要权限。
+
+### Capability API 1.22：battle 块
+
+可选 `battle` 指定生命池、可选 MP 池、法术位池，以及哪些列表的目录行变成 `CombatSkill`。战后通过与玩家按钮相同的角色表操作写回数值。
+
+```json
+{
+  "capabilityApi": { "major": 1, "minor": 22 },
+  "kind": ["ruleset"],
+  "contributions": { "assets": { "paths": ["ruleset.json"] } }
+}
+```
+
+这是角色表与 Engine 战斗的数据连接，不是完整桌面规则适配器。伤害仍由内置机制计算，不读取 `attackRoll`、`save`、`concentration` 或 `perCostStep`。精确的系统规则属于另一项适配器接入工作。`coverage.combat` 保持独立含义，此连接不读取它。安装时检查经验证的 `ruleset.json`；`battle` 要求 API 1.22，正如 `catalogs` 要求 1.21。不需要权限，不影响没有该块的规则集。
+
+### Capability API 1.23：随角色变化的目录数值
+
+目录行可用 `scaled` 指定最多四个由规则集维护的自有数字列。每列使用现有数值引用及可选阶梯表，例如按等级计算资源或按属性计算次数，不新增算术机制。
+
+```json
+{
+  "capabilityApi": { "major": 1, "minor": 23 },
+  "kind": ["ruleset"],
+  "contributions": { "assets": { "paths": ["ruleset.json", "catalogs/spells.json"] } }
+}
+```
+
+数值在编辑时计算，不在读取时计算。游戏状态、GM 提示词及战斗读取保存的数字。行可位于 `ruleset.json` 或 `catalogs/<id>.json`；安装器检查这些清单资源的已验证内容，`scaled` 要求 API 1.23。不增加权限，不影响未使用缩放的目录。
+
+`[sheet: op="use" name="..."]` 支付条目的 `mechanics.cost`，并扣除该条目创建的每个行资源池的一次使用。它只读取已支持的目录，无需新的声明。
+
+### Capability API 1.24：骰池
+
+`resolution` 可用 `"kind": "dice-pool"` 代替 `"dice-sum"`。角色表数值决定骰子数，引擎统计达到阈值的结果。规则集可定义双倍成功、爆骰、成功抵消、大失败、卓越成功及 GM 情境修正的范围。
+
+```json
+{
+  "capabilityApi": { "major": 1, "minor": 24 },
+  "kind": ["ruleset"],
+  "contributions": { "assets": { "paths": ["ruleset.json"] } }
+}
+```
+
+角色表不变：原本用于求和的修正值在此表示骰子数。不新增表元素、编辑器槽位或包代码。经验证的 `ruleset.json` 中，`dice-pool` 要求 API 1.24；仅支持 `dice-sum` 的旧 Engine 会拒绝整个文件。不需要权限，不影响求和规则集。
+
+### Capability API 1.25：层与世界指引
+
+可选 `layers` 是创建时选择并固定在游戏绑定中的具名变体。`gm.worldGuidance` 在创建世界时读取一次，使世界符合队伍规则。
+
+```json
+{
+  "capabilityApi": { "major": 1, "minor": 25 },
+  "kind": ["ruleset"],
+  "contributions": { "assets": { "paths": ["ruleset.json"] } }
+}
+```
+
+允许的效果是封闭集合：在规则集指引后追加指引、删除枚举值、将难度表替换为相同检定类型的表，以及在选择器中隐藏目录条目。不能添加表元素，因此任何层组合下的角色表都仍可读取。没有包代码或额外模型调用。第三方层留待后续支持。安装器检查内容后，两个字段都要求 API 1.25。不需要权限，不影响未使用这些字段的规则集。
+
+### Capability API 1.26–1.27：战斗格式与生物目录
+
+API 1.26 添加可选 `combat`，定义掷骰、目标、行动预算、攻击与能力列表、状态、专注、零生命规则、伤害类型和敌人强度等级。目录 `mechanics` 可描述目标、必定命中、状态、临时点数、随角色表变化的数值及预算消耗。
+
+```json
+{
+  "capabilityApi": { "major": 1, "minor": 26 },
+  "kind": ["ruleset"],
+  "contributions": { "assets": { "paths": ["ruleset.json"] } }
+}
+```
+
+API 1.27 允许 `"holds": "creatures"`。生物数据使用 `combat` 的数值：固定或战斗开始时掷出的生命、防御、先攻、按角色表 ID 指定的属性与豁免、抗性、弱点、免疫、威胁等级及供 GM 阅读的特性。动作可以造成命中、要求豁免、施加状态、限制次数、通过掷骰充能、用一个预算执行动作序列，或消耗生物自身的特殊点数。
+
+```json
+{
+  "capabilityApi": { "major": 1, "minor": 27 },
+  "kind": ["ruleset"],
+  "contributions": { "assets": { "paths": ["ruleset.json", "catalogs/beasts.json"] } }
+}
+```
+
+生物目录不声明 `feeds`，也不出现在角色表选择器中。这些版本提供格式及共享结算机制。服务器已经能结算和保存规则集战斗，并在每个动作后更新角色表；相应战斗界面尚未推出，玩家仍使用现有战斗界面。安装器验证 `ruleset.json` 和声明的 `catalogs/<id>.json` 后，会在低于 1.26 时拒绝 `combat` 及新增 `mechanics` 键，在低于 1.27 时拒绝 `holds` 和 `creature`。旧的严格模式会拒绝文件。不新增权限，也不影响没有这些字段的规则集。
+
 ### Capability API 1.18：在 Game 向导中保留 Experience 设置
 
 `game-surface` 包可以使用架构版本 2 和 Capability API 1.18 声明 `contributions.gameSurface.setup`。Engine 保留通常的七个设置步骤，包括 **Party**(队伍)、目标、模型和世界书。只有新游戏提供 Experiences；重新打开已有游戏的设置会保留其 Experience 和包配置。没有此声明的包继续使用原有设置对话框。
