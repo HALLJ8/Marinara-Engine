@@ -171,6 +171,12 @@ const ENGINE_MAX_HP = 60;
   );
   refuses(
     emberText,
+    (doc) => (doc.battle.skills = [{ list: "knacks", alwaysWhen: { column: "name", equals: "Road Sense" } }]),
+    /battle\.skills\.0\.alwaysWhen: alwaysWhen is the exception to onlyWhen, so it needs onlyWhen beside it/,
+    "alone it would gate nothing and let every row through",
+  );
+  refuses(
+    emberText,
     (doc) => (doc.battle.skills = [{ list: "knacks", alwaysWhen: { column: "name", equals: 0 } }]),
     /battle\.skills\.0\.alwaysWhen\.equals: "name" is a text column, so equals must be a string/,
     "the exception compares against a value the column can hold",
@@ -391,6 +397,51 @@ const ENGINE_MAX_HP = 60;
     null,
     "hit points are not spendable as a cost, so the entry is not offered at all",
   );
+  // The Engine charges one number of energy, or one slot. A price it cannot charge in full makes the
+  // skill absent rather than cheaper than the sheet says.
+  assert.equal(
+    synthetic({
+      kind: "attack",
+      cost: [
+        { pool: "luck", amount: 1 },
+        { pool: "luck", amount: 2 },
+      ],
+    })!.mpCost,
+    3,
+    "several energy terms are one bill",
+  );
+  {
+    // The 5e example declares slot pools but ships no catalogs, so the probe brings its own header.
+    const withSpellCatalog = {
+      ...fiveE,
+      catalogs: [{ id: "spells", label: "Spells", feeds: ["spells"], entries: [] }],
+    } as typeof fiveE;
+    const slotProbe = (cost: RulesetCatalogMechanics["cost"]) => {
+      const entry: RulesetCatalogEntry = {
+        id: "probe",
+        label: "Probe",
+        rows: [{ list: "spells", values: { name: "Probe" } }],
+        mechanics: { kind: "attack", cost },
+      };
+      const rows = [{ name: "Probe", level: 1, prepared: true, _catalog: "spells/probe" }];
+      const sheet = build({ lists: { spells: rows } });
+      return combatSkillsFromSheet(withSpellCatalog, sheet, { spells: [entry] })[0] ?? null;
+    };
+    assert.equal(
+      slotProbe([{ pool: "slots_2", amount: 1 }])!.slotLevel,
+      2,
+      "exactly one slot is what the Engine spends",
+    );
+    assert.equal(slotProbe([{ pool: "slots_2", amount: 2 }]), null, "two slots of one level cannot be charged");
+    assert.equal(
+      slotProbe([
+        { pool: "slots_1", amount: 1 },
+        { pool: "slots_2", amount: 1 },
+      ]),
+      null,
+      "slots of two levels cannot be charged",
+    );
+  }
   assert.equal(
     synthetic({ kind: "attack", cost: [{ pool: "tricks", amount: 1 }] }),
     null,

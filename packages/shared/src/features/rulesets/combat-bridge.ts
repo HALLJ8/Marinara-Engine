@@ -218,22 +218,30 @@ function combatSkillFromEntry(
 
   let mpCost = 0;
   let slotLevel: number | undefined;
+  let slotTerms = 0;
+  let energyTerms = 0;
   for (const cost of mechanics.cost ?? []) {
     if (battle.energy && cost.pool === battle.energy.pool) {
-      mpCost = cost.amount;
+      // Several energy terms are one bill: the Engine spends a single number.
+      mpCost += cost.amount;
+      energyTerms += 1;
       continue;
     }
-    // The Engine spends exactly one slot per use, whatever a higher cost says, which is the closest
-    // honest reading of a slot cost it has.
     const slot = battle.slots?.find((entrySlot) => entrySlot.pool === cost.pool);
     if (slot) {
+      // The Engine spends exactly one slot per use, so only a cost of exactly one slot is carried.
+      if (cost.amount !== 1) return null;
       slotLevel = slot.level;
+      slotTerms += 1;
       continue;
     }
     // A cost on a pool group, on hit points, or on a class resource the bridge cannot map: the
     // Engine would use the entry for free, so it does not offer it at all.
     return null;
   }
+  // A skill with a slot level spends the slot INSTEAD of energy, so two slots, or a slot plus
+  // energy, is a price the Engine cannot charge in full. Better absent than cheaper than it says.
+  if (slotTerms > 1 || (slotTerms === 1 && energyTerms > 0)) return null;
 
   const skill: CombatSkill = {
     // The catalog reference is already unique and stable, and it holds a slash, so it can never

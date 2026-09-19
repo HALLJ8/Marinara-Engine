@@ -1090,6 +1090,11 @@ function refineRulesetDefinition(def: RulesetDefinitionBase, ctx: z.RefinementCt
       if (source.onlyWhen && typeOf(source.onlyWhen) !== "boolean") {
         issue([...path, "onlyWhen"], "Must name a boolean column");
       }
+      // `alwaysWhen` is the exception to `onlyWhen`. Alone it would gate nothing, which reads like
+      // a filter and lets every row through.
+      if (source.alwaysWhen && !source.onlyWhen) {
+        issue([...path, "alwaysWhen"], "alwaysWhen is the exception to onlyWhen, so it needs onlyWhen beside it");
+      }
       if (source.alwaysWhen) {
         const column = list.columns.find((entry) => entry.id === source.alwaysWhen!.column);
         if (!column) {

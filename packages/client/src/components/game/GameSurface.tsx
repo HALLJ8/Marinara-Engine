@@ -10570,6 +10570,12 @@ function GameSurfaceComponent({
           for (const refusal of written.refused) {
             console.warn("[game-ruleset] A sheet refused part of the battle result", refusal);
           }
+          // The battle already showed the change, so a sheet that did not take it has to be said
+          // out loud, the way a refused sheet command from the Game Master is.
+          if (written.refused.length > 0) {
+            const names = [...new Set(written.refused.map((refusal) => refusal.name))];
+            toast.warning(localizeUi("game.ruleset.battle.writeBackRefused", { names: names.join(", ") }));
+          }
           if (written.live) patchGameStateField("rulesetLive", written.live);
           if (written.updated.length > 0) {
             sheetRecapLine = `Sheets: the ${rulesetDefinition.name} sheets for ${written.updated.join(", ")} were updated with what this battle cost. Do not change those numbers again.`;
@@ -10660,6 +10666,7 @@ function GameSurfaceComponent({
       chatMeta.gameCharacterCards,
       clearCombatSnapshot,
       gameRuleset,
+      localizeUi,
       patchGameStateField,
       personaInfo?.name,
       transitionGameState,

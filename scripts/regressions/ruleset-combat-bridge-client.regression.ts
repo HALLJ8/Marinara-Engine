@@ -153,15 +153,18 @@ assert.deepEqual(
   assert.equal(seeded.party[1], enemy, "an enemy has no sheet to read, whatever it is called");
   assert.deepEqual(seeded.seeds, {});
 
-  // A card whose stored sheet this version cannot read is the same as no card at all.
+  // A card whose stored sheet this version cannot read is the same as no card at all. The fighter
+  // carries the card's own name, so the lookup really does reach the unreadable sheet.
+  const sable = combatant("Sable");
   const unreadable = seedRulesetBattleParty(
     ember,
     [{ name: "Sable", rulesetSheet: { v: 1, build: { fields: "not a sheet" } } }],
     undefined,
     emberCatalogs,
-    [stranger],
+    [sable],
   );
   assert.deepEqual(unreadable.seeds, {});
+  assert.equal(unreadable.party[0], sable, "an unreadable sheet leaves the fighter untouched");
 }
 
 // ── A ruleset with no battle block changes nothing at all ──

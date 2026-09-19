@@ -234,7 +234,8 @@ is never dropped into a fight where one blow does 12.
   Only rows that came from one of your catalogs count, and only when the entry behind the row has a
   `mechanics` block: a row somebody typed by hand says nothing in numbers. `onlyWhen` names a boolean
   column the row must have set, such as a prepared spell. `alwaysWhen` names a column and a value
-  that lets a row through anyway, such as the spells that are cast without being prepared.
+  that lets a row through anyway, such as the spells that are cast without being prepared. It is
+  the exception to `onlyWhen`, so it is refused without one beside it.
 
 ### What is carried in, and what is carried out
 
@@ -273,9 +274,14 @@ A catalog entry's `mechanics` block is read like this:
   cell. Anything with an area targets every enemy it covers, and `friendlyFire` is honoured.
 - `damageType` becomes the skill's element. `targets` is not carried: Marinara's combat decides who
   a heal, a buff or an attack can be pointed at from the skill's type.
-- `cost` on the energy pool becomes the MP cost; `cost` on one of the slot pools spends one slot of
-  that level. A cost on any other pool, such as hit points or a class resource, leaves the entry out
-  of the fight entirely, because the Engine would otherwise hand it out for free.
+- `cost` on the energy pool becomes the MP cost, and several energy costs are added up. A `cost` of
+  exactly one slot spends one slot of that level. Marinara's combat charges one number of energy
+  or one slot, never both, so an entry that costs two slots, slots of two levels, or a slot plus
+  energy is left out of the fight. So is a cost on any other pool, such as hit points or a class
+  resource, because the Engine would otherwise hand it out for free.
+- A `buff` or a `debuff` becomes Marinara's own buff or debuff. Whatever else the entry's text
+  promises, such as clearing a condition on the sheet, is not applied in the fight. Leave
+  `mechanics` off an entry whose effect only makes sense outside a battle.
 
 `coverage.combat` is separate and still means what it meant: set it only when battles really do
 follow your system's rules, which no ruleset can do from a file today.
