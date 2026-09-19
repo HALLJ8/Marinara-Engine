@@ -402,6 +402,56 @@ the format did not change.
   rulesets) and `ruleset-combat-director-route.regression.ts` (the real routes, the live write-back,
   an unchanged classic fight, the boss window with the model faked, and the blueprint prompt).
 
+### What C3b settled
+
+C3b is the screen. Still no Capability API bump: the format did not change, and the three shared
+additions below are fields nothing outside the Engine writes.
+
+- **One decision says whether a fight is the ruleset's own**, and everything reads it:
+  `isRulesetCombatFight({ combatDirector, definition, anchor })` in
+  `packages/client/src/lib/ruleset-combat-bridge.ts`. All three have to hold. It is read off the
+  BLOCKS the file declares, never off `coverage.combat`, which is what the author claims rather than
+  what the file carries. The setup wizard and the import review say what battles will do from the
+  same test.
+- **The Classic shell is the stage.** `GameCombatUI`'s `directed` prop gains an optional `ruleset`
+  part; without it every Classic path is the one it has always been, and with it the hardcoded
+  attack/skill/defend menu, its sub-phases and its arrow-key handling are all replaced by the
+  ruleset's own menu. Portraits, health bars and their animations already read `party` and
+  `enemies`, which the server keeps in step, so they were not touched at all.
+- **Nothing on screen computes legality or arithmetic.** The menu, the legal target ids, the costs,
+  the forecast and every number in the log come from the server's view. An option the rules refuse
+  is simply not sent, so nothing is greyed out by the client, and a 400 refusal is a localized
+  sentence per `code` with the server's own sentence as the fallback for a code this build does not
+  know.
+- **The words are the ruleset's.** Budgets, conditions, saves, tracks, tiers, pools and what an
+  attack is rolled against all print the labels the file declares, so 5e says "Armor Class" and
+  Ember Roads says "Guard". Only the kind's own closed list of standard actions, and ending a turn,
+  are named by the Engine.
+- **The log is one pure module**, `packages/client/src/lib/ruleset-combat-log.ts`, so every event
+  type's line can be pinned. A roll with nothing added to it prints as the die alone; several dice
+  that add up to what was kept print as the handful; advantage and disadvantage print both dice and
+  the one kept, and only when the event says which way it leaned.
+- **The bridge stands aside for exactly that fight.** `startBattleParty` does not seed from the
+  sheet and `handleCombatEnd` does not call `applyRulesetBattleResult`, because the server wrote
+  every accepted step as it happened. A ruleset with `battle` and no `combat`, and a game without
+  the director, keep the bridge exactly as it was.
+- **The recap is the real summary.** `CombatSummary` gained an optional `ruleset` field carrying
+  `RulesetEncounterSummary`, and the recap prints health as value and maximum in the ruleset's own
+  pool, who is down, dying or stable, conditions by label, the ruleset's own round count, and one
+  line saying the sheets were kept up to date, in place of the percentage lines.
+- **Three small shared additions**, all additive: `RulesetEncounterSummary.party[].stable` (a recap
+  could not otherwise tell somebody who has stopped slipping from somebody still on the clock),
+  `CombatSummary.ruleset`, and `creature`/`tier`/`proposed` on `CombatEnemy` and `Combatant` so the
+  blueprint's own terms reach `/start` through the client pipeline.
+- **One small server change:** `syncRulesetCombatants` now sets the director's own `round` from the
+  fight's round. It used to stay on one forever, which showed as "Round 1" all fight and as "after 1
+  round" in the recap.
+- **Proven** in `scripts/regressions/ruleset-combat-screen-client.regression.ts` (every event type's
+  line on both example rulesets through the real English catalog, menu grouping, target picking, the
+  decision above for every combination, and the recap from a real summary) and in a third mode of
+  `e2e/game-combat-director.e2e.ts` that imports Ember Roads through the real route and plays a
+  fight on it.
+
 ## Architecture
 
 ### The pin

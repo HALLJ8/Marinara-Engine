@@ -755,10 +755,17 @@ Engine has always used:
 
 Said plainly, because a ruleset should not claim what the Engine does not do:
 
-- **No screen.** The fight is resolved and saved, but there is no battle screen on your numbers yet,
-  so your players still see Marinara's own. That is the next release.
+What IS on screen: the fight plays on the battle screen in your words. The menu is your attacks,
+your abilities and the standard actions you listed, each saying what it spends out of your budgets
+and your pools. Turn order, the round, every condition you named with its rounds left, temporary
+points, concentration, and the two counts of your dying rule are all shown. The log prints the real
+arithmetic in your terms: "Juno attacks Rust jackal with Road axe: 8 (5 + 3) + 3 = 11 against Guard
+6, a hit." Every accepted action is written to the sheet as it happens, so a reload mid-fight is
+exact and the Game Master is told afterwards not to change those numbers again.
+
 - **No positions**: no distance, reach, ranges, areas on a map, cover, movement or opportunity
-  attacks. `range`, `area` and `economy.movement` are carried and not read.
+  attacks. `range`, `area` and `economy.movement` are carried and not read. The fight is theatre of
+  the mind: anybody can be pointed at anybody.
 - **No reactions**, so nothing interrupts a turn, and `cannot-react` changes nothing yet.
 - **Signature actions are stored, priced and resolved, but nothing opens the window they are used
   in.** The points, the options and the spending are all here; what asks a creature for one between
