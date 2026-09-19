@@ -140,20 +140,20 @@ try {
   });
   assert.match(
     getCapabilityApiCompatibilityIssue(unsupportedMajorManifest) ?? "",
-    /requires capability API 2\.0; this Engine supports 1\.26/,
+    /requires capability API 2\.0; this Engine supports 1\.27/,
   );
   const currentMinorManifest = capabilityPackageManifestSchema.parse({
     ...manifestV2,
-    capabilityApi: { major: 1, minor: 26 },
+    capabilityApi: { major: 1, minor: 27 },
   });
   assert.equal(getCapabilityApiCompatibilityIssue(currentMinorManifest), null);
   const unsupportedMinorManifest = capabilityPackageManifestSchema.parse({
     ...manifestV2,
-    capabilityApi: { major: 1, minor: 27 },
+    capabilityApi: { major: 1, minor: 28 },
   });
   assert.match(
     getCapabilityApiCompatibilityIssue(unsupportedMinorManifest) ?? "",
-    /requires capability API 1\.27; this Engine supports 1\.26/,
+    /requires capability API 1\.28; this Engine supports 1\.27/,
   );
   const startupManifest = {
     ...currentMinorManifest,

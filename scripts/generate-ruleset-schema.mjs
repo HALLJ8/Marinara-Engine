@@ -42,6 +42,31 @@ function requireOneCatalogSource(node) {
   }
 }
 
+// An entry writes rows onto a sheet or it is a creature, never both and never neither, and a
+// creature says what it does in its own actions rather than in `mechanics`. Refinements again, so
+// the editor is told here. The node is found by its shape: `rows` beside `creature`.
+function requireOneEntryContent(node) {
+  if (Array.isArray(node)) return node.forEach(requireOneEntryContent);
+  if (!node || typeof node !== "object") return;
+  Object.values(node).forEach(requireOneEntryContent);
+  if (node.type === "object" && node.properties?.rows && node.properties.creature) {
+    node.oneOf = [{ required: ["rows"] }, { required: ["creature"], not: { required: ["mechanics"] } }];
+  }
+}
+
+// And the header the entries sit in: a catalog of rows names the lists it feeds, a catalog of
+// creatures names none. Found by its shape: `holds` beside `feeds`.
+function requireCatalogFeeds(node) {
+  if (Array.isArray(node)) return node.forEach(requireCatalogFeeds);
+  if (!node || typeof node !== "object") return;
+  Object.values(node).forEach(requireCatalogFeeds);
+  if (node.type === "object" && node.properties?.holds && node.properties.feeds) {
+    node.if = { properties: { holds: { const: "creatures" } }, required: ["holds"] };
+    node.then = { not: { required: ["feeds"] } };
+    node.else = { required: ["feeds"] };
+  }
+}
+
 // How many columns of a row may be scaled is another refinement the generator cannot see. The node
 // is found by its shape (a map whose values carry `from`), so the editor counts what the Engine counts.
 function boundScaledColumns(node) {
@@ -84,6 +109,8 @@ function requireSaveEndsUntilSave(node) {
 
 const schema = zodToJsonSchema(rulesetDefinitionSchema, { $refStrategy: "none", target: "jsonSchema7" });
 requireOneCatalogSource(schema);
+requireOneEntryContent(schema);
+requireCatalogFeeds(schema);
 requireSaveEndsUntilSave(schema);
 boundScaledColumns(schema);
 requireOneHideComparison(schema);
