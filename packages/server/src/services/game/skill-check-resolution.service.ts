@@ -823,7 +823,9 @@ export async function resolveSkillCheckTagsInContent(
       }
       const result = resolveSkillCheckWithContext(context, entry.request, options.rollD20);
       results.push(result);
-      return serializeResolvedSkillCheckTag(result);
+      // The ask rides along on the record, so a saved turn still says which ability the check was
+      // rolled with and how many dice were added. Empty outside a ruleset game, byte for byte.
+      return serializeResolvedSkillCheckTag(result, askExtras(entry.tag));
     });
     return {
       content: rolled,
@@ -980,6 +982,9 @@ export function resolvePoolCheckTag(
         "d20",
         spent.map((entry) => entry.slot),
       ),
+      // Only a ruleset game reads `with=`, so only a ruleset game writes it back; the Engine's own
+      // rules record the same bytes they always have.
+      ...(context.ruleset && tag.withAbility ? { with: tag.withAbility } : {}),
     }),
   };
 }

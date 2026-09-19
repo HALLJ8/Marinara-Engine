@@ -339,8 +339,12 @@ export function parseSkillCheckTagBody(body: string): SkillCheckTag | null {
     const threshold = Number(values.get("threshold"));
     if (Number.isFinite(threshold)) tag.threshold = threshold;
   }
-  if (values.has("bonus")) {
-    const bonus = Number(values.get("bonus"));
+  // A whole number of dice, or nothing. `Number` rather than `parseInt`, so "1.5" stays unusable
+  // instead of becoming 1, and the emptiness test comes first because `Number("")` is 0 and an
+  // attribute written with no value has declared nothing.
+  const bonusValue = values.get("bonus")?.trim();
+  if (bonusValue) {
+    const bonus = Number(bonusValue);
     if (Number.isInteger(bonus)) tag.bonusDice = bonus;
   }
   const who = values.get("who")?.trim();

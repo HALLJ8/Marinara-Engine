@@ -650,7 +650,9 @@ function renderRulesetSkillCheckLine(
       ? [`Add with="Ability" to roll a skill or save with another ability than its own.`]
       : [];
   const branchClause = oneRequestDice
-    ? [`When the outcome splits two ways, add branch="label" to this tag and write the branch block described under DICE.`]
+    ? [
+        `When the outcome splits two ways, add branch="label" to this tag and write the branch block described under DICE.`,
+      ]
     : [];
   const whoClause = `Add who="Character Name" to roll for a party member; without it the player is checked.`;
 
@@ -826,9 +828,7 @@ export function buildGmFormatReminder(
   // A pool ruleset has no `dice` at all, which is why the kind is read before the count.
   const rulesetResolution = ctx.ruleset?.resolution;
   const rulesetRollsOneD20 =
-    rulesetResolution?.kind === "dice-sum" &&
-    rulesetResolution.dice.count === 1 &&
-    rulesetResolution.dice.sides === 20;
+    rulesetResolution?.kind === "dice-sum" && rulesetResolution.dice.count === 1 && rulesetResolution.dice.sides === 20;
 
   const partyNames = normalizePromptTextList(ctx.partyNames);
   const hasParty = partyNames.length > 0;

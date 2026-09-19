@@ -265,11 +265,32 @@ const dicePoolResolutionSchema = z
     /** Optional: a face at or above this rolls one more die, chained, up to the Engine's ceiling. */
     explode: z.object({ from: poolFace }).strict().optional(),
     /** Optional: a face at or below this takes one success away, never below none. */
-    cancel: z.object({ upTo: z.number().int().min(1).max(POOL_DIE_MAX_SIDES - 1) }).strict().optional(),
+    cancel: z
+      .object({
+        upTo: z
+          .number()
+          .int()
+          .min(1)
+          .max(POOL_DIE_MAX_SIDES - 1),
+      })
+      .strict()
+      .optional(),
     /** Optional: no die succeeded AND a face at or below this showed, which is worse than failing. */
-    botch: z.object({ upTo: z.number().int().min(1).max(POOL_DIE_MAX_SIDES - 1) }).strict().optional(),
+    botch: z
+      .object({
+        upTo: z
+          .number()
+          .int()
+          .min(1)
+          .max(POOL_DIE_MAX_SIDES - 1),
+      })
+      .strict()
+      .optional(),
     /** Optional: this many net successes or more is a critical success. */
-    exceptional: z.object({ successes: z.number().int().min(1).max(RULESET_POOL_MAX_DICE) }).strict().optional(),
+    exceptional: z
+      .object({ successes: z.number().int().min(1).max(RULESET_POOL_MAX_DICE) })
+      .strict()
+      .optional(),
     /** Optional: lets the GM add or take dice for one check (a stunt, a wound, bad light). */
     situationalDice: z
       .object({ min: z.number().int().min(-20).max(0), max: z.number().int().min(0).max(20) })
