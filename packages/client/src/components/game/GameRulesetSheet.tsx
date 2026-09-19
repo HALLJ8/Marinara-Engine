@@ -24,6 +24,7 @@ import {
   type ResolvedRulesetLive,
   type RulesetDefinition,
   type RulesetField,
+  type RulesetLayerOptions,
   type RulesetLiveState,
   type RulesetSheetBuild,
   type RulesetSheetEnvelope,
@@ -99,7 +100,13 @@ function summaryFieldValue(
 }
 
 export interface GameRulesetSheetProps {
+  /** The effective definition: the ruleset with the game's layers already on it. */
   definition: RulesetDefinition;
+  /** The layers the game turned on, listed after the ruleset's name. Empty or absent outside a
+   *  game, and for a game whose ruleset ships none. */
+  layers?: Array<{ id: string; label: string }>;
+  /** The pin's own option record, which the build editor's catalog picker filters by. */
+  layerOptions?: RulesetLayerOptions;
   /** The party card this sheet belongs to, for accessible names. */
   cardName: string;
   envelope: RulesetSheetEnvelope | undefined;
@@ -111,6 +118,8 @@ export interface GameRulesetSheetProps {
 
 export function GameRulesetSheet({
   definition,
+  layers,
+  layerOptions,
   cardName,
   envelope,
   live,
@@ -122,6 +131,8 @@ export function GameRulesetSheet({
   const [draft, setDraft] = useState<RulesetSheetEnvelope | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [restNotice, setRestNotice] = useState<string | null>(null);
+
+  const layerNames = layers?.map((layer) => layer.label).join(", ") || null;
 
   const build = useMemo(() => envelope?.build ?? defaultRulesetSheetBuild(definition), [definition, envelope]);
   const evaluated = useMemo(() => evaluateRulesetSheet(definition, build), [definition, build]);
@@ -200,7 +211,13 @@ export function GameRulesetSheet({
           <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--foreground)]">
             {localizeUi("game.ruleset.sheet.title")}
           </h3>
-          <p className="truncate text-[0.6875rem] text-[var(--muted-foreground)]">{definition.name}</p>
+          {/* The rules this game runs on, and the variants of them it turned on, so a player
+              reading the sheet can tell a Hard winter game from an ordinary one. */}
+          <p className="truncate text-[0.6875rem] text-[var(--muted-foreground)]">
+            {layerNames
+              ? localizeUi("game.ruleset.sheet.nameWithLayers", { name: definition.name, layers: layerNames })
+              : definition.name}
+          </p>
         </div>
         {!readOnly && !draft && (
           <button
@@ -216,7 +233,12 @@ export function GameRulesetSheet({
 
       {draft ? (
         <div className="space-y-3">
-          <RulesetSheetEditor definition={definition} envelope={draft} onChange={setDraft} />
+          <RulesetSheetEditor
+            definition={definition}
+            layerOptions={layerOptions}
+            envelope={draft}
+            onChange={setDraft}
+          />
           <div className="flex flex-wrap gap-2">
             <button
               type="button"

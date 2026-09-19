@@ -6,6 +6,7 @@
 // Nothing here knows a system by name: every word comes from a localization key or from the
 // ruleset's own labels, and every value comes from the catalog file.
 import {
+  catalogEntryHiddenByLayers,
   catalogRowRef,
   rowsFromCatalogEntry,
   rulesetListRowIssues,
@@ -17,6 +18,7 @@ import {
   type RulesetCatalogMechanics,
   type RulesetDefinition,
   type RulesetField,
+  type RulesetLayerOptions,
   type RulesetList,
   type RulesetListColumn,
   type RulesetSheetBuild,
@@ -140,6 +142,24 @@ export function filterCatalogEntries(
         catalogEntryMatchesFilter(entry, view.filter, chosen[view.filter.id] ?? CATALOG_FILTER_ANY),
       ),
   );
+}
+
+/** The entries the picker may offer at all: everything the catalog holds, minus what the game's
+ *  layers hide. It runs before the filters, so a filter never offers a value only a hidden entry
+ *  carries, and the count of matches is the count of things that can actually be picked.
+ *
+ *  Only the PICKER is narrowed. Refresh from ruleset and the scaled columns read the catalog
+ *  straight from the query, so a row the sheet already holds keeps working after a layer hides its
+ *  entry: hidden means not offered, not gone. Outside a game there is no pin, no options are passed
+ *  and nothing is hidden. */
+export function visibleCatalogEntries(
+  definition: Pick<RulesetDefinition, "layers">,
+  options: RulesetLayerOptions | null | undefined,
+  catalogId: string,
+  entries: readonly RulesetCatalogEntry[],
+): RulesetCatalogEntry[] {
+  if (!options) return [...entries];
+  return entries.filter((entry) => !catalogEntryHiddenByLayers(definition, options, catalogId, entry));
 }
 
 /** A stored sheet is read tolerantly, so a list the file holds as something other than rows reads

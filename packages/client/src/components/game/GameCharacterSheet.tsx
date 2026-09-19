@@ -19,7 +19,13 @@ import {
   X,
   Zap,
 } from "lucide-react";
-import type { AvatarCrop, RulesetDefinition, RulesetLiveState, RulesetSheetEnvelope } from "@marinara-engine/shared";
+import type {
+  AvatarCrop,
+  RulesetDefinition,
+  RulesetLayerOptions,
+  RulesetLiveState,
+  RulesetSheetEnvelope,
+} from "@marinara-engine/shared";
 import { cn, getAvatarCropStyle } from "../../lib/utils";
 import { GameRulesetSheet } from "./GameRulesetSheet";
 import { DraftNumberInput } from "../ui/DraftNumberInput";
@@ -70,7 +76,12 @@ export type GameCharacterSheetRuleset =
   | { status: "unreadable" }
   | {
       status: "ok";
+      /** The effective definition: the ruleset with the game's layers already on it. */
       definition: RulesetDefinition;
+      /** The layers this game turned on, named after the ruleset in the sheet's heading. */
+      layers?: Array<{ id: string; label: string }>;
+      /** The pin's own record, which the catalog picker leaves hidden entries out by. */
+      layerOptions?: RulesetLayerOptions;
       envelope: RulesetSheetEnvelope | undefined;
       live: RulesetLiveState | undefined;
       onLiveChange: (next: RulesetLiveState) => void;
@@ -666,6 +677,8 @@ export function GameCharacterSheet({
               {ruleset.status === "ok" ? (
                 <GameRulesetSheet
                   definition={ruleset.definition}
+                  layers={ruleset.layers}
+                  layerOptions={ruleset.layerOptions}
                   cardName={card.title}
                   envelope={ruleset.envelope}
                   live={ruleset.live}

@@ -109,6 +109,7 @@ import { CapabilityElement } from "../capabilities/CapabilityElement";
 import { NewGameExperienceChooser } from "./NewGameExperienceChooser";
 import { LegacyExperienceSetupDialog } from "./LegacyExperienceSetupDialog";
 import { MAX_EXPERIENCE_SEED, buildExperienceSetup, parseExperienceSeed } from "../../lib/game-experience-setup";
+import { restoredRulesetLayers, rulesetLayerOptions, toggleRulesetLayer } from "../../lib/ruleset-layers";
 
 const GameAssetsBrowserView = lazy(() =>
   import("../game-assets/GameAssetsBrowserView").then((module) => ({ default: module.GameAssetsBrowserView })),
@@ -520,6 +521,9 @@ export function GameSetupWizard({
     return agentImportPolicy?.enabled === true ? installed : installed.filter((entry) => !entry.source);
   }, [agentImportPolicy, installedRulesets, isNewGame]);
   const [rulesetId, setRulesetId] = useState<string | null>(null);
+  // The layers checked on the chosen ruleset, by id. They belong to THAT ruleset, so choosing a
+  // different one clears them rather than carrying a name the new rules do not have.
+  const [rulesetLayerIds, setRulesetLayerIds] = useState<string[]>([]);
   const activeRuleset = rulesets.find((entry) => entry.definition.id === rulesetId) ?? null;
   const [rulesetImportNotice, setRulesetImportNotice] = useState<string | null>(null);
   const experienceSeedInvalid = Boolean(experienceSetup?.seed && parseExperienceSeed(experienceSeed) === null);
@@ -1103,6 +1107,12 @@ export function GameSetupWizard({
       });
       const config = imported.config;
       setRulesetId(config.ruleset?.id ?? null);
+      // The layers the file chose, against the definition installed HERE: an id this version of the
+      // ruleset no longer has is dropped rather than sent to a create call that would refuse it.
+      const importedRuleset = rulesets.find((entry) => entry.definition.id === config.ruleset?.id);
+      setRulesetLayerIds(
+        importedRuleset ? restoredRulesetLayers(importedRuleset.definition, config.ruleset?.options) : [],
+      );
       const sharedRuleset = shareFile.setup.config.ruleset;
       // Installed but left off the list means the import switch hid it, which needs a different
       // fix from the user than installing something. Only an answer that says "off" counts as off:
@@ -1324,7 +1334,8 @@ export function GameSetupWizard({
               id: activeRuleset.definition.id,
               version: activeRuleset.definition.version,
               packageId: activeRuleset.packageId,
-              options: {},
+              // Only the checked layers, so a ruleset with none sends the empty record it always did.
+              options: rulesetLayerOptions(rulesetLayerIds),
             },
           }
         : {}),
@@ -2033,10 +2044,17 @@ export function GameSetupWizard({
                         rulesets={rulesets}
                         activeId={activeRuleset?.definition.id ?? null}
                         combatStyle={combatStyle}
+                        layerIds={rulesetLayerIds}
                         onSelect={(id) => {
                           setRulesetId(id);
+                          setRulesetLayerIds([]);
                           setRulesetImportNotice(null);
                         }}
+                        onToggleLayer={(layerId) =>
+                          setRulesetLayerIds((current) =>
+                            activeRuleset ? toggleRulesetLayer(activeRuleset.definition, current, layerId) : current,
+                          )
+                        }
                       />
                     )}
                     {rulesetImportNotice && (
