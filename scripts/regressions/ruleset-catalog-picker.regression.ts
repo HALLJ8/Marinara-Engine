@@ -235,6 +235,12 @@ const badEntry = {
 const dropping = planCatalogAddition(definition, catalog.id, [badEntry], {});
 assert.equal(dropping.dropped, 1);
 assert.deepEqual(Object.keys(dropping.lists), []);
+// A list hidden on this sheet takes no rows: the rest of the entry is still added, and an entry that
+// would only write to hidden lists adds nothing and is counted.
+const aroundHidden = planCatalogAddition(definition, catalog.id, [lastEmber], {}, new Set(["tricks"]));
+assert.deepEqual(Object.keys(aroundHidden.lists), ["knacks"]);
+assert.equal(aroundHidden.dropped, 0);
+assert.equal(planCatalogAddition(definition, catalog.id, [lastEmber], {}, new Set(["knacks", "tricks"])).dropped, 1);
 // An entry for a list this ruleset does not have is dropped the same way.
 const strayEntry = {
   id: "stray",

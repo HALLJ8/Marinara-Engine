@@ -181,6 +181,9 @@ export function planCatalogAddition(
   catalogId: string,
   selected: readonly RulesetCatalogEntry[],
   lists: RulesetSheetBuild["lists"],
+  /** Lists `hideWhen` hides on THIS sheet. They do not exist for this character, so a row meant for
+   *  one is not written where nobody could see or remove it. */
+  skipLists: ReadonlySet<string> = new Set(),
 ): CatalogAdditionPlan {
   const listById = new Map(definition.sheet.lists.map((list) => [list.id, list]));
   const next: Record<string, CatalogListRow[]> = {};
@@ -190,13 +193,16 @@ export function planCatalogAddition(
     // Built and declared rows run in step: `rowsFromCatalogEntry` maps one to one over `entry.rows`,
     // and the declared values are what the list's columns are checked against. An entry is added
     // whole or not at all: a knack without the limited-use row that belongs to it is half a knack.
-    const built = rowsFromCatalogEntry(catalogId, entry);
-    const fits = built.every((row, index) => {
+    const all = rowsFromCatalogEntry(catalogId, entry);
+    const fits = all.every((row, index) => {
+      if (skipLists.has(row.list)) return true;
       const list = listById.get(row.list);
       const values = entry.rows[index]?.values;
       return Boolean(list && values && rulesetListRowIssues(list, values).length === 0);
     });
-    if (!fits) {
+    const built = all.filter((row) => !skipLists.has(row.list));
+    // An entry whose every row belongs to a hidden list would add nothing, which is left out too.
+    if (!fits || built.length === 0) {
       dropped += 1;
       continue;
     }

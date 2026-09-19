@@ -7,11 +7,12 @@
 import { useMemo, useRef, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { useTranslation as useUiTranslation } from "react-i18next";
-import type {
-  RulesetCatalogEntry,
-  RulesetCatalogHeader,
-  RulesetDefinition,
-  RulesetSheetBuild,
+import {
+  isRulesetItemHidden,
+  type RulesetCatalogEntry,
+  type RulesetCatalogHeader,
+  type RulesetDefinition,
+  type RulesetSheetBuild,
 } from "@marinara-engine/shared";
 import { useRulesetCatalog } from "../../hooks/use-capability-packages";
 import { ApiError } from "../../lib/api-client";
@@ -98,6 +99,14 @@ export function RulesetCatalogPicker({
   const labels = useMemo(() => catalogMechanicsLabels(definition, catalog), [catalog, definition]);
   const showsMechanics = useMemo(() => entries.some((entry) => entry.mechanics), [entries]);
 
+  // A list `hideWhen` hides on this sheet is not drawn by the editor, so nothing is added to it.
+  const hiddenLists = useMemo(
+    () =>
+      new Set(
+        definition.sheet.lists.filter((list) => isRulesetItemHidden(list, build, definition)).map((list) => list.id),
+      ),
+    [build, definition],
+  );
   const plan = useMemo(
     () =>
       planCatalogAddition(
@@ -105,8 +114,9 @@ export function RulesetCatalogPicker({
         catalog.id,
         entries.filter((entry) => selected.has(entry.id)),
         build.lists,
+        hiddenLists,
       ),
-    [build.lists, catalog.id, definition, entries, selected],
+    [build.lists, catalog.id, definition, entries, hiddenLists, selected],
   );
 
   const toggle = (id: string) =>
