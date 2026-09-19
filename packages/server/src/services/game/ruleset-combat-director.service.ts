@@ -707,7 +707,10 @@ function areaCandidates(
   // The same bound the view keeps, and the aims that catch the most people first, so what is left
   // out on a very large board is what mattered least. The sort is stable, so equal aims keep the
   // board's own order and the picker stays deterministic.
-  const aims = [...rulesetAimCells(encounter, actor.id, option.id)]
+  // The scan itself is bounded too, at a few times what is kept: on the boards this Engine draws
+  // that is every aim there is, and on a very large imported one it is enough to rank from without
+  // the ranking becoming the cost.
+  const aims = [...rulesetAimCells(encounter, actor.id, option.id, RULESET_AIM_LIMIT * 4)]
     .sort((left, right) => right.targetIds.length - left.targetIds.length)
     .slice(0, RULESET_AIM_LIMIT);
   for (const aim of aims) {

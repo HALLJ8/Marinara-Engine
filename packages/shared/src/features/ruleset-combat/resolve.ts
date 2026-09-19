@@ -22,7 +22,13 @@ import {
   rulesetMovementAllowance,
   writeRulesetSheet,
 } from "./encounter.js";
-import { rulesetAreaCells, rulesetCellEnterCost, rulesetOpportunityAttack } from "./grid.js";
+import {
+  rulesetAreaCells,
+  rulesetCellEnterCost,
+  rulesetOpportunityAttack,
+  rulesetStepLeavesReach,
+  rulesetThreateningEnemies,
+} from "./grid.js";
 import {
   planRulesetCombatCost,
   rulesetActionAvailable,
@@ -898,24 +904,11 @@ function threatsLeaving(
   from: RulesetCombatCell,
   to: RulesetCombatCell,
 ): RulesetCombatant[] {
-  const opportunity = ctx.combat.opportunity;
-  if (!opportunity) return [];
-  return ctx.state.combatants.filter((combatant) => {
-    if (combatant.side === mover.side || !rulesetCombatStanding(combatant)) return false;
-    if ((combatant.budgets[opportunity.budget] ?? 0) < 1) return false;
-    if (typeof combatant.x !== "number" || typeof combatant.y !== "number") return false;
-    const effects = rulesetCombatEffects(ctx.definition, ctx.combat, combatant);
-    if (effects.has("cannot-act") || effects.has("cannot-react")) return false;
-    const strike = rulesetOpportunityAttack(combatant);
-    if (!strike) return false;
-    const reach = Math.max(1, strike.reach ?? 1);
-    const at = { x: combatant.x, y: combatant.y };
-    return cellsApart(at, from) <= reach && cellsApart(at, to) > reach;
-  });
-}
-
-function cellsApart(a: RulesetCombatCell, b: RulesetCombatCell): number {
-  return Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y));
+  // The same two questions the menu asked when it listed whom a walk provokes, asked again at every
+  // step because a strike on the way can change who is still standing and who still has the budget.
+  return rulesetThreateningEnemies(ctx.definition, ctx.combat, ctx.state, mover)
+    .filter((threat) => rulesetStepLeavesReach(threat, from, to))
+    .map((threat) => threat.combatant);
 }
 
 /** One strike at somebody walking away. It spends the declared budget and then resolves exactly as

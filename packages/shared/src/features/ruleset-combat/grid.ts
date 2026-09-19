@@ -249,7 +249,7 @@ export function rulesetActionReach(action: { reach?: number; range?: { normal: n
 /** Everybody who would strike at somebody leaving the cell next to them: standing, able to act and
  *  to react, holding the budget the ruleset says such a strike costs, and carrying something to
  *  strike with. A ruleset that declares no `opportunity` has none of this. */
-function threateningEnemies(
+export function rulesetThreateningEnemies(
   definition: RulesetDefinition,
   combat: RulesetCombat,
   state: RulesetEncounterState,
@@ -302,7 +302,7 @@ export function rulesetReachableCells(
     if (combatant.side !== actor.side) blockers.add(`${at.x},${at.y}`);
   }
 
-  const threats = threateningEnemies(definition, combat, state, actor);
+  const threats = rulesetThreateningEnemies(definition, combat, state, actor);
   const best = new Map<string, number>([[`${from.x},${from.y}`, 0]]);
   const cameFrom = new Map<string, string>();
   const cells = new Map<string, RulesetReachableCell>();
@@ -367,6 +367,16 @@ function pathTo(
   return path;
 }
 
+/** Whether one step takes a walker out of this threat's reach: inside it before, outside it after.
+ *  The preview and the resolution both ask exactly this, so they can never name different people. */
+export function rulesetStepLeavesReach(
+  threat: { at: RulesetCombatCell; reach: number },
+  from: RulesetCombatCell,
+  to: RulesetCombatCell,
+): boolean {
+  return rulesetCellDistance(threat.at, from) <= threat.reach && rulesetCellDistance(threat.at, to) > threat.reach;
+}
+
 /** Whose reach this walk leaves, in the order it leaves them. One strike each: a budget is a budget,
  *  however many times somebody dances in and out of it. */
 function provokedBy(
@@ -380,11 +390,7 @@ function provokedBy(
   for (const cell of path) {
     for (const threat of threats) {
       if (provoked.includes(threat.combatant.id)) continue;
-      if (
-        rulesetCellDistance(threat.at, previous) <= threat.reach &&
-        rulesetCellDistance(threat.at, cell) > threat.reach
-      )
-        provoked.push(threat.combatant.id);
+      if (rulesetStepLeavesReach(threat, previous, cell)) provoked.push(threat.combatant.id);
     }
     previous = cell;
   }
