@@ -19,6 +19,7 @@ import {
   CATALOG_FILTER_ANY,
   CATALOG_VISIBLE_LIMIT,
   catalogEntryAlreadyAdded,
+  catalogEntryFilterTexts,
   catalogFilterViews,
   catalogMechanicsLabels,
   filterCatalogEntries,
@@ -53,14 +54,7 @@ function describeCatalogError(error: unknown, fallback: string): { message: stri
 function entryChips(entry: RulesetCatalogEntry, catalog: RulesetCatalogHeaderView): string[] {
   const chips = new Set<string>();
   for (const filter of catalog.filters ?? []) {
-    const value = entry.filters?.[filter.id];
-    if (Array.isArray(value)) {
-      for (const tag of value) if (tag) chips.add(tag);
-    } else if (typeof value === "number") {
-      chips.add(String(value));
-    } else if (typeof value === "string" && value) {
-      chips.add(value);
-    }
+    for (const text of catalogEntryFilterTexts(entry, filter.id)) chips.add(text);
   }
   return [...chips];
 }
@@ -284,7 +278,8 @@ export function RulesetCatalogPicker({
               </button>
               <button
                 type="button"
-                disabled={selected.size === 0 || plan.full.length > 0}
+                // Nothing to add also covers a selection whose every entry was left out.
+                disabled={selected.size === 0 || plan.full.length > 0 || plan.targets.length === 0}
                 onClick={() => {
                   onAdd(plan.lists);
                   onClose();

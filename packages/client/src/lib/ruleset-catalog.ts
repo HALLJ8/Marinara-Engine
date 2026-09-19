@@ -37,17 +37,19 @@ function compare(left: string, right: string): number {
 
 /** The distinct values the loaded entries actually carry for one declared filter. Derived from the
  *  entries rather than from the header, so a filter never offers a value nothing has. */
+/** What one entry says for one filter, as the texts the picker shows and matches: every tag of a
+ *  tags value, a number as its text, a non-empty string as itself. */
+export function catalogEntryFilterTexts(entry: RulesetCatalogEntry, filterId: string): string[] {
+  const value = entry.filters?.[filterId];
+  if (Array.isArray(value)) return value.filter(Boolean);
+  if (typeof value === "number") return [String(value)];
+  return typeof value === "string" && value ? [value] : [];
+}
+
 export function catalogFilterOptions(filter: RulesetCatalogFilter, entries: readonly RulesetCatalogEntry[]): string[] {
   const seen = new Set<string>();
   for (const entry of entries) {
-    const value = entry.filters?.[filter.id];
-    if (Array.isArray(value)) {
-      for (const tag of value) if (tag) seen.add(tag);
-    } else if (typeof value === "number") {
-      seen.add(String(value));
-    } else if (typeof value === "string" && value) {
-      seen.add(value);
-    }
+    for (const text of catalogEntryFilterTexts(entry, filter.id)) seen.add(text);
   }
   const options = [...seen];
   // Numbers sort as numbers: a cost of 10 belongs after 9, not between 1 and 2.
