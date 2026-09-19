@@ -2655,6 +2655,8 @@
                           ],
                           "additionalProperties": false
                         },
+                        "minProperties": 1,
+                        "maxProperties": 4,
                         "properties": {
                           "$comment": {}
                         }

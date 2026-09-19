@@ -7,7 +7,7 @@
 // ability that exists) only run in `parseRulesetDefinition`, which the import uses.
 import { readFile, writeFile } from "node:fs/promises";
 import { zodToJsonSchema } from "zod-to-json-schema";
-import { rulesetDefinitionSchema } from "../packages/shared/dist/index.js";
+import { RULESET_SCALED_MAX_COLUMNS, rulesetDefinitionSchema } from "../packages/shared/dist/index.js";
 
 const target = new URL("../docs/extending/ruleset.schema.json", import.meta.url);
 
@@ -42,8 +42,22 @@ function requireOneCatalogSource(node) {
   }
 }
 
+// How many columns of a row may be scaled is another refinement the generator cannot see. The node
+// is found by its shape (a map whose values carry `from`), so the editor counts what the Engine counts.
+function boundScaledColumns(node) {
+  if (Array.isArray(node)) return node.forEach(boundScaledColumns);
+  if (!node || typeof node !== "object") return;
+  Object.values(node).forEach(boundScaledColumns);
+  const column = node.additionalProperties;
+  if (node.type === "object" && column?.properties?.from && column.properties.table) {
+    node.minProperties = 1;
+    node.maxProperties = RULESET_SCALED_MAX_COLUMNS;
+  }
+}
+
 const schema = zodToJsonSchema(rulesetDefinitionSchema, { $refStrategy: "none", target: "jsonSchema7" });
 requireOneCatalogSource(schema);
+boundScaledColumns(schema);
 allowAnnotations(schema);
 const text = `${JSON.stringify(
   {

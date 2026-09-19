@@ -607,6 +607,10 @@ const catalogScaledColumnSchema = z.object({ from: rulesetValueRefSchema, table:
 
 const catalogScaledSchema = z.record(catalogScaledColumnSchema).superRefine((scaled, ctx) => {
   const keys = Object.keys(scaled);
+  // An empty map says nothing, and would still make the row the entry's only one for its list.
+  if (keys.length === 0) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "scaled names at least one column, or is left out" });
+  }
   if (keys.length > RULESET_SCALED_MAX_COLUMNS) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,

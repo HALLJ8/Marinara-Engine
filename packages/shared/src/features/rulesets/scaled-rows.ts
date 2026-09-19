@@ -46,8 +46,9 @@ export function rulesetCatalogIdsForBuild(definition: RulesetDefinition, build: 
   return declared.map((catalog) => catalog.id).filter((id) => marked.has(id));
 }
 
-/** Every fetched entry by the mark a picked row carries. */
-function entriesByRef(catalogs: RulesetCatalogEntriesById): Map<string, RulesetCatalogEntry> {
+/** Every fetched entry by the mark a picked row carries. Exported so a caller that asks about many
+ *  rows (an editor drawing a list) builds the lookup once and hands it to `scaledRowColumns`. */
+export function rulesetCatalogEntriesByRef(catalogs: RulesetCatalogEntriesById): Map<string, RulesetCatalogEntry> {
   const byRef = new Map<string, RulesetCatalogEntry>();
   for (const [catalogId, entries] of Object.entries(catalogs)) {
     for (const entry of entries) byRef.set(catalogRowRef(catalogId, entry.id), entry);
@@ -58,7 +59,7 @@ function entriesByRef(catalogs: RulesetCatalogEntriesById): Map<string, RulesetC
 /** The spec for one row of one list: the entry it came from carries at most one row for that list
  *  when that row is scaled, which is the schema's own rule, so there is nothing to guess. */
 function scaledRowSpec(
-  byRef: Map<string, RulesetCatalogEntry>,
+  byRef: ReadonlyMap<string, RulesetCatalogEntry>,
   listId: string,
   row: Record<string, unknown>,
 ): RulesetCatalogEntryRow | null {
@@ -90,7 +91,7 @@ export function recomputeScaledRows(
   catalogs: RulesetCatalogEntriesById,
 ): RulesetSheetBuild {
   if (!definition.catalogs?.length) return build;
-  const byRef = entriesByRef(catalogs);
+  const byRef = rulesetCatalogEntriesByRef(catalogs);
   if (byRef.size === 0) return build;
 
   // The sheet is evaluated at most once per call, and only when a scaled column is actually found.
@@ -144,11 +145,13 @@ export function scaledRowColumns(
   definition: RulesetDefinition,
   listId: string,
   row: Readonly<Record<string, unknown>>,
-  catalogs: RulesetCatalogEntriesById,
+  /** The fetched catalogs, or the lookup `rulesetCatalogEntriesByRef` built from them. */
+  catalogs: RulesetCatalogEntriesById | ReadonlyMap<string, RulesetCatalogEntry>,
 ): string[] {
   const list = definition.sheet.lists.find((entry) => entry.id === listId);
   if (!list) return [];
-  const spec = scaledRowSpec(entriesByRef(catalogs), listId, row);
+  const byRef = catalogs instanceof Map ? catalogs : rulesetCatalogEntriesByRef(catalogs as RulesetCatalogEntriesById);
+  const spec = scaledRowSpec(byRef, listId, row);
   if (!spec?.scaled) return [];
   return Object.keys(spec.scaled).filter(
     (columnId) => list.columns.find((column) => column.id === columnId)?.type === "number",

@@ -2,7 +2,7 @@
 // ruleset definition: no ruleset ships client code, and nothing here knows a system by name.
 // Values are clamped to the ruleset's bounds when they are edited, never when they are read.
 import { BookOpen, Plus, Trash2 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { useQueries } from "@tanstack/react-query";
 import { useTranslation as useUiTranslation } from "react-i18next";
 import {
@@ -10,6 +10,7 @@ import {
   evaluateRulesetSheet,
   isRulesetItemHidden,
   recomputeScaledRows,
+  rulesetCatalogEntriesByRef,
   rulesetCatalogIdsForBuild,
   scaledRowColumns,
   RULESET_CATALOG_ROW_KEY,
@@ -66,6 +67,7 @@ function TypedInput({
   ariaLabel,
   disabled = false,
   title,
+  describedBy,
 }: {
   spec: RulesetField | RulesetListColumn;
   value: Scalar | undefined;
@@ -73,9 +75,11 @@ function TypedInput({
   ariaLabel: string;
   /** Set for a cell the ruleset keeps itself. The control stays in place and stops taking edits. */
   disabled?: boolean;
-  /** The hint behind such a cell. A control that already has an accessible name reads its `title`
-   *  as its description, so one attribute serves the tooltip and the screen reader alike. */
+  /** The hint behind such a cell, for a pointer. */
   title?: string;
+  /** The id of the visible text that says the same thing. A disabled control cannot be focused, so
+   *  a `title` alone never reaches a keyboard or a screen reader. */
+  describedBy?: string;
 }) {
   if (spec.type === "number") {
     return (
@@ -90,6 +94,7 @@ function TypedInput({
         disabled={disabled}
         title={title}
         ariaLabel={ariaLabel}
+        ariaDescribedBy={describedBy}
         className={`${inputClass} text-center`}
       />
     );
@@ -103,6 +108,7 @@ function TypedInput({
         disabled={disabled}
         title={title}
         aria-label={ariaLabel}
+        aria-describedby={describedBy}
         className="h-4 w-4 accent-[var(--primary)]"
       />
     );
@@ -120,6 +126,7 @@ function TypedInput({
         disabled={disabled}
         title={title}
         aria-label={ariaLabel}
+        aria-describedby={describedBy}
         className={inputClass}
       >
         {spec.values.map((option) => (
@@ -140,6 +147,7 @@ function TypedInput({
         disabled={disabled}
         title={title}
         aria-label={ariaLabel}
+        aria-describedby={describedBy}
         className={inputClass}
       />
     );
@@ -155,6 +163,7 @@ function TypedInput({
       disabled={disabled}
       title={title}
       aria-label={ariaLabel}
+      aria-describedby={describedBy}
       className={inputClass}
     />
   );
@@ -288,6 +297,7 @@ export function RulesetSheetEditor({
   // Whether the user has changed anything in THIS editor. Opening a sheet must never write to it,
   // so the late recompute below is only for a sheet that is already being edited.
   const editedRef = useRef(false);
+  const hintBaseId = useId();
 
   const commit = (patch: Partial<RulesetSheetBuild>) => {
     editedRef.current = true;
@@ -331,22 +341,23 @@ export function RulesetSheetEditor({
     }))
     .filter((group) => group.fields.length + group.derived.length + group.lists.length > 0);
 
-  // The cells the ruleset keeps, by list and then by row index. Built once per build change: the
-  // shared helper rebuilds its own lookup of every fetched entry on each call, so it is asked only
-  // about rows that carry a catalog mark, and not at all while nothing loaded scales anything.
+  // The cells the ruleset keeps, by list and then by row index. Built once per build change, with
+  // one lookup of the fetched entries shared by every row, and not at all while nothing loaded
+  // scales anything.
   const scaledCells = useMemo(() => {
     const byList = new Map<string, Map<number, string[]>>();
     const anyScaled = Object.values(loadedCatalogs).some((entries) =>
       entries.some((entry) => entry.rows.some((row) => row.scaled)),
     );
     if (!anyScaled) return byList;
+    const byRef = rulesetCatalogEntriesByRef(loadedCatalogs);
     for (const list of sheet.lists) {
       const rows = build.lists[list.id];
       if (!Array.isArray(rows)) continue;
       const byIndex = new Map<number, string[]>();
       rows.forEach((row, index) => {
         if (!row || typeof row[RULESET_CATALOG_ROW_KEY] !== "string") return;
-        const columns = scaledRowColumns(definition, list.id, row, loadedCatalogs);
+        const columns = scaledRowColumns(definition, list.id, row, byRef);
         if (columns.length > 0) byIndex.set(index, columns);
       });
       if (byIndex.size > 0) byList.set(list.id, byIndex);
@@ -524,6 +535,7 @@ export function RulesetSheetEditor({
                         // A cell the ruleset keeps follows this character's own numbers, so it is
                         // shown where it always was and simply does not take edits.
                         const setByRuleset = locked?.get(index)?.includes(column.id) ?? false;
+                        const hintId = setByRuleset ? `${hintBaseId}-${list.id}-${index}-${column.id}` : undefined;
                         return (
                           <label
                             key={column.id}
@@ -537,7 +549,13 @@ export function RulesetSheetEditor({
                               ariaLabel={`${list.label} ${index + 1}: ${column.label}`}
                               disabled={setByRuleset}
                               title={setByRuleset ? t("ui.rulesets.sheet.scaledHint") : undefined}
+                              describedBy={hintId}
                             />
+                            {hintId && (
+                              <span id={hintId} className="text-[0.625rem] text-[var(--muted-foreground)]">
+                                {t("ui.rulesets.sheet.scaledHint")}
+                              </span>
+                            )}
                           </label>
                         );
                       })}

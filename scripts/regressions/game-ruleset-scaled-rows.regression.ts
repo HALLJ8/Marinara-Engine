@@ -24,6 +24,7 @@ import {
   rowsFromCatalogEntry,
   rulesetCatalogIdsForBuild,
   rulesetSheetBuildSchema,
+  rulesetCatalogEntriesByRef,
   scaledRowColumns,
   RULESET_CATALOG_ROW_KEY,
   type RulesetCatalogEntriesById,
@@ -99,6 +100,8 @@ const emberBuild = (heart: number, uses = 1) =>
   assert.ok(parsed(emberText, (doc) => scaleTrick(doc, { uses: { from: { derived: "grit_max" } } })));
   const one = { from: { const: 1 } };
   assert.match(refusedWith({ a: one, b: one, c: one, d: one, e: one }), /At most 4 columns of a row can be scaled/);
+  // An empty map scales nothing, so it is a mistake rather than a harmless extra.
+  assert.match(refusedWith({}), /scaled names at least one column, or is left out/);
   assert.match(refusedWith({ "Not An Id": { from: { const: 1 } } }), /An id is lowercase letters/);
 
   // Two rows for one list, so a marked row on a sheet could not be matched to its spec.
@@ -153,6 +156,11 @@ const emberBuild = (heart: number, uses = 1) =>
 
   assert.deepEqual(scaledRowColumns(ember, "tricks", raised.lists.tricks![0]!, emberCatalogs), ["uses"]);
   assert.deepEqual(scaledRowColumns(ember, "knacks", raised.lists.knacks![0]!, emberCatalogs), []);
+  // A caller drawing many rows builds the lookup once and hands it over; the answer is the same.
+  assert.deepEqual(
+    scaledRowColumns(ember, "tricks", raised.lists.tricks![0]!, rulesetCatalogEntriesByRef(emberCatalogs)),
+    ["uses"],
+  );
 }
 
 // ── Nothing the ruleset did not write is ever touched ──
