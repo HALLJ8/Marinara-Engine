@@ -12,6 +12,10 @@ import { refreshCapabilityAgentRegistry } from "../services/capability-packages/
 import { createChatsStorage } from "../services/storage/chats.storage.js";
 import { createAgentsStorage } from "../services/storage/agents.storage.js";
 
+const rulesetVersionQuery = z.object({
+  rulesetId: z.string().min(1).max(140),
+  version: z.coerce.number().int().min(1),
+});
 const packageParams = z.object({
   id: z
     .string()
@@ -80,11 +84,38 @@ export async function capabilityPackagesRoutes(app: FastifyInstance) {
   // Every installed ruleset, whole, because the sheet editors are rendered from the definition.
   // A failed read is an error here, never an empty list: the editors call a stored sheet "not
   // installed" when its ruleset is absent, and must not say that because the lookup failed.
+  // Imported rulesets are listed whatever the import policy says, for the same reason: an existing
+  // sheet has to stay readable after the switch goes off. `source` is what tells the two apart.
   app.get(
     "/rulesets",
     async (): Promise<InstalledRuleset[]> =>
-      [...(await readRulesetRegistry()).values()].map(({ definition, packageId }) => ({ packageId, definition })),
+      [...(await readRulesetRegistry(app.db)).values()].map(({ definition, packageId, source, versions }) => ({
+        packageId,
+        definition,
+        ...(source ? { source } : {}),
+        ...(versions ? { versions: [...versions.keys()].sort((left, right) => left - right) } : {}),
+      })),
   );
+  // One stored version of an IMPORTED ruleset. The list above carries only the newest definition,
+  // but a game plays on the exact version it pinned, so the in-game sheet has to be able to ask for
+  // that one. Official packages install a single version and are answered by the list alone.
+  app.get("/rulesets/version", async (request, reply) => {
+    const { rulesetId, version } = rulesetVersionQuery.parse(request.query);
+    const registered = (await readRulesetRegistry(app.db)).get(rulesetId);
+    const definition = registered?.versions?.get(version);
+    if (!registered || !definition) {
+      return reply
+        .status(404)
+        .send({ error: "That version of the ruleset is not installed", code: "ruleset_version_missing" });
+    }
+    const listed: InstalledRuleset = {
+      packageId: registered.packageId,
+      definition,
+      ...(registered.source ? { source: registered.source } : {}),
+      versions: [...registered.versions!.keys()].sort((left, right) => left - right),
+    };
+    return listed;
+  });
   app.get<{ Params: { id: string } }>("/:id/release-notes", async (request) => {
     const { id } = packageParams.parse(request.params);
     return capabilityPackageManager.releaseNotes(id);

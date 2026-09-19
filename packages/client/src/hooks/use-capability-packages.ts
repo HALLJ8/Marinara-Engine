@@ -37,6 +37,32 @@ export function useInstalledRulesets(enabled = true) {
   });
 }
 
+/** What `POST /game-rulesets/import` answers: `unchanged` means the exact file was already stored. */
+export type RulesetImportResult = { status: "added" | "unchanged"; rulesetId: string; version: number };
+
+/** Import one ruleset file. The file text goes over verbatim, because the stored bytes are what
+ *  lets the server tell a re-import of the same file from a changed one. */
+export function useImportRuleset() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (definition: string) => api.post<RulesetImportResult>("/game-rulesets/import", { definition }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: capabilityPackageKeys.rulesets() }),
+  });
+}
+
+/** Remove every stored version of an imported ruleset. `force` is the answer to the server's
+ *  `ruleset_in_use` 409, so a ruleset a game plays on is never removed by one click. */
+export function useRemoveRuleset() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ rulesetId, force }: { rulesetId: string; force?: boolean }) =>
+      api.delete<{ removed: number; games: number }>(
+        `/game-rulesets?rulesetId=${encodeURIComponent(rulesetId)}${force ? "&force=true" : ""}`,
+      ),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: capabilityPackageKeys.rulesets() }),
+  });
+}
+
 export function useCapabilityCatalog(enabled = true) {
   return useQuery({
     queryKey: capabilityPackageKeys.catalog(),

@@ -1,31 +1,69 @@
 // ──────────────────────────────────────────────
 // Game: ruleset registry
 //
-// Reads every installed package's `ruleset.json`, validates it as data, and resolves the ruleset a
-// game pinned at creation (`chat.metadata.gameRuleset`). No pin means `engine-legacy`: today's
-// behaviour, untouched. A pin this install cannot honour is reported, never reinterpreted — the
-// game's arithmetic must not change silently because a package went away or is older than the pin.
+// Reads every installed package's `ruleset.json` plus every community ruleset the user imported,
+// validates them as data, and resolves the ruleset a game pinned at creation
+// (`chat.metadata.gameRuleset`). No pin means `engine-legacy`: today's behaviour, untouched. A pin
+// this install cannot honour is reported, never reinterpreted — the game's arithmetic must not
+// change silently because a package went away or is older than the pin.
+//
+// Official rulesets are keyed by their bare id and community ones by their NAMESPACED id, so an
+// import can never shadow a package's ruleset and two authors' `v20` are two entries. The import
+// policy is not consulted here: turning imports off hides community rulesets from NEW games (see
+// the `/create` handler), and must never break a game that already pinned one.
 // ──────────────────────────────────────────────
 import {
+  isCommunityRulesetId,
   parseRulesetDefinition,
   rulesetRefSchema,
   RULESET_MAX_BYTES,
+  type CommunityRulesetSource,
   type RulesetDefinition,
   type RulesetRef,
 } from "@marinara-engine/shared";
+import { getDB, type DB } from "../../db/connection.js";
 import { logger } from "../../lib/logger.js";
+import { createGameRulesetsStorage } from "../storage/game-rulesets.storage.js";
 import { capabilityPackageManager } from "../capability-packages/package-manager.service.js";
 
 export type RulesetSource = { packageId: string | null; data: Buffer | string };
-export type RegisteredRuleset = { definition: RulesetDefinition; packageId: string | null };
+/** One stored community version, as `game_rulesets` holds it. */
+export type CommunityRulesetRow = {
+  rulesetId: string;
+  version: number;
+  sourceKind: CommunityRulesetSource["kind"];
+  sourceUrl: string | null;
+  definition: string;
+};
+export type RegisteredRuleset = {
+  /** For a community entry this is the HIGHEST stored version. */
+  definition: RulesetDefinition;
+  packageId: string | null;
+  /** Community only: where the file came from. Absent on an official package's ruleset. */
+  source?: CommunityRulesetSource;
+  /** Community only: every stored version, because a game pins an exact one. */
+  versions?: ReadonlyMap<number, RulesetDefinition>;
+};
 export type RulesetRegistry = ReadonlyMap<string, RegisteredRuleset>;
 
 type RegistryLog = (message: string) => void;
 
+/** Re-key a community definition under its namespaced id. The rest of the Engine and the client key
+ *  sheets, pins and wizard choices by `definition.id`, so the id the file carries (always bare)
+ *  would collide with an official ruleset's the moment it left this function. */
+function namespaceDefinition(definition: RulesetDefinition, rulesetId: string): RulesetDefinition {
+  return { ...definition, id: rulesetId };
+}
+
 /** Build the registry from raw sources. Pure apart from `log`, and never throws: a source the
  *  Engine cannot use is dropped with one line saying why. Sources are taken in package-id order so
- *  which of two packages claiming one id wins does not depend on install order. */
-export function buildRulesetRegistry(sources: readonly RulesetSource[], log: RegistryLog): RulesetRegistry {
+ *  which of two packages claiming one id wins does not depend on install order. Community rows are
+ *  a separate input so the whole merge stays testable without a database. */
+export function buildRulesetRegistry(
+  sources: readonly RulesetSource[],
+  log: RegistryLog,
+  community: readonly CommunityRulesetRow[] = [],
+): RulesetRegistry {
   const registry = new Map<string, RegisteredRuleset>();
   // Code-point order, not localeCompare: the winner must not depend on the host's locale either.
   // A source with no package sorts last, so it can never take an id from an installed package.
@@ -63,6 +101,46 @@ export function buildRulesetRegistry(sources: readonly RulesetSource[], log: Reg
     }
     registry.set(parsed.definition.id, { definition: parsed.definition, packageId: source.packageId });
   }
+
+  // Community versions, grouped by namespaced id. A stored row the CURRENT schema no longer accepts
+  // (the format tightened since it was imported) is skipped with one line, exactly like a package
+  // source: the other versions of that ruleset stay usable.
+  const byId = new Map<string, Map<number, { definition: RulesetDefinition; row: CommunityRulesetRow }>>();
+  for (const row of community) {
+    if (!isCommunityRulesetId(row.rulesetId)) {
+      log(`Stored ruleset "${row.rulesetId}" is not namespaced and cannot shadow an official id; dropped`);
+      continue;
+    }
+    let json: unknown;
+    try {
+      json = JSON.parse(row.definition);
+    } catch {
+      log(`Stored ruleset "${row.rulesetId}" version ${row.version} is not valid JSON; dropped`);
+      continue;
+    }
+    const parsed = parseRulesetDefinition(json);
+    if (!parsed.ok) {
+      log(
+        `Stored ruleset "${row.rulesetId}" version ${row.version} is no longer usable; dropped (${parsed.issues
+          .slice(0, 5)
+          .join("; ")})`,
+      );
+      continue;
+    }
+    const versions = byId.get(row.rulesetId) ?? new Map();
+    versions.set(row.version, { definition: namespaceDefinition(parsed.definition, row.rulesetId), row });
+    byId.set(row.rulesetId, versions);
+  }
+  for (const [rulesetId, versions] of byId) {
+    const latest = [...versions.keys()].reduce((highest, version) => Math.max(highest, version));
+    const newest = versions.get(latest)!;
+    registry.set(rulesetId, {
+      definition: newest.definition,
+      packageId: null,
+      source: { kind: newest.row.sourceKind, url: newest.row.sourceUrl },
+      versions: new Map([...versions].map(([version, entry]) => [version, entry.definition])),
+    });
+  }
   return registry;
 }
 
@@ -73,8 +151,9 @@ export type ResolvedGameRuleset =
       status: "unavailable";
       /** `unreadable-pin`: the stored pin is malformed. `missing`: nothing installed provides the id.
        *  `different-package`: the id is provided, but not by the package the game pinned.
-       *  `older-installed`: the game was created on a newer version than the one installed. */
-      reason: "unreadable-pin" | "missing" | "different-package" | "older-installed";
+       *  `older-installed`: the game was created on a newer version than the one installed.
+       *  `version-missing`: a community ruleset is here, but not the exact version the game pinned. */
+      reason: "unreadable-pin" | "missing" | "different-package" | "older-installed" | "version-missing";
       ref: RulesetRef | null;
       installedVersion: number | null;
     };
@@ -95,36 +174,67 @@ export function resolveGameRuleset(metadata: Record<string, unknown>, registry: 
   if (registered.packageId !== ref.packageId) {
     return { status: "unavailable", reason: "different-package", ref, installedVersion: registered.definition.version };
   }
+  // A community ruleset keeps every version it was imported at, so the game gets the EXACT one it
+  // was created on rather than the author's latest: an import is not a reviewed package update, and
+  // a newer file may have renumbered the very sheet the game is built on.
+  if (registered.versions) {
+    const exact = registered.versions.get(ref.version);
+    if (!exact) {
+      return { status: "unavailable", reason: "version-missing", ref, installedVersion: registered.definition.version };
+    }
+    return { status: "ok", ref, definition: exact, packageId: null };
+  }
   if (registered.definition.version < ref.version) {
     return { status: "unavailable", reason: "older-installed", ref, installedVersion: registered.definition.version };
   }
   return { status: "ok", ref, definition: registered.definition, packageId: registered.packageId };
 }
 
-/** The pin for a new game on the given registered ruleset. */
+/** The pin for a new game on the given registered ruleset. A community ruleset also records where
+ *  it came from, so a recipient of a shared setup can be told where to get it. */
 export function createRulesetRef(registered: RegisteredRuleset): RulesetRef {
   return {
     id: registered.definition.id,
     version: registered.definition.version,
     packageId: registered.packageId,
+    ...(registered.source?.url ? { source: registered.source.url } : {}),
     options: {},
   };
 }
 
-/** The live registry: every ready installed package's ruleset. Re-read per call like the GM verb
- *  table, so install, update, disable and uninstall need no invalidation. Throws when the installed
- *  packages cannot be read, for a caller that must tell "none installed" from "could not look". */
-export async function readRulesetRegistry(): Promise<RulesetRegistry> {
-  return buildRulesetRegistry(await capabilityPackageManager.rulesetSources(), (message) =>
-    logger.warn("[game/rulesets] %s", message),
+/** The live registry: every ready installed package's ruleset plus every imported one. Re-read per
+ *  call like the GM verb table, so install, update, disable, uninstall and import need no
+ *  invalidation. Throws when the sources cannot be read, for a caller that must tell "none
+ *  installed" from "could not look".
+ *
+ *  `db` defaults to the process's own connection — the same instance `app.db` is decorated with —
+ *  because this function is already the wrapper that reaches for live state (it does the same with
+ *  `capabilityPackageManager`). Resolving it here rather than at each call site is what guarantees
+ *  that every path which resolves a pin sees imported rulesets; `buildRulesetRegistry` stays the
+ *  pure, injectable core. */
+export async function readRulesetRegistry(db?: DB): Promise<RulesetRegistry> {
+  const [sources, community] = await Promise.all([
+    capabilityPackageManager.rulesetSources(),
+    createGameRulesetsStorage(db ?? (await getDB())).list(),
+  ]);
+  return buildRulesetRegistry(
+    sources,
+    (message) => logger.warn("[game/rulesets] %s", message),
+    community.map((row) => ({
+      rulesetId: row.rulesetId,
+      version: row.version,
+      sourceKind: row.sourceKind,
+      sourceUrl: row.sourceUrl,
+      definition: row.definition,
+    })),
   );
 }
 
 /** The same registry for game resolution, which never throws: a failed read is an empty registry,
  *  so a pinned game reports its ruleset missing instead of failing the turn. */
-export async function loadRulesetRegistry(): Promise<RulesetRegistry> {
+export async function loadRulesetRegistry(db?: DB): Promise<RulesetRegistry> {
   try {
-    return await readRulesetRegistry();
+    return await readRulesetRegistry(db);
   } catch (error) {
     logger.error(error, "[game/rulesets] Could not read installed rulesets; games fall back to reporting them missing");
     return new Map();

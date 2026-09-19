@@ -663,6 +663,8 @@ export interface CustomAgentRepository {
   lastDigest: string | null;
   lastSyncedAt: string | null;
   agentCount: number;
+  /** Game Mode rulesets the repository published under `rulesets/` at the last sync. */
+  rulesetCount: number;
 }
 
 export type CustomAgentRepositoryChangeStatus = "new" | "updated" | "unchanged" | "removed";
@@ -675,10 +677,43 @@ export interface CustomAgentRepositoryChange {
   definition?: PackagedAgentDefinition;
 }
 
+/** `new-version`: another version of this ruleset is already installed and this one joins it.
+ *  `conflict`: that exact version is installed with different contents, so it is left alone and the
+ *  author has to raise the version number. `invalid`: the file is not a usable ruleset. Both of the
+ *  last two are skipped without stopping the rest of the repository. */
+export type CustomAgentRepositoryRulesetStatus = "new" | "new-version" | "unchanged" | "conflict" | "invalid";
+
+export interface CustomAgentRepositoryRulesetChange {
+  /** The file name inside `rulesets/`, which is what identifies the row even when nothing else parsed. */
+  file: string;
+  /** The namespaced id the ruleset would be installed under, or null when the file could not be read. */
+  rulesetId: string | null;
+  name: string;
+  version: number | null;
+  status: CustomAgentRepositoryRulesetStatus;
+  /** The author's summary of what the ruleset covers, empty when the file could not be read. */
+  coverage: string;
+  /** Why an unusable file cannot be installed, first few lines only. */
+  issues: string[];
+}
+
 export interface CustomAgentRepositoryPreview {
   repository: Pick<CustomAgentRepository, "id" | "url" | "owner" | "name">;
   digest: string;
   changes: CustomAgentRepositoryChange[];
+  rulesets: CustomAgentRepositoryRulesetChange[];
+}
+
+/** What adding or syncing a repository just did with its rulesets. Stored versions are never
+ *  rewritten, so `skipped` covers both unusable files and versions already installed differently. */
+export interface CustomAgentRepositoryRulesetResult {
+  added: number;
+  unchanged: number;
+  skipped: number;
+}
+
+export interface CustomAgentRepositoryApplyResult extends CustomAgentRepository {
+  rulesets: CustomAgentRepositoryRulesetResult;
 }
 
 export interface CustomAgentRepositoryState {

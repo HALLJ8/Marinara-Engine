@@ -8,9 +8,11 @@ import { useTranslation as useUiTranslation } from "react-i18next";
 import {
   normalizeCharacterLookupName,
   rulesetSheetEnvelopeSchema,
+  type GameCombatStyle,
   type InstalledRuleset,
 } from "@marinara-engine/shared";
 import { useCharacters, usePersonas } from "../../hooks/use-characters";
+import { rulesetRepositoryLabel } from "../../lib/ruleset-source";
 import { cn } from "../../lib/utils";
 
 function readRecord(value: unknown): Record<string, unknown> | null {
@@ -97,10 +99,13 @@ export function GameSetupRulesetSheetStatus({
 export function GameSetupRulesChooser({
   rulesets,
   activeId,
+  combatStyle,
   onSelect,
 }: {
   rulesets: InstalledRuleset[];
   activeId: string | null;
+  /** The Combat Preference picked above, named in the note so "Marinara's combat" is never read as Classic. */
+  combatStyle: GameCombatStyle;
   onSelect: (rulesetId: string | null) => void;
 }) {
   const { t } = useUiTranslation();
@@ -125,8 +130,11 @@ export function GameSetupRulesChooser({
             {t("game.ruleset.setup.ownRulesDescription")}
           </span>
         </button>
-        {rulesets.map(({ definition }) => {
+        {rulesets.map(({ definition, source }) => {
           const selected = active?.definition.id === definition.id;
+          // An imported ruleset says so on its own card: it was not reviewed by anyone, and where
+          // it came from is part of deciding whether to build a whole campaign on it.
+          const repository = source ? rulesetRepositoryLabel(source) : null;
           return (
             <button
               key={definition.id}
@@ -136,6 +144,13 @@ export function GameSetupRulesChooser({
               className={cardClass(selected)}
             >
               <span className="block font-medium text-[var(--foreground)]">{definition.name}</span>
+              {source && (
+                <span className="mt-0.5 block text-[0.625rem] uppercase text-[var(--muted-foreground)]/80">
+                  {repository
+                    ? t("game.ruleset.setup.importedFrom", { source: repository })
+                    : t("game.ruleset.setup.imported")}
+                </span>
+              )}
               <span className="mt-1 block text-[var(--muted-foreground)]">{definition.coverage.summary}</span>
             </button>
           );
@@ -146,7 +161,13 @@ export function GameSetupRulesChooser({
         <div className="mt-2 space-y-2 rounded-lg border border-[var(--border)] bg-[var(--card)] p-3 text-xs">
           <p className="text-[var(--muted-foreground)]">{t("game.ruleset.setup.pinned")}</p>
           {!active.definition.coverage.combat && (
-            <p className="text-[var(--muted-foreground)]">{t("game.ruleset.setup.defaultCombat")}</p>
+            <p className="text-[var(--muted-foreground)]">
+              {t("game.ruleset.setup.combatFromPreference", {
+                style: t(
+                  combatStyle === "tactical" ? "ui.game.gamesetupwizard.tactical" : "ui.game.gamesetupwizard.classic",
+                ),
+              })}
+            </p>
           )}
         </div>
       )}
