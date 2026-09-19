@@ -16,6 +16,7 @@ import {
   RULESET_CATALOG_MAX_BYTES,
   RULESET_MAX_BYTES,
   rulesetCatalogAssetPath,
+  isRulesetCatalogAssetPath,
   isInstalledCapabilityReady,
   installedCapabilityRegistrySchema,
   installedCapabilityPackageSchema,
@@ -494,14 +495,31 @@ function supportsEngineVersion(entry: CapabilityCatalogPackage, engineVersion: s
   );
 }
 
+/** Whether any row of these entries names a column the ruleset keeps up to date. Read structurally
+ *  rather than parsed: the install gate looks at documents nothing has validated yet, and a shape it
+ *  does not recognise is not its problem to report. */
+function entriesCarryScaledRows(entries: unknown): boolean {
+  if (!Array.isArray(entries)) return false;
+  return entries.some((entry) => {
+    const rows = entry && typeof entry === "object" ? (entry as { rows?: unknown }).rows : undefined;
+    return (
+      Array.isArray(rows) &&
+      rows.some((row) => !!row && typeof row === "object" && (row as { scaled?: unknown }).scaled !== undefined)
+    );
+  });
+}
+
 /** `rulesetDocument` is the package's own `ruleset.json`, parsed, when the install already has its
  *  verified bytes. Catalogs live INSIDE that file, so the manifest alone cannot show them, and the
- *  gate that keeps a package off an Engine too old to serve them has to read it. A document that is
- *  absent or unparseable simply skips the catalog check: install has never validated a ruleset's
- *  contents, and an unusable one is the registry's story to tell, with a log line. */
+ *  gate that keeps a package off an Engine too old to serve them has to read it. `catalogDocuments`
+ *  are the package's own `catalogs/<id>.json` files, by their normalized path, which install also
+ *  holds by then: a scaled row can sit in one of those instead. A document that is absent or
+ *  unparseable simply skips the catalog check: install has never validated a ruleset's contents, and
+ *  an unusable one is the registry's story to tell, with a log line. */
 export function getCapabilityPackageInstallIssue(
   manifest: CapabilityCatalogPackage["manifest"],
   rulesetDocument?: unknown,
+  catalogDocuments?: ReadonlyMap<string, unknown>,
 ): string | null {
   if (manifest.kind.includes("turn-game") && !manifest.entrypoints.server) {
     return "Turn-game packages require a server entrypoint";
@@ -543,14 +561,22 @@ export function getCapabilityPackageInstallIssue(
     const declaredPaths = new Set(
       (manifest.contributions?.assets?.paths ?? []).map(tryNormalizeArchivePath).filter((path) => path !== null),
     );
+    // A row whose number the ruleset keeps up to date is a new key in a strict file, inline or in a
+    // catalog asset, so an Engine that does not know it refuses the file that holds it.
+    const scaledIssue = "A ruleset with scaled catalog rows requires schemaVersion 2 and capabilityApi 1.23 or newer";
     for (const catalog of catalogs) {
-      const asset = catalog && typeof catalog === "object" ? (catalog as { asset?: unknown }).asset : undefined;
+      const header = catalog && typeof catalog === "object" ? (catalog as { asset?: unknown; entries?: unknown }) : {};
+      if (entriesCarryScaledRows(header.entries) && !declaresApi(23)) return scaledIssue;
+      const asset = header.asset;
       if (typeof asset !== "string") continue;
       // A path that does not normalize is never a declared one, whatever else failed to normalize.
       const normalized = tryNormalizeArchivePath(asset);
       if (!normalized || !declaredPaths.has(normalized)) {
         return `The ruleset names the catalog file ${asset}, which is not listed in contributions.assets.paths`;
       }
+      const document = catalogDocuments?.get(normalized);
+      const fileEntries = document && typeof document === "object" ? (document as { entries?: unknown }).entries : null;
+      if (entriesCarryScaledRows(fileEntries) && !declaresApi(23)) return scaledIssue;
     }
   }
   // The battle block lives inside the ruleset file too, so it is read the same way and for the same
@@ -834,7 +860,18 @@ async function installCatalogPackage(entry: CapabilityCatalogPackage, activateDu
     } catch {
       rulesetDocument = undefined;
     }
-    const rulesetIssue = getCapabilityPackageInstallIssue(installedManifest, rulesetDocument);
+    // The catalog files are here too, and a scaled row can sit in one of them rather than inline.
+    const catalogDocuments = new Map<string, unknown>();
+    for (const [name, data] of verifiedFiles) {
+      if (!isRulesetCatalogAssetPath(name)) continue;
+      try {
+        catalogDocuments.set(name, JSON.parse(data.toString("utf8")));
+      } catch {
+        // An unreadable catalog file is the catalog route's story to tell, with the author's own
+        // issue lines; it has never been a reason to refuse the install.
+      }
+    }
+    const rulesetIssue = getCapabilityPackageInstallIssue(installedManifest, rulesetDocument, catalogDocuments);
     if (rulesetIssue) throw new Error(rulesetIssue);
   }
 

@@ -64,8 +64,10 @@ function readInteger(value: string | undefined): number | null {
 function readOpName(raw: string | undefined): RulesetSheetOp["op"] | null {
   const value = raw?.trim().toLowerCase();
   if (!value) return null;
-  // `heal` is the word a Game Master reaches for; it is the same command as `restore`.
+  // `heal` and `cast` are the words a Game Master reaches for; they are the same commands as
+  // `restore` and `use`.
   if (value === "heal") return "restore";
+  if (value === "cast") return "use";
   return (RULESET_SHEET_OP_NAMES as readonly string[]).includes(value) ? (value as RulesetSheetOp["op"]) : null;
 }
 
@@ -112,6 +114,13 @@ export function parseSheetCommandTagBody(body: string): ParsedSheetCommandTag {
     if (!field) return parsed;
     // An absent value is how a note is cleared; the field still has to be named.
     return { ...parsed, op: { op: "note", field, value: values.get("value") ?? "" } };
+  }
+  if (name === "use") {
+    // `spell=` is the word that goes with `cast=`; both are read as the general `name=`.
+    const entry = (values.get("name") ?? values.get("spell"))?.trim();
+    if (!entry) return parsed;
+    const pool = values.get("pool")?.trim();
+    return { ...parsed, op: { op: "use", name: entry, ...(pool ? { pool } : {}) } };
   }
   const rest = values.get("rest")?.trim();
   if (!rest) return parsed;
@@ -174,6 +183,9 @@ export function serializeSheetCommandTag(
     } else if (op.op === "note") {
       attribute("field", op.field);
       attribute("value", op.value);
+    } else if (op.op === "use") {
+      attribute("name", op.name);
+      if (op.pool) attribute("pool", op.pool);
     } else {
       attribute("rest", op.rest);
     }
@@ -216,8 +228,15 @@ export function readResolvedSheetCommandTags(text: string): ResolvedSheetCommand
     const now = values.get("now")?.trim();
     const reason = values.get("reason")?.trim();
     const name = readOpName(values.get("op"));
+    // `name` first, because a `use` tag carries the ability's name and may carry the pool it was
+    // paid from; the ability is what the line is about.
     const target =
-      values.get("pool") ?? values.get("track") ?? values.get("condition") ?? values.get("field") ?? values.get("rest");
+      values.get("name") ??
+      values.get("pool") ??
+      values.get("track") ??
+      values.get("condition") ??
+      values.get("field") ??
+      values.get("rest");
     const head = [who, name ?? "sheet", target].filter(Boolean).join(" ");
     found.push({
       ...(who ? { who } : {}),

@@ -5,7 +5,7 @@
 // rewritten with the outcome. A refusal is kept in the reply on purpose — the narration has to be
 // able to see that the spell was never cast.
 
-import type { RulesetDefinition, RulesetSheetBuild } from "../../schemas/ruleset.schema.js";
+import type { RulesetCatalogEntriesById, RulesetDefinition, RulesetSheetBuild } from "../../schemas/ruleset.schema.js";
 import { normalizeCharacterLookupName } from "../../utils/character-lookup-name.js";
 import {
   createSheetCommandTagRegex,
@@ -15,7 +15,14 @@ import {
   truncateSheetSummary,
   type SheetCommandTagOutcome,
 } from "../../utils/sheet-command-tag.js";
-import { applyRulesetSheetOp, type RulesetLiveStates, type RulesetSheetOp } from "./live-state.js";
+import {
+  applyRulesetSheetOp,
+  planRulesetUse,
+  type RulesetLiveState,
+  type RulesetLiveStates,
+  type RulesetSheetOp,
+  type RulesetSheetOpResult,
+} from "./live-state.js";
 
 export interface SheetCommandCard {
   name: string;
@@ -28,6 +35,9 @@ export interface SheetCommandContext {
   /** The player's own card, which a command that names nobody applies to. */
   playerName: string | null;
   live: RulesetLiveStates;
+  /** The entries of the catalogs the party's rows point at, which the `use` command needs to know
+   *  what an ability costs. Absent, every `use` is refused as naming nothing the Engine knows. */
+  catalogs?: RulesetCatalogEntriesById;
 }
 
 export interface SheetCommandOutcome {
@@ -96,19 +106,42 @@ export function applySheetCommandTags(
     return { cards: [group[0]!], who: group[0]!.name };
   };
 
-  const applyTo = (card: SheetCommandCard, op: RulesetSheetOp) => {
+  const store = (key: string, state: RulesetLiveState) => {
+    if (Object.keys(state).length > 0) live[key] = state;
+    else delete live[key];
+    changed = true;
+  };
+
+  // `use` is several spends at once, so it is all or nothing: every step goes onto a working copy
+  // and the first refusal refuses the whole command, with the sheet exactly as it was.
+  const useOn = (card: SheetCommandCard, key: string, op: Extract<RulesetSheetOp, { op: "use" }>) => {
+    const plan = planRulesetUse(ctx.definition, card.build, live[key], ctx.catalogs ?? {}, op);
+    if (!plan.ok) return { ok: false, reason: plan.reason } as const;
+    let state = live[key] as RulesetLiveState | undefined;
+    const paid: string[] = [];
+    for (const step of plan.steps) {
+      const result = applyRulesetSheetOp(ctx.definition, card.build, state, step.op);
+      if (!result.ok) return result;
+      state = result.live;
+      paid.push(`${step.label} ${result.now}`);
+    }
+    // An ability that costs nothing, such as a cantrip or a passive feature, is fine and changes
+    // nothing: it is the Game Master saying what happened, not asking to spend.
+    if (!state || paid.length === 0) return { ok: true, live: {}, now: `${plan.label}: no cost` } as const;
+    store(key, state);
+    return { ok: true, live: state, now: paid.join(", ") } as const;
+  };
+
+  const applyTo = (card: SheetCommandCard, op: RulesetSheetOp): RulesetSheetOpResult => {
     const key = normalizeCharacterLookupName(card.name);
     try {
+      if (op.op === "use") return useOn(card, key, op);
       const result = applyRulesetSheetOp(ctx.definition, card.build, live[key], op);
-      if (result.ok) {
-        if (Object.keys(result.live).length > 0) live[key] = result.live;
-        else delete live[key];
-        changed = true;
-      }
+      if (result.ok) store(key, result.live);
       return result;
     } catch {
       // A turn is never lost to its bookkeeping; an impossible command is simply refused.
-      return { ok: false, reason: "malformed" } as const;
+      return { ok: false, reason: "malformed" };
     }
   };
 

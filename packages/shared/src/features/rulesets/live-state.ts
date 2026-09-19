@@ -12,7 +12,15 @@
 // as a d20 game with spell slots.
 
 import { z } from "zod";
-import type { RulesetDefinition, RulesetSheetBuild } from "../../schemas/ruleset.schema.js";
+import {
+  catalogRowRef,
+  RULESET_CATALOG_ROW_KEY,
+  type RulesetCatalogEntriesById,
+  type RulesetCatalogEntry,
+  type RulesetDefinition,
+  type RulesetList,
+  type RulesetSheetBuild,
+} from "../../schemas/ruleset.schema.js";
 import { evaluateRulesetSheet, isRulesetItemHidden, resolveRulesetValueRef, roundRulesetNumber } from "./sheet-math.js";
 
 export interface RulesetLivePoolValue {
@@ -303,7 +311,10 @@ export type RulesetSheetOp =
   | { op: "track"; track: string; to?: number; by?: number }
   | { op: "condition"; condition: string; active: boolean }
   | { op: "note"; field: string; value: string }
-  | { op: "rest"; rest: string };
+  | { op: "rest"; rest: string }
+  /** Uses something the character picked from a catalog, paying everything it costs. Resolved by
+   *  `planRulesetUse` before it reaches `applyRulesetSheetOp`, because it needs the catalogs. */
+  | { op: "use"; name: string; pool?: string };
 
 export type RulesetSheetRefusal =
   | "unknown-pool"
@@ -315,13 +326,17 @@ export type RulesetSheetRefusal =
   | "unknown-condition"
   | "unknown-field"
   | "unknown-rest"
+  | "unknown-entry"
+  | "ambiguous-entry"
+  | "bad-pool"
   | "malformed";
 
 export type RulesetSheetOpResult =
   | { ok: true; live: RulesetLiveState; now: string }
   | { ok: false; reason: RulesetSheetRefusal };
 
-/** The op names a tag may spell. `heal` is an alias the tag layer folds into `restore`. */
+/** The op names a tag may spell. `heal` is an alias the tag layer folds into `restore`, and `cast`
+ *  one it folds into `use`. */
 export const RULESET_SHEET_OP_NAMES = Object.freeze([
   "spend",
   "restore",
@@ -331,6 +346,7 @@ export const RULESET_SHEET_OP_NAMES = Object.freeze([
   "condition",
   "note",
   "rest",
+  "use",
 ] as const);
 
 /** How long a `now` summary may get before the tag layer would cut it anyway. */
@@ -373,6 +389,9 @@ export function applyRulesetSheetOp(
   stored: unknown,
   op: RulesetSheetOp,
 ): RulesetSheetOpResult {
+  // `use` is turned into plain spends by `planRulesetUse` before it gets here: it needs the
+  // ruleset's catalogs, which this function deliberately does not take.
+  if (op.op === "use") return { ok: false, reason: "malformed" };
   const next = readStoredLiveState(stored);
   const resolved = resolveLive(definition, build, next);
 
@@ -520,4 +539,157 @@ export function applyRulesetSheetOp(
 
 function definitionTrackDefault(definition: RulesetDefinition, id: string): number | undefined {
   return definition.sheet.live.tracks.find((track) => track.id === id)?.default;
+}
+
+// ── The `use` command ──
+//
+// What a character uses is a row they picked from a catalog, so what it costs is that entry's own
+// `mechanics.cost` plus one from every list-row pool the same entry wrote (a trick's uses, a class
+// feature's counter). The Engine turns that into plain `spend` operations and the caller applies
+// them all or nothing, so the Game Master names the ability and never does the arithmetic.
+
+export interface RulesetUseStep {
+  op: RulesetSheetOp;
+  /** The pool this step pays, as the sheet shows it, for the outcome written back into the tag. */
+  label: string;
+}
+
+export type RulesetUsePlan =
+  | { ok: true; label: string; steps: RulesetUseStep[] }
+  | { ok: false; reason: RulesetSheetRefusal };
+
+/** The column a Game Master sees a row of this list under: what the sheet block prints it as, then
+ *  the name a row pool is keyed by, then the first text column the list has. */
+function listNameColumn(definition: RulesetDefinition, list: RulesetList): string | undefined {
+  return (
+    definition.gm.sheetSummary.lists.find((entry) => entry.list === list.id)?.nameColumn ??
+    list.pools?.nameColumn ??
+    list.columns.find((column) => column.type === "text")?.id
+  );
+}
+
+/**
+ * What using one catalog-picked ability spends, or why it cannot be worked out. Pure: nothing is
+ * applied here, and the caller puts every step through `applyRulesetSheetOp` on a working copy so a
+ * refusal in the middle leaves the sheet exactly as it was.
+ *
+ * A catalog the caller could not fetch reads as an entry that is not there: the Engine cannot know
+ * what the ability costs, and guessing would let a spell be cast for free.
+ */
+export function planRulesetUse(
+  definition: RulesetDefinition,
+  build: RulesetSheetBuild,
+  stored: unknown,
+  catalogs: RulesetCatalogEntriesById,
+  op: Extract<RulesetSheetOp, { op: "use" }>,
+): RulesetUsePlan {
+  const wanted = op.name.trim();
+  if (!wanted) return { ok: false, reason: "unknown-entry" };
+
+  const byRef = new Map<string, RulesetCatalogEntry>();
+  for (const [catalogId, entries] of Object.entries(catalogs)) {
+    for (const entry of entries) byRef.set(catalogRowRef(catalogId, entry.id), entry);
+  }
+
+  // Which entry was meant. A row answers to the name the sheet shows it under and to the label of
+  // the entry it came from, so the Game Master's own wording and the ruleset's both work.
+  const matched = new Set<string>();
+  for (const list of definition.sheet.lists) {
+    const rows = build.lists?.[list.id];
+    if (!Array.isArray(rows)) continue;
+    const nameColumn = listNameColumn(definition, list);
+    for (const row of rows) {
+      if (!row || typeof row !== "object") continue;
+      const cells = row as Record<string, unknown>;
+      const ref = own(cells, RULESET_CATALOG_ROW_KEY);
+      if (typeof ref !== "string") continue;
+      const name = nameColumn ? own(cells, nameColumn) : undefined;
+      const label = byRef.get(ref)?.label;
+      if ((typeof name === "string" && sameName(name, wanted)) || (label && sameName(label, wanted))) {
+        matched.add(ref);
+      }
+    }
+  }
+  if (matched.size === 0) return { ok: false, reason: "unknown-entry" };
+  if (matched.size > 1) return { ok: false, reason: "ambiguous-entry" };
+  const ref = [...matched][0]!;
+  const entry = byRef.get(ref);
+  if (!entry) return { ok: false, reason: "unknown-entry" };
+
+  const resolved = readRulesetLive(definition, build, stored);
+  const declared = resolved.pools.filter((pool) => !pool.listId);
+  const declaredByKey = new Map(declared.map((pool) => [pool.key, pool]));
+  /** The family a cost term names, whether it named a pool of that family or the family itself. */
+  const groupOf = (target: string): string | undefined => {
+    const pool = definition.sheet.live.pools.find((entry) => entry.id === target);
+    if (pool) return pool.group;
+    return definition.sheet.live.pools.some((entry) => entry.group === target) ? target : undefined;
+  };
+
+  const terms = entry.mechanics?.cost ?? [];
+  let costs: Array<{ pool: string; amount: number }> = [...terms];
+  if (op.pool !== undefined) {
+    // An upcast: one price, paid out of another pool of the same family. Anything else is refused
+    // rather than reinterpreted, because paying a different bill is not what was asked for.
+    const named = op.pool.trim();
+    const group = terms.length === 1 ? groupOf(terms[0]!.pool) : undefined;
+    const target = named
+      ? declared.find((pool) => sameName(pool.key, named) || sameName(pool.label, named))
+      : undefined;
+    if (!group || !target || target.group !== group) return { ok: false, reason: "bad-pool" };
+    costs = [{ pool: target.key, amount: terms[0]!.amount }];
+  }
+
+  const steps: RulesetUseStep[] = [];
+  /** What this plan already spends per pool, so two terms on one family do not both read the value
+   *  the turn started with. */
+  const running = new Map<string, number>();
+  const spend = (pool: { key: string; label: string }, amount: number) => {
+    running.set(pool.key, (running.get(pool.key) ?? 0) + amount);
+    steps.push({ op: { op: "spend", pool: pool.key, amount }, label: pool.label });
+  };
+
+  for (const cost of costs) {
+    const direct = declaredByKey.get(cost.pool);
+    if (direct) {
+      spend(direct, cost.amount);
+      continue;
+    }
+    const family = definition.sheet.live.pools.filter((pool) => pool.group === cost.pool);
+    if (family.length > 0) {
+      // The first pool of the family, in declaration order, that can still afford it. There is no
+      // automatic climb to a higher one: a group is not always a ladder, and the Game Master can
+      // see every pool's value on the sheet block and name one with pool=.
+      const present = family.flatMap((pool) => {
+        const found = declaredByKey.get(pool.id);
+        return found ? [found] : [];
+      });
+      const chosen = present.find((pool) => pool.value - (running.get(pool.key) ?? 0) >= cost.amount) ?? present[0];
+      if (!chosen) return { ok: false, reason: "insufficient" };
+      spend(chosen, cost.amount);
+      continue;
+    }
+    // A pool this sheet does not have right now, such as a caster's empty ninth-level slots. It is
+    // refused where every other spend on it would be, with the same reason.
+    steps.push({ op: { op: "spend", pool: cost.pool, amount: cost.amount }, label: cost.pool });
+  }
+
+  // Plus one from every list-row pool this same entry wrote: the counter that tracks a feature's
+  // uses is one of the entry's own rows, found by the same mark.
+  for (const list of definition.sheet.lists) {
+    const pools = list.pools;
+    const rows = build.lists?.[list.id];
+    if (!pools || !Array.isArray(rows)) continue;
+    for (const row of rows) {
+      if (!row || typeof row !== "object") continue;
+      const cells = row as Record<string, unknown>;
+      if (own(cells, RULESET_CATALOG_ROW_KEY) !== ref) continue;
+      const name = own(cells, pools.nameColumn);
+      if (typeof name !== "string") continue;
+      const key = `${list.id}${LIST_POOL_SEPARATOR}${name.trim().toLowerCase()}`;
+      const pool = resolved.pools.find((candidate) => candidate.key === key);
+      if (pool && !running.has(pool.key)) spend(pool, 1);
+    }
+  }
+  return { ok: true, label: entry.label, steps };
 }

@@ -421,8 +421,9 @@ const installedPackages = packages.map((fixture) => {
   ];
   const manifest = {
     schemaVersion: 2,
-    // 1.22, because the example ruleset also carries the combat bridge's battle block now.
-    capabilityApi: { major: 1, minor: 22 },
+    // 1.23, because the example ruleset carries the combat bridge's battle block and a scaled
+    // catalog row now.
+    capabilityApi: { major: 1, minor: 23 },
     builtAgainst: { engineVersion: "2.4.6", engineCommit: "0".repeat(40) },
     id: packageId,
     name: fixture.id,
@@ -538,6 +539,44 @@ try {
     assert.match(
       getCapabilityPackageInstallIssue(manifestWithUnusablePath as any, unusablePath) ?? "",
       /which is not listed in contributions\.assets\.paths/,
+    );
+
+    // ── A scaled row needs 1.23, inline or in the catalog file ──
+    const before123 = { ...manifest, capabilityApi: { major: 1, minor: 22 } };
+    const scaledIssue = /scaled catalog rows requires schemaVersion 2 and capabilityApi 1\.23 or newer/;
+    assert.match(
+      getCapabilityPackageInstallIssue(before123 as any, JSON.parse(ruleset())) ?? "",
+      scaledIssue,
+      "the example's scaled trick row is read out of the inline catalog",
+    );
+    const withoutScaled = JSON.parse(
+      ruleset((doc) => {
+        for (const entry of doc.catalogs[0].entries) for (const row of entry.rows) delete row.scaled;
+      }),
+    );
+    assert.equal(
+      getCapabilityPackageInstallIssue(before123 as any, withoutScaled),
+      null,
+      "the same ruleset without a scaled row installs on 1.22",
+    );
+    // The install path holds the verified bytes of every declared asset, so the same gate reads a
+    // scaled row out of a catalog FILE rather than only out of the ruleset.
+    const assetRuleset = JSON.parse(packages[0]!.ruleset);
+    const assetPath = rulesetCatalogAssetPath("knacks");
+    const scaledFile = JSON.parse(packages[0]!.catalog);
+    assert.match(
+      getCapabilityPackageInstallIssue(before123 as any, assetRuleset, new Map([[assetPath, scaledFile]])) ?? "",
+      scaledIssue,
+    );
+    assert.equal(
+      getCapabilityPackageInstallIssue(manifest as any, assetRuleset, new Map([[assetPath, scaledFile]])),
+      null,
+      "the same file installs once the package declares 1.23",
+    );
+    assert.equal(
+      getCapabilityPackageInstallIssue(before123 as any, assetRuleset),
+      null,
+      "a catalog file the caller did not hand over is not guessed at",
     );
   }
 
