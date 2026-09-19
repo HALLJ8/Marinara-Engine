@@ -434,6 +434,9 @@ test("Combat director ruleset: the ruleset's own menu resolves the fight and wri
     if (importedRulesetId) {
       await request.delete(`/api/game-rulesets?rulesetId=${encodeURIComponent(importedRulesetId)}&force=true`);
     }
-    await request.patch("/api/agents/import-policy", { data: { enabled: importsWereEnabled } });
+    // Checked, because a restore that quietly failed would leave the policy on for every spec that
+    // runs on this server afterwards.
+    const restored = await request.patch("/api/agents/import-policy", { data: { enabled: importsWereEnabled } });
+    expect(restored.ok(), await restored.text()).toBeTruthy();
   }
 });

@@ -55,14 +55,23 @@ export function RulesetCombatMenu({ view, budgetLabel, busy, onChoose, onFlee }:
   // keyboard away from somebody working down the list.
   const stepStage = step?.stage;
   const stepOption = step?.option.id;
-  const leftStep = useRef(false);
+  // Set by the player's own way out of a step (Back, or a choice that was sent), never by the turn
+  // moving on underneath an open step.
+  const playerClosedStep = useRef(false);
+  const closeStep = () => {
+    // Only when there IS a step to leave: a choice sent straight off the menu closes nothing, and a
+    // flag left standing would be spent on the next turn reset instead.
+    playerClosedStep.current = step !== null;
+    setStep(null);
+  };
   useEffect(() => {
     if (stepStage) first.current?.focus();
     // Going BACK unmounts the step, and the browser would drop focus on the body, leaving a keyboard
     // player to Tab down from the top of the page. The menu takes it instead, and only then: a
-    // menu that merely appears (a new turn) must not steal focus from wherever the player is.
-    else if (leftStep.current) root.current?.focus();
-    leftStep.current = !!stepStage;
+    // menu that appears, or is reset because the turn moved on, must not steal focus from wherever
+    // the player is.
+    else if (playerClosedStep.current) root.current?.focus();
+    playerClosedStep.current = false;
   }, [stepStage, stepOption]);
 
   if (!view.options) {
@@ -76,7 +85,7 @@ export function RulesetCombatMenu({ view, budgetLabel, busy, onChoose, onFlee }:
   }
 
   const send = (option: DirectedRulesetOption, targets: string[], payWith?: string) => {
-    setStep(null);
+    closeStep();
     onChoose(option.id, targets, payWith);
   };
   const take = (option: DirectedRulesetOption) => {
@@ -139,7 +148,7 @@ export function RulesetCombatMenu({ view, budgetLabel, busy, onChoose, onFlee }:
             </button>
           ))}
         </div>
-        <BackButton onClick={() => setStep(null)} label={t("game.combat.ruleset.target.back")} />
+        <BackButton onClick={closeStep} label={t("game.combat.ruleset.target.back")} />
       </div>
     );
   }
@@ -201,7 +210,7 @@ export function RulesetCombatMenu({ view, budgetLabel, busy, onChoose, onFlee }:
               {t("game.combat.ruleset.target.confirm", { count: step.targets.length })}
             </button>
           )}
-          <BackButton onClick={() => setStep(null)} label={t("game.combat.ruleset.target.back")} />
+          <BackButton onClick={closeStep} label={t("game.combat.ruleset.target.back")} />
         </div>
       </div>
     );
