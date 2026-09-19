@@ -386,6 +386,7 @@ export function useTouchFolderDrag({
       if (!touch) {
         if (Array.from(event.changedTouches).some((touch) => touch.identifier === drag.scrollTouch?.identifier)) {
           drag.scrollTouch = null;
+          if (drag.active) scheduleAutoScroll(drag);
         }
         return;
       }
@@ -393,7 +394,7 @@ export function useTouchFolderDrag({
       drag.lastY = touch.clientY;
       cancelTouchDrag(true);
     },
-    [cancelTouchDrag],
+    [cancelTouchDrag, scheduleAutoScroll],
   );
 
   const handleTouchCancel = useCallback(
@@ -407,9 +408,10 @@ export function useTouchFolderDrag({
         cancelTouchDrag(false);
       } else if (Array.from(event.changedTouches).some((touch) => touch.identifier === drag.scrollTouch?.identifier)) {
         drag.scrollTouch = null;
+        if (drag.active) scheduleAutoScroll(drag);
       }
     },
-    [cancelTouchDrag],
+    [cancelTouchDrag, scheduleAutoScroll],
   );
   const handleContextMenu = useCallback(
     (event: Event) => {

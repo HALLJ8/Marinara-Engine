@@ -125,6 +125,28 @@ for (const kind of ["chat", "character", "persona"] as const) {
         await touch(panel, "touchend", [primary], [secondary]);
         await expect(preview).toBeVisible();
         await expect(panel).toBeVisible();
+        // A stationary holding finger near the edge resumes auto-scroll after the scrolling finger leaves.
+        const scrollDown = await scroller.evaluate(
+          (element) => element.scrollTop + element.clientHeight < element.scrollHeight - 60,
+        );
+        const edgeFinger = {
+          ...primary,
+          clientY: await scroller.evaluate(
+            (element, down) =>
+              down
+                ? Math.min(innerHeight, element.getBoundingClientRect().bottom) - 8
+                : Math.max(0, element.getBoundingClientRect().top) + 8,
+            scrollDown,
+          ),
+        };
+        await touch(panel, "touchstart", [primary, secondary], [secondary]);
+        await touch(panel, "touchmove", [edgeFinger, secondary], [edgeFinger]);
+        const pausedScroll = await scrollTop();
+        await page.waitForTimeout(100);
+        expect(await scrollTop()).toBe(pausedScroll);
+        await touch(panel, kind === "character" ? "touchcancel" : "touchend", [edgeFinger], [secondary]);
+        if (scrollDown) await expect.poll(scrollTop).toBeGreaterThan(pausedScroll + 20);
+        else await expect.poll(scrollTop).toBeLessThan(pausedScroll - 20);
         await touch(panel, "touchstart", [primary, secondary], [secondary]);
         secondary = { ...secondary, clientY: secondary.clientY + 5000 };
         await touch(panel, "touchmove", [primary, secondary], [secondary]);
