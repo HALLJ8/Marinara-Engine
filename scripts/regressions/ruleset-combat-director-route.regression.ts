@@ -362,6 +362,58 @@ try {
     assert.match(refusedStart.json().error, /does not pin a ruleset/);
   }
 
+  // ── A player who swiped back: the fight writes the row the sheet SHOWS, not the newest one ──
+  {
+    const swiped = await newGame({ ruleset: true });
+    const shown = await states.getByChatAndMessage(swiped.chat.id, swiped.anchor.id, 0);
+    assert.ok(shown, "the row of the telling the player is looking at");
+    // A later telling of the same message, which the player swiped away from. It is the NEWEST row.
+    const { id: _id, createdAt: _createdAt, ...telling } = shown!;
+    await states.create({
+      ...telling,
+      swipeIndex: 1,
+      worldCustomFields: [],
+      presentCharacters: [],
+      recentEvents: [],
+      fieldLocks: {},
+      hiddenTrackerFields: [],
+      committed: true,
+    } as Parameters<typeof states.create>[0]);
+    assert.equal((await states.getLatest(swiped.chat.id))?.swipeIndex, 1, "the newest row is the other telling");
+    const opened = await post("/combat/start", {
+      chatId: swiped.chat.id,
+      anchor: swiped.anchor.id,
+      style: "ruleset",
+      party: [unit("corwin", "Corwin", "player")],
+      enemies: [{ ...unit("lurker", "Thorn Lurker", "enemy"), creature: "creatures/thorn-lurker" }],
+    });
+    assert.equal(opened.statusCode, 200, opened.body);
+    let fight = opened.json().session as DirectedCombatView;
+    const send = async (command: DirectedCommand) => {
+      const response = await post("/combat/command", {
+        chatId: swiped.chat.id,
+        anchor: swiped.anchor.id,
+        id: fight.id,
+        instanceId: fight.instanceId,
+        revision: fight.revision,
+        requestId: crypto.randomUUID(),
+        command,
+      });
+      assert.equal(response.statusCode, 200, response.body);
+      fight = response.json().session;
+    };
+    for (let guard = 0; guard < 20 && fight.ruleset!.controller !== "manual" && !fight.outcome; guard++) {
+      await send({ type: "continue" });
+    }
+    const priced = fight.ruleset!.options?.find((option) => (option.cost?.length ?? 0) > 0);
+    assert.ok(priced, "the wizard has something on the menu that spends a pool");
+    await send({ type: "ruleset", optionId: priced!.id, targetIds: [priced!.targetIds[0]!] });
+    const liveOf = async (swipeIndex: number) =>
+      (await states.getByChatAndMessage(swiped.chat.id, swiped.anchor.id, swipeIndex))?.rulesetLive ?? null;
+    assert.ok(await liveOf(0), "the spent pool is on the row the sheet shows");
+    assert.equal(await liveOf(1), null, "and the telling the player swiped away from is untouched");
+  }
+
   // ── A party member with no sheet is refused by name ──
   {
     const game3 = await newGame({ ruleset: true });

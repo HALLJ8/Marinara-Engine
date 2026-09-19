@@ -44,6 +44,7 @@ import { loadRulesetRegistry, resolveGameRuleset } from "../services/game/rulese
 import { loadRulesetCatalogEntries } from "../services/game/ruleset-catalog.service.js";
 import { resolveTacticalStartPreferences } from "../services/game/tactical-battlefield.service.js";
 import { logger } from "../lib/logger.js";
+import { resolveVisibleGameStateAnchor } from "./generate/generate-route-utils.js";
 
 // Host-owned Experience namespace: existing branch/checkpoint/export paths preserve these rows,
 // while turn-game readers and resets already exclude the entire experience: prefix.
@@ -391,21 +392,35 @@ export async function combatDirectorRoutes(
     };
     return view;
   };
+  /** The game state row the in-game sheet shows: the last assistant message's active swipe, the rule
+   *  `GET` and `PATCH /chats/:id/game-state` follow. The NEWEST row is not always that one (a player
+   *  who swiped back is looking at an older telling), and a fight that read or wrote another row
+   *  than the sheet would leave the two disagreeing. */
+  const visibleLiveRow = async (chatId: string) => {
+    const states = createGameStateStorage(app.db);
+    const visibleAnchor = resolveVisibleGameStateAnchor(await chats.listMessages(chatId));
+    const row = await states.getForGeneration(chatId, { preferLatestVisible: true, visibleAnchor });
+    return { states, visibleAnchor, row };
+  };
   /** The party's live sheet state, written where the sheet reads it. Inside the ledger's own save,
    *  so a step either changes both or changes neither. */
   const writeRulesetLive = async (chatId: string, anchor: string, fight: RulesetFightState) => {
-    const states = createGameStateStorage(app.db);
-    const latest = await states.getLatest(chatId);
-    const next: RulesetLiveStates = { ...(parseStoredRulesetLive(latest?.rulesetLive) ?? {}) };
+    const { states, visibleAnchor, row } = await visibleLiveRow(chatId);
+    const next: RulesetLiveStates = { ...(parseStoredRulesetLive(row?.rulesetLive) ?? {}) };
     for (const [name, live] of Object.entries(rulesetFightLiveStates(fight))) {
       // A member back at their defaults drops out of the store, exactly as the in-game sheet leaves
       // them, instead of keeping an empty entry forever.
       if (Object.keys(live).length > 0) next[name] = live;
       else delete next[name];
     }
-    const written = latest
-      ? await states.updateLatest(chatId, { rulesetLive: next })
-      : await states.updateByMessage(anchor, 0, chatId, { rulesetLive: next });
+    // The same order the sheet's own PATCH follows: the visible message's row, then the newest row,
+    // and only a game with no row at all gets one on the battle's anchor.
+    const written =
+      (visibleAnchor
+        ? await states.updateByMessage(visibleAnchor.messageId, visibleAnchor.swipeIndex, chatId, { rulesetLive: next })
+        : null) ??
+      (await states.updateLatest(chatId, { rulesetLive: next })) ??
+      (await states.updateByMessage(anchor, 0, chatId, { rulesetLive: next }));
     const stored = parseStoredRulesetLive(written?.rulesetLive) ?? {};
     if (!written || JSON.stringify(stored) !== JSON.stringify(parseStoredRulesetLive(next) ?? {})) {
       throw new Error("The party's sheets could not be written, so the fight did not take that step.");
@@ -578,7 +593,7 @@ export async function combatDirectorRoutes(
             })),
             cards,
             playerName: persona?.name ?? null,
-            live: parseStoredRulesetLive((await createGameStateStorage(app.db).getLatest(input.chatId))?.rulesetLive),
+            live: parseStoredRulesetLive((await visibleLiveRow(input.chatId)).row?.rulesetLive),
             partyCatalogs: await loadFightCatalogs(resolved.packageId, definition, (c) => partyLists.has(c.id)),
             bestiary: await loadFightCatalogs(resolved.packageId, definition, (c) => c.holds === "creatures"),
           });
