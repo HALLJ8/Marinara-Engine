@@ -2655,8 +2655,19 @@
                           ],
                           "additionalProperties": false
                         },
-                        "minProperties": 1,
-                        "maxProperties": 4,
+                        "if": {
+                          "required": [
+                            "$comment"
+                          ]
+                        },
+                        "then": {
+                          "minProperties": 2,
+                          "maxProperties": 5
+                        },
+                        "else": {
+                          "minProperties": 1,
+                          "maxProperties": 4
+                        },
                         "properties": {
                           "$comment": {}
                         }

@@ -50,8 +50,11 @@ function boundScaledColumns(node) {
   Object.values(node).forEach(boundScaledColumns);
   const column = node.additionalProperties;
   if (node.type === "object" && column?.properties?.from && column.properties.table) {
-    node.minProperties = 1;
-    node.maxProperties = RULESET_SCALED_MAX_COLUMNS;
+    // `$comment` is allowed in every object and the Engine drops it before it counts, so a map
+    // that carries one may hold one key more.
+    node.if = { required: ["$comment"] };
+    node.then = { minProperties: 2, maxProperties: RULESET_SCALED_MAX_COLUMNS + 1 };
+    node.else = { minProperties: 1, maxProperties: RULESET_SCALED_MAX_COLUMNS };
   }
 }
 

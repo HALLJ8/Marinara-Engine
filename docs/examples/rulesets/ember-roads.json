@@ -220,7 +220,7 @@
               }
             },
             {
-              "$comment": "The uses follow the character's Heart, so the row stays right as the character grows without anyone editing it. The value is fitted to the column, so a Heart of 3 gives 3 uses and a Heart below 0 leaves the trick with none.",
+              "$comment": "The uses follow the character's Heart, so the row stays right as the character grows without anyone editing it. The value is fitted to the column, so a Heart of 3 gives 3 uses and a Heart of 0 or less leaves the trick with none.",
               "list": "tricks",
               "values": { "name": "Last Ember", "uses": 1, "recharge": "camp" },
               "scaled": { "uses": { "from": { "abilityScore": "heart" } } }

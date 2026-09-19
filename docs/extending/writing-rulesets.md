@@ -203,8 +203,8 @@ keeps those cells right.
 The value is worked out when the sheet is edited and never when it is read, so a stored row is always
 the number it says it is. It is fitted to the column it lands in: clamped to the column's `min` and
 `max`, and rounded down when the column takes whole numbers. In the example above, a character with
-Heart 3 has three uses and one with Heart below 0 has none, which means the trick's pool is not on
-their sheet at all.
+Heart 3 has three uses and one with Heart 0 or less has none. The row stays on their sheet with 0
+uses, and because a counter with a maximum of 0 is not a pool, there is nothing to spend in play.
 
 Scaled columns are Capability API 1.23 for a packaged ruleset. A community ruleset you import is
 validated by the Engine that reads it, so it needs nothing.
