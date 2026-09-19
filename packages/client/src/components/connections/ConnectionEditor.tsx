@@ -814,7 +814,9 @@ export function ConnectionEditor() {
       maxRequestsPerMinute: localMaxRequestsPerMinute,
       enableCaching: localEnableCaching,
       anthropicExtendedCacheTtl:
-        localProvider === "anthropic" && localEnableCaching ? localAnthropicExtendedCacheTtl : false,
+        (localProvider === "anthropic" && localEnableCaching) || localProvider === "claude_subscription"
+          ? localAnthropicExtendedCacheTtl
+          : false,
       cachingAtDepth: localCachingAtDepth,
       defaultForAgents: localDefaultForAgents,
       embeddingModel: supportsDirectEmbeddings ? localEmbeddingModel : existingEmbeddingModel,
@@ -1048,6 +1050,10 @@ export function ConnectionEditor() {
       promptPresetId: !isMediaProvider ? localPromptPresetId || null : null,
       defaultParameters,
       enableCaching: localEnableCaching,
+      anthropicExtendedCacheTtl:
+        (localProvider === "anthropic" && localEnableCaching) || localProvider === "claude_subscription"
+          ? localAnthropicExtendedCacheTtl
+          : false,
       cachingAtDepth: localCachingAtDepth,
       defaultForAgents: localDefaultForAgents,
       embeddingModel: supportsDirectEmbeddings ? localEmbeddingModel : existingEmbeddingModel,
@@ -1099,6 +1105,7 @@ export function ConnectionEditor() {
     localImageCaptioningEnabled,
     localImageCaptioningConnectionId,
     localEnableCaching,
+    localAnthropicExtendedCacheTtl,
     localCachingAtDepth,
     localDefaultForAgents,
     localEmbeddingModel,
@@ -2976,6 +2983,23 @@ export function ConnectionEditor() {
                   {localizeUi("ui.connections.connectioneditor.keepThisOffIfYouDoNotWantLocal")}
                 </p>
               </div>
+            </FieldGroup>
+          )}
+
+          {isClaudeSubscriptionProvider && (
+            <FieldGroup
+              label={localizeUi("ui.connections.connectioneditor.promptCaching")}
+              icon={<Zap size="0.875rem" className="text-[var(--marinara-chat-chrome-button-text-active)]" />}
+            >
+              <SettingsSwitch
+                label={localizeUi("ui.connections.connectioneditor.extendedTokenCaching1Hour")}
+                description={localizeUi("ui.connections.connectioneditor.subscriptionExtendedCacheDescription")}
+                checked={localAnthropicExtendedCacheTtl}
+                onChange={(checked) => {
+                  setLocalAnthropicExtendedCacheTtl(checked);
+                  markDirty();
+                }}
+              />
             </FieldGroup>
           )}
 

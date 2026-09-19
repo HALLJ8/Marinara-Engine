@@ -60,6 +60,12 @@ for (const mode of ["roleplay", "conversation", "game"] as const) {
       let generationCount = 0;
       let holdTranslation = false;
       let pendingTranslation: Route | undefined;
+      let holdPersistence = false;
+      let pendingPersistence: Route | undefined;
+      await page.route(`**/api/chats/${chat.id}/messages/*/extra`, async (route) => {
+        if (holdPersistence) pendingPersistence = route;
+        else await route.continue();
+      });
       await page.route("**/api/generate", async (route) => {
         const regenerateId = route.request().postDataJSON().regenerateMessageId;
         const response = regenerateId
@@ -118,6 +124,37 @@ for (const mode of ["roleplay", "conversation", "game"] as const) {
       if (mode === "game") await page.getByRole("button", { name: "Send game turn", exact: true }).click();
       else await composer.press("Enter");
       await expect.poll(() => saved?.id).toBeTruthy();
+      const otherChat = await create("/api/chats", {
+        name: "Other conversation",
+        mode: "roleplay",
+        characterIds: [character.id],
+        connectionId: connection.id,
+      });
+      // Desktop detail navigation unmounts ChatArea. Switching chats through it
+      // must reset the shared translation state just like an ordinary chat switch.
+      const switchThroughEditor = async (id: string) => {
+        await page.evaluate(async (connectionId) => {
+          const { useUIStore } = await import("/src/stores/ui.store.ts" as string);
+          useUIStore.getState().openConnectionDetail(connectionId);
+        }, connection.id);
+        await expect(page.getByPlaceholder("Connection name")).toBeVisible();
+        await page.evaluate(async (chatId) => {
+          const { useChatStore } = await import("/src/stores/chat.store.ts" as string);
+          useChatStore.getState().setActiveChatId(chatId);
+        }, id);
+        await page.evaluate(async () => {
+          const { useUIStore } = await import("/src/stores/ui.store.ts" as string);
+          useUIStore.getState().closeConnectionDetail();
+        });
+        await expect
+          .poll(() =>
+            page.evaluate(async () => {
+              const { useTranslationStore } = await import("/src/stores/translation.store.ts" as string);
+              return useTranslationStore.getState().config.chatId;
+            }),
+          )
+          .toBe(id);
+      };
       const row =
         mode === "game"
           ? page.locator('[data-component="GameNarration.ActivePanel"]')
@@ -155,11 +192,32 @@ for (const mode of ["roleplay", "conversation", "game"] as const) {
         await regenerate();
         await expect.poll(() => generationCount).toBe(2);
         await expect.poll(() => Boolean(pendingTranslation)).toBe(true);
+        await switchThroughEditor(otherChat.id);
+        holdPersistence = true;
+        await pendingTranslation!.fulfill({ json: { translatedText: translated } });
+        await expect.poll(() => Boolean(pendingPersistence)).toBe(true);
+        // Return after the background response, before its persisted extras arrive.
+        // The old translation is seeded on return and must not mask the new one.
+        await switchThroughEditor(chat.id);
+        holdPersistence = false;
+        await pendingPersistence!.continue();
+        await expect.poll(async () => (await extra()).translationSource).toBe(source);
+        await expect(row).toContainText(translated);
+        await expect(row).not.toContainText(source);
+        await expect(row).not.toContainText("Zacznijmy");
+        await page.screenshot({ path: info.outputPath("translation-only-background.png") });
+
+        pendingTranslation = undefined;
+        source = "The corridor fills with distant footsteps.";
+        translated = "Korytarz wypełnia się odległymi krokami.";
+        await regenerate();
+        await expect.poll(() => generationCount).toBe(3);
+        await expect.poll(() => Boolean(pendingTranslation)).toBe(true);
         const pendingText = translated;
         source = "The lantern illuminates a different path.";
         translated = "Latarnia oświetla inną drogę.";
         await regenerate();
-        await expect.poll(() => generationCount).toBe(3);
+        await expect.poll(() => generationCount).toBe(4);
         holdTranslation = false;
         await pendingTranslation!.fulfill({ json: { translatedText: pendingText } });
         await expect.poll(async () => (await extra()).translationSource).toBe(source);

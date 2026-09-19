@@ -117,16 +117,18 @@ export function translateMessage(
         deeplxUrl: config.deeplxUrl,
       });
       translatedText = result.translatedText;
+      if (chatId) {
+        await enqueueTranslationPersistence(queryClient, chatId, messageId, {
+          translation: translatedText,
+          translationSource: text,
+          translationHidden: false,
+        }).catch(() => {});
+      }
+      // Navigation can return to this chat while its extras are being saved.
+      // Publish after persistence so a seeded, older translation cannot win.
       if (isCurrentChat()) store.setTranslation(messageId, translatedText, text);
     } finally {
       if (isCurrentChat()) store.setTranslating(messageId, false);
-    }
-    if (chatId) {
-      await enqueueTranslationPersistence(queryClient, chatId, messageId, {
-        translation: translatedText,
-        translationSource: text,
-        translationHidden: false,
-      }).catch(() => {});
     }
   })();
   pendingTranslations.set(key, { text, request });
