@@ -1,7 +1,7 @@
-// The decidable half of the ruleset catalog picker: which filter options a catalog offers, what a
-// filter starts on, what the sheet already holds, what a selection would cost each list, and the
-// one-line reading of an entry's mechanics. None of it needs React, so the client-lane regression
-// checks it directly.
+// The decidable half of the ruleset catalog picker and of Refresh from ruleset: which filter options
+// a catalog offers, what a filter starts on, what the sheet already holds, what a selection would
+// cost each list, which picked rows the ruleset has newer text for, and the one-line reading of an
+// entry's mechanics. None of it needs React, so the client-lane regression checks it directly.
 //
 // Nothing here knows a system by name: every word comes from a localization key or from the
 // ruleset's own labels, and every value comes from the catalog file.
@@ -11,11 +11,14 @@ import {
   rulesetListRowIssues,
   RULESET_CATALOG_ROW_KEY,
   type RulesetCatalogEntry,
+  type RulesetCatalogEntryRow,
   type RulesetCatalogFilter,
   type RulesetCatalogHeader,
   type RulesetCatalogMechanics,
   type RulesetDefinition,
   type RulesetField,
+  type RulesetList,
+  type RulesetListColumn,
   type RulesetSheetBuild,
 } from "@marinara-engine/shared";
 import type { TFunction } from "i18next";
@@ -238,6 +241,164 @@ export function planCatalogAddition(
     if (target.adding > target.room) full.push(list.label);
   }
   return { lists: next, targets, dropped, full };
+}
+
+// ── Refresh from ruleset ──
+
+/** The column a row of this list is shown under: what the Game Master's sheet block prints it as,
+ *  then the name a row pool is keyed by, then the list's first text column. The shared live-state
+ *  reader chooses the same column for the same reasons and keeps its own copy of this private. */
+function listNameColumn(definition: RulesetDefinition, list: RulesetList): string | undefined {
+  return (
+    definition.gm.sheetSummary.lists.find((entry) => entry.list === list.id)?.nameColumn ??
+    list.pools?.nameColumn ??
+    list.columns.find((column) => column.type === "text")?.id
+  );
+}
+
+/**
+ * The entry's value as text the column could really hold, or null when it is not comparable.
+ *
+ * Only text-like columns are ever compared. A number or a switch is where the player's own state
+ * lives (prepared, proficient, a magic weapon's bonus, a maximum they set by hand) and there is no
+ * stored base to merge against, so the ruleset's copy of it is never offered. A value the column
+ * would refuse is left out too: a refresh must never write something the editor cannot then show.
+ */
+function refreshableText(column: RulesetListColumn, value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  if (column.type === "enum") return column.values.includes(value) ? value : null;
+  if (column.type === "dice") return value.length <= 40 ? value : null;
+  if (column.type === "text" || column.type === "longtext") return value.length <= column.maxLength ? value : null;
+  return null;
+}
+
+export type CatalogRefreshColumn = {
+  columnId: string;
+  label: string;
+  /** What the sheet holds now. Empty when the row never carried the column. */
+  current: string;
+  /** What the ruleset says now, and exactly what applying writes. */
+  next: string;
+};
+
+export type CatalogRefreshRow = {
+  listId: string;
+  /** Where the row sits in the stored list. Unique inside one list, so a chosen row is keyed by it. */
+  index: number;
+  /** What to call the row while it is reviewed: the name the sheet shows it under, else the entry's. */
+  name: string;
+  columns: CatalogRefreshColumn[];
+};
+
+export type CatalogRefreshList = {
+  listId: string;
+  label: string;
+  rows: CatalogRefreshRow[];
+};
+
+/**
+ * Which picked rows the ruleset now has different text for, list by list.
+ *
+ * A row is lined up with the entry row it was copied from by position among the rows carrying the
+ * same mark in that list, which only holds while the sheet still has as many of them as the entry
+ * writes. Otherwise the only safe reading is an entry with a single row for the list: any other
+ * pairing would be a guess, and a guess here rewrites somebody's character. A row whose entry the
+ * catalog no longer has is skipped, silently: nothing is known about it any more.
+ */
+export function planCatalogRefresh(
+  definition: RulesetDefinition,
+  catalogId: string,
+  entries: readonly RulesetCatalogEntry[],
+  lists: RulesetSheetBuild["lists"],
+): CatalogRefreshList[] {
+  const byRef = new Map<string, RulesetCatalogEntry>();
+  for (const entry of entries) byRef.set(catalogRowRef(catalogId, entry.id), entry);
+  if (byRef.size === 0) return [];
+
+  const plans: CatalogRefreshList[] = [];
+  for (const list of definition.sheet.lists) {
+    const rows = storedRows(lists, list.id);
+    if (rows.length === 0) continue;
+    const columnById = new Map(list.columns.map((column) => [column.id, column]));
+    const nameColumn = listNameColumn(definition, list);
+
+    // Where this catalog's rows sit in this list, gathered per entry.
+    const marked = new Map<string, number[]>();
+    rows.forEach((row, index) => {
+      const ref = row?.[RULESET_CATALOG_ROW_KEY];
+      if (typeof ref !== "string" || !byRef.has(ref)) return;
+      const found = marked.get(ref);
+      if (found) found.push(index);
+      else marked.set(ref, [index]);
+    });
+
+    const refreshed: CatalogRefreshRow[] = [];
+    for (const [ref, indexes] of marked) {
+      const entry = byRef.get(ref)!;
+      const entryRows = entry.rows.filter((row) => row.list === list.id);
+      const pairedWith = (position: number): RulesetCatalogEntryRow | undefined => {
+        if (entryRows.length === indexes.length) return entryRows[position];
+        return entryRows.length === 1 ? entryRows[0] : undefined;
+      };
+      indexes.forEach((index, position) => {
+        const entryRow = pairedWith(position);
+        const row = rows[index];
+        if (!entryRow || !row) return;
+        const columns: CatalogRefreshColumn[] = [];
+        for (const [columnId, value] of Object.entries(entryRow.values)) {
+          // A column the ruleset keeps itself follows the sheet, not the file, so it is never part
+          // of a refresh: the editor already holds it at whatever this character's numbers say.
+          if (entryRow.scaled && Object.hasOwn(entryRow.scaled, columnId)) continue;
+          const column = columnById.get(columnId);
+          if (!column) continue;
+          const next = refreshableText(column, value);
+          if (next === null) continue;
+          const stored = row[columnId];
+          if (stored === next) continue;
+          columns.push({
+            columnId,
+            label: column.label,
+            current: stored === undefined ? "" : String(stored),
+            next,
+          });
+        }
+        if (columns.length === 0) return;
+        const name = nameColumn ? row[nameColumn] : undefined;
+        refreshed.push({
+          listId: list.id,
+          index,
+          name: typeof name === "string" && name.trim() ? name : entry.label,
+          columns,
+        });
+      });
+    }
+
+    if (refreshed.length === 0) continue;
+    // The sheet's own row order, so the review reads down the list the way the editor draws it.
+    refreshed.sort((left, right) => left.index - right.index);
+    plans.push({ listId: list.id, label: list.label, rows: refreshed });
+  }
+  return plans;
+}
+
+/** The lists a refresh changes, each with its full new rows, ready for one `commit({ lists })`. Only
+ *  the differing columns of the chosen rows are written, so everything else the row holds survives:
+ *  the `_catalog` mark, the player's own numbers, and any column the entry does not set. */
+export function applyCatalogRefresh(
+  lists: RulesetSheetBuild["lists"],
+  chosen: readonly CatalogRefreshRow[],
+): Record<string, CatalogListRow[]> {
+  const next: Record<string, CatalogListRow[]> = {};
+  for (const chosenRow of chosen) {
+    const rows = next[chosenRow.listId] ?? [...storedRows(lists, chosenRow.listId)];
+    const current = rows[chosenRow.index];
+    if (!current || typeof current !== "object") continue;
+    const patched = { ...current };
+    for (const column of chosenRow.columns) patched[column.columnId] = column.next;
+    rows[chosenRow.index] = patched;
+    next[chosenRow.listId] = rows;
+  }
+  return next;
 }
 
 // ── The mechanics line ──
