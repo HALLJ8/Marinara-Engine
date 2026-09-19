@@ -165,6 +165,7 @@ export type CatalogAdditionPlan = {
   lists: Record<string, CatalogListRow[]>;
   targets: CatalogAdditionTarget[];
   /** Rows the target list could not hold. Dropped rather than spliced in. */
+  /** Entries left out because one of their rows does not fit the list it is meant for. */
   dropped: number;
   /** Labels of the lists this selection would push past `maxItems`. */
   full: string[];
@@ -186,18 +187,23 @@ export function planCatalogAddition(
 
   for (const entry of selected) {
     // Built and declared rows run in step: `rowsFromCatalogEntry` maps one to one over `entry.rows`,
-    // and the declared values are what the list's columns are checked against.
-    rowsFromCatalogEntry(catalogId, entry).forEach((built, index) => {
-      const list = listById.get(built.list);
+    // and the declared values are what the list's columns are checked against. An entry is added
+    // whole or not at all: a knack without the limited-use row that belongs to it is half a knack.
+    const built = rowsFromCatalogEntry(catalogId, entry);
+    const fits = built.every((row, index) => {
+      const list = listById.get(row.list);
       const values = entry.rows[index]?.values;
-      if (!list || !values || rulesetListRowIssues(list, values).length > 0) {
-        dropped += 1;
-        return;
-      }
-      const rows = next[built.list] ?? [...(lists[built.list] ?? [])];
-      rows.push(built.row);
-      next[built.list] = rows;
+      return Boolean(list && values && rulesetListRowIssues(list, values).length === 0);
     });
+    if (!fits) {
+      dropped += 1;
+      continue;
+    }
+    for (const row of built) {
+      const rows = next[row.list] ?? [...(lists[row.list] ?? [])];
+      rows.push(row.row);
+      next[row.list] = rows;
+    }
   }
 
   const targets: CatalogAdditionTarget[] = [];

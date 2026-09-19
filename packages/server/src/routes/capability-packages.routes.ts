@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import {
@@ -193,9 +194,11 @@ export async function capabilityPackagesRoutes(app: FastifyInstance) {
     }
     if ("issue" in source) return unusable([source.issue]);
     // A catalog can be a megabyte of JSON that is parsed and checked entry by entry. The pinned hash
-    // names the file and the ruleset version names what it was checked against, so a browser that
-    // already holds this answer is told so before any of that work. `no-cache` still makes it ask.
-    const etag = `"${source.sha256}.${definition.version}"`;
+    // names the file, and the ruleset version plus a digest of the catalog's header name what it was
+    // checked against and answered with. A browser that already holds this answer is told so before
+    // any of that work. `no-cache` still makes it ask.
+    const headerDigest = createHash("sha256").update(JSON.stringify(header)).digest("hex").slice(0, 16);
+    const etag = `"${source.sha256}.${definition.version}.${headerDigest}"`;
     reply.header("ETag", etag).header("Cache-Control", "no-cache");
     if (ifNoneMatchSatisfied(request.headers["if-none-match"], etag)) return reply.status(304).send();
     const file = await source.read();

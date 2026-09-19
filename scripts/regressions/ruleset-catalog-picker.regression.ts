@@ -222,7 +222,8 @@ assert.deepEqual(
   ],
 );
 
-// A row the ruleset itself would refuse is dropped and counted, never spliced in.
+// An entry with a row the ruleset itself would refuse is left out WHOLE and counted: its good row
+// is not spliced in without the one that belongs with it.
 const badEntry = {
   id: "too-many-uses",
   label: "Too many uses",
@@ -233,8 +234,8 @@ const badEntry = {
 } as unknown as RulesetCatalogEntry;
 const dropping = planCatalogAddition(definition, catalog.id, [badEntry], {});
 assert.equal(dropping.dropped, 1);
-assert.deepEqual(Object.keys(dropping.lists), ["knacks"]);
-// A row for a list this ruleset does not have is dropped the same way.
+assert.deepEqual(Object.keys(dropping.lists), []);
+// An entry for a list this ruleset does not have is dropped the same way.
 const strayEntry = {
   id: "stray",
   label: "Stray",

@@ -589,7 +589,11 @@ try {
     // A packaged catalog is named by its pinned hash, so a browser that already holds it is told so
     // without the file being read and checked again.
     const etag = served.headers.etag;
-    assert.match(String(etag), /^"[a-f0-9]{64}\.1"$/u, "the hash of the file plus the ruleset version");
+    assert.match(
+      String(etag),
+      /^"[a-f0-9]{64}\.1\.[a-f0-9]{16}"$/u,
+      "the hash of the file, the ruleset version, and a digest of the catalog's header",
+    );
     assert.equal(served.headers["cache-control"], "no-cache");
     const unchanged = await app.inject({
       method: "GET",
