@@ -164,7 +164,6 @@ export type CatalogAdditionPlan = {
   /** Only the lists that change, each with its full new rows, ready for one `commit({ lists })`. */
   lists: Record<string, CatalogListRow[]>;
   targets: CatalogAdditionTarget[];
-  /** Rows the target list could not hold. Dropped rather than spliced in. */
   /** Entries left out because one of their rows does not fit the list it is meant for. */
   dropped: number;
   /** Labels of the lists this selection would push past `maxItems`. */
