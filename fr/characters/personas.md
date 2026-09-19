@@ -122,6 +122,8 @@ L'onglet **Stats** comporte deux blocs distincts. Tous deux alimentent l'afficha
 
 Les valeurs définies ici servent de point de départ par défaut aux nouveaux chats. Elles ne se mettent pas à jour toutes seules. La mise à jour automatique exige que l'agent correspondant soit activé pour le chat. Pour l'explication complète, consulte [Couleurs de personnage et caractéristiques RPG](colors-and-stats.md).
 
+Si un ensemble de règles de Game Mode est installé, ou si la persona conserve sa fiche, **Ruleset sheets** apparaît sous les deux sections. Il s'agit de sa configuration initiale par ensemble, copiée dans chaque nouvelle partie. Voir [Fiches d'ensembles de règles](colors-and-stats.md#ruleset-sheets).
+
 ## Historique des versions
 
 Chaque fois que tu enregistres une modification des champs de fiche d'un persona, Marinara conserve automatiquement un instantané. Le panneau **Version history** de l'onglet **Metadata** liste ces versions enregistrées avec leur horodatage.

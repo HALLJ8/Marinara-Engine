@@ -122,6 +122,8 @@ A aba **Stats** tem dois blocos separados. Os dois alimentam o painel de status 
 
 Os valores definidos aqui são o ponto de partida dos chats novos. Eles não se atualizam sozinhos. Para a atualização automática, o agente correspondente precisa estar ativado no chat. Para a explicação completa, veja [Cores do personagem e status de RPG](colors-and-stats.md).
 
+Se há um conjunto de regras de Game Mode instalado, ou a persona ainda guarda sua ficha, **Ruleset sheets** aparece abaixo das duas seções. É a configuração inicial por conjunto, copiada para cada nova partida. Veja [Fichas de conjuntos de regras](colors-and-stats.md#ruleset-sheets).
+
 ## Histórico de versões
 
 Toda vez que você salva uma mudança nos campos do card de uma persona, Marinara salva um instantâneo automaticamente. O painel **Version history**, na aba **Metadata**, lista essas versões salvas com data e hora.

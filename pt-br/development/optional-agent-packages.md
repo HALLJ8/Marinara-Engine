@@ -233,6 +233,131 @@ No computador, aparece uma lista de navegação com uma área de detalhes ao lad
 
 Uma extração só está completa quando os bundles de produção do cliente e do servidor da base não contêm mais a implementação do pacote, quando uma instalação nova não consegue ativá-lo sem baixar o pacote, quando uma instalação atualizada continua com ele e quando instalar, atualizar e desinstalar o pacote funciona em computador, celular e sistemas de arquivos compatíveis com Termux.
 
+### Capability API 1.20: conjuntos de regras de Game Mode
+
+Um conjunto fornece dados validados: resolução de testes conhecida pelo Engine, ficha com elementos predefinidos, descansos e orientações para o GM. O recurso reservado `ruleset.json` é descoberto como `gm-verbs.json`, por `contributions.assets.paths` e um hash em `files[]`.
+
+```json
+{
+  "schemaVersion": 2,
+  "capabilityApi": { "major": 1, "minor": 20 },
+  "id": "ruleset-5e-2014",
+  "kind": ["ruleset"],
+  "permissions": [],
+  "entrypoints": {},
+  "contributions": { "assets": { "paths": ["ruleset.json"] } },
+  "files": [{ "path": "ruleset.json", "sha256": "<sha256 of the file>", "bytes": 25767 }]
+}
+```
+
+O exemplo mostra apenas os campos relevantes; `name`, `version`, `description`, `engine` e `builtAgainst` continuam obrigatórios. Não exige permissões, agente nem pontos de entrada de cliente ou servidor. O tipo `ruleset` e `ruleset.json` exigem um ao outro. Não executa código nem expressões em texto; uma resolução nova exige mudanças no Engine. Veja formato e exemplo 5e em [`game-rulesets-and-sheets-implementation.md`](game-rulesets-and-sheets-implementation.md).
+
+O manifesto deve declarar API 1.20; Engines antigos recusam a instalação. O Engine rejeita tamanho declarado acima de 256 KB antes da leitura, verifica novamente o hash instalado e aplica `packages/shared/src/schemas/ruleset.schema.ts`. Um arquivo inválido é ignorado com um registro identificando pacote e primeiros erros `path: message`. IDs repetidos favorecem o primeiro pacote na ordem de IDs de pacote; o outro é ignorado com registro. `engine-legacy` e `traditional` são reservados.
+
+A escolha é salva uma vez em `chat.metadata.gameRuleset`. Sem escolha, valem as regras existentes. Pacote ausente ou definição antiga torna o conjunto indisponível sem substituí-lo. O vínculo verifica ID do conjunto e pacote fornecedor, impedindo que outro pacote assuma a partida com o mesmo ID.
+
+### Capability API 1.21: catálogos
+
+Catálogos oferecem magias, habilidades de classe e equipamentos no editor da ficha. O cabeçalho fica em `catalogs` dentro de `ruleset.json`; entradas podem ficar ali ou em recurso reservado:
+
+```json
+{
+  "capabilityApi": { "major": 1, "minor": 21 },
+  "kind": ["ruleset"],
+  "contributions": { "assets": { "paths": ["ruleset.json", "catalogs/spells.json"] } },
+  "files": [
+    { "path": "ruleset.json", "sha256": "<sha256>", "bytes": 25767 },
+    { "path": "catalogs/spells.json", "sha256": "<sha256>", "bytes": 418204 }
+  ]
+}
+```
+
+`catalogs/<id>.json` deve corresponder ao ID do catálogo, nunca a outro. Tem hash em `files[]` e exige o `ruleset.json` que o declara. Tamanho declarado acima de 1 MB é recusado antes da leitura. Entradas internas e externas são validadas contra a mesma ficha. Limites: 12 catálogos por conjunto, 2000 entradas por catálogo.
+
+O cliente carrega o conteúdo ao abrir o seletor, por `GET /api/capability-packages/rulesets/catalog?rulesetId=&catalogId=&version=`. A lista instalada contém apenas contagens. O texto do catálogo não entra automaticamente no prompt; o GM só vê o que `gm.sheetSummary` seleciona. Recursos e o campo `catalogs` no arquivo verificado exigem API 1.21. Um esquema estrito antigo rejeitaria o arquivo inteiro. Sem permissões.
+
+### Capability API 1.22: bloco battle
+
+`battle` indica saúde, MP opcional, reservas de espaços e listas cujas linhas de catálogo viram `CombatSkill`. Depois da batalha, devolve valores pelas mesmas operações da ficha usadas nos controles do jogador.
+
+```json
+{
+  "capabilityApi": { "major": 1, "minor": 22 },
+  "kind": ["ruleset"],
+  "contributions": { "assets": { "paths": ["ruleset.json"] } }
+}
+```
+
+É uma ligação de dados ao combate do Engine, não um adaptador completo do sistema de mesa. O cálculo integrado não lê `attackRoll`, `save`, `concentration` nem `perCostStep`. Regras exatas pertencem a outra integração com adaptadores. `coverage.combat` mantém seu significado independente e não é lido nessa ligação. O conteúdo verificado de `ruleset.json` exige API 1.22 para `battle`, como 1.21 para `catalogs`. Sem permissões nem mudanças em conjuntos sem o bloco.
+
+### Capability API 1.23: valores escalonados de catálogo
+
+`scaled` permite que o conjunto mantenha até quatro colunas numéricas próprias de uma linha. Cada uma usa uma referência de valor existente e uma tabela de limites opcional, como recursos por nível ou usos por atributo, sem nova aritmética.
+
+```json
+{
+  "capabilityApi": { "major": 1, "minor": 23 },
+  "kind": ["ruleset"],
+  "contributions": { "assets": { "paths": ["ruleset.json", "catalogs/spells.json"] } }
+}
+```
+
+O recálculo acontece ao editar, não ao ler. Estado da partida, prompt do GM e combate leem o número salvo. As linhas podem estar em `ruleset.json` ou `catalogs/<id>.json`; o instalador verifica ambos e exige API 1.23 para `scaled`. Sem permissões ou mudanças em catálogos sem escalonamento.
+
+`[sheet: op="use" name="..."]` paga `mechanics.cost` e um uso de cada reserva de linha criada pela entrada. Não exige outra declaração, pois usa catálogos já compatíveis.
+
+### Capability API 1.24: paradas de dados
+
+`resolution` aceita `"kind": "dice-pool"` em vez de `"dice-sum"`. O valor da ficha indica quantos dados rolar; resultados que atingem o limiar contam como sucessos. O conjunto pode definir sucessos duplos, explosões, cancelamentos, falhas críticas, sucessos excepcionais e limites para ajustes circunstanciais do GM.
+
+```json
+{
+  "capabilityApi": { "major": 1, "minor": 24 },
+  "kind": ["ruleset"],
+  "contributions": { "assets": { "paths": ["ruleset.json"] } }
+}
+```
+
+A ficha não muda: o modificador de soma passa a contar dados. Não há novos elementos, slots de editor nem código do pacote. O instalador exige API 1.24 para `dice-pool` no `ruleset.json` verificado; Engines antigos limitados a `dice-sum` rejeitariam tudo. Sem permissões nem mudanças em conjuntos de soma.
+
+### Capability API 1.25: camadas e orientações do mundo
+
+`layers` contém variantes nomeadas, escolhidas na criação e fixadas no vínculo da partida. `gm.worldGuidance` é lido uma vez ao gerar o mundo, para adaptá-lo às regras do grupo.
+
+```json
+{
+  "capabilityApi": { "major": 1, "minor": 25 },
+  "kind": ["ruleset"],
+  "contributions": { "assets": { "paths": ["ruleset.json"] } }
+}
+```
+
+Os efeitos permitidos acrescentam orientações depois das do conjunto, removem valores de enumeração, substituem a escala de dificuldade por outra do mesmo tipo de resolução e ocultam entradas de catálogo. Não adicionam elementos à ficha, que continua legível com qualquer camada. Sem código de pacote ou chamada extra ao modelo. Camadas de terceiros ficam para depois. Ambos os campos verificados exigem API 1.25. Sem permissões ou mudanças para conjuntos que não os usam.
+
+### Capability API 1.26–1.27: formato de combate e criaturas
+
+API 1.26 adiciona `combat` para rolagens, alvos, economia de ações, ataques, habilidades, condições, concentração, saúde zero, tipos de dano e escala de inimigos. `mechanics` pode descrever alvos, acertos garantidos, condições, pontos temporários, escalonamento pela ficha e orçamento gasto.
+
+```json
+{
+  "capabilityApi": { "major": 1, "minor": 26 },
+  "kind": ["ruleset"],
+  "contributions": { "assets": { "paths": ["ruleset.json"] } }
+}
+```
+
+API 1.27 permite `"holds": "creatures"`. Os blocos usam `combat`: saúde fixa ou rolada no início, defesa, iniciativa, atributos e salvaguardas pelos IDs da ficha, resistências, vulnerabilidades, imunidades, ameaça e características para o GM. Ações podem atacar, exigir salvaguardas, aplicar condições, limitar usos, recarregar por rolagem, encadear ações com um orçamento ou gastar pontos especiais próprios.
+
+```json
+{
+  "capabilityApi": { "major": 1, "minor": 27 },
+  "kind": ["ruleset"],
+  "contributions": { "assets": { "paths": ["ruleset.json", "catalogs/beasts.json"] } }
+}
+```
+
+Um catálogo de criaturas não declara `feeds` nem aparece no seletor de fichas. Com o diretor de combate ativado, um jogo com `combat` usa essas regras e seu bestiário na tela de batalha e salva as fichas após cada ação. Esse é o estilo `ruleset`, sem exigir outro nível de Capability API. Sem `combat`, continuam valendo o bloco `battle` ou a preferência Classic/Tactical. A instalação confere os arquivos verificados `ruleset.json` e `catalogs/<id>.json`: `combat` e as novas chaves de `mechanics` exigem 1.26; `holds` e `creature`, 1.27. Um esquema estrito anterior rejeitaria o arquivo. Não há novas permissões nem mudanças nos conjuntos sem esses campos.
+
 ### Capability API 1.18: manter a configuração de Experience no assistente de Game
 
 Um pacote `game-surface` pode declarar `contributions.gameSurface.setup` com a versão 2 do esquema e Capability API 1.18. O Engine mantém as sete etapas habituais de configuração, incluindo **Party** (grupo), objetivos, modelos e lorebooks. Apenas jogos novos oferecem Experiences; reabrir a configuração de um jogo existente preserva sua Experience e a configuração do pacote. Pacotes sem essa declaração mantêm o diálogo de configuração anterior.

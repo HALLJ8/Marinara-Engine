@@ -38,7 +38,7 @@ Przy każdym imporcie widać, o jakie uprawnienia prosi agent, zanim cokolwiek z
 
 Własne repozytoria są domyślnie wyłączone, bo ich prompty i wybory narzędzi to niesprawdzona treść z zewnątrz. Ustaw `ENABLE_CUSTOM_AGENT_REPOS=true`, włącz przełącznik **Allow custom Agent imports** w sekcji Danger Zone, a potem otwórz **Agents → Download Agents → Custom Sources**, żeby podejrzeć publiczne repozytorium GitHub. Dodanie źródła oraz każda późniejsza zmiana treści wymagają wyraźnego potwierdzenia. Synchronizacja jest ręczna; Marinara nie klonuje repozytoriów ani nie odpytuje ich w tle.
 
-W głównym folderze repozytorium musi znaleźć się plik `agents.json` z tablicą zapisaną w tym samym formacie definicji agenta co pobierane pakiety agentów. Minimalny plik wygląda tak:
+Repozytorium może publikować agentów, zestawy zasad Game Mode albo oba rodzaje treści; co najmniej jeden jest wymagany. Opcjonalny plik `agents.json` w głównym folderze zawiera tablicę w formacie definicji pobieranych agentów. Minimalny przykład:
 
 ```json
 [
@@ -54,7 +54,11 @@ W głównym folderze repozytorium musi znaleźć się plik `agents.json` z tabli
 ]
 ```
 
-Marinara przyjmuje wyłącznie adresy URL wskazujące główny folder repozytorium GitHub i przed pokazaniem podglądu sprawdza zarówno ograniczone archiwum, jak i każdą definicję agenta. Podczas synchronizacji zdalne wartości promptu, ustawień i narzędzi zastępują te wartości z podglądu, którymi zarządza repozytorium. Wybór połączenia i grafiki zostaje lokalny. Jeśli agent zniknie po stronie źródła, Marinara zachowuje go jako zwykłego lokalnego agenta i usuwa tylko powiązanie z repozytorium. Przy usuwaniu źródła obowiązuje ta sama zasada zachowania kopii lokalnej.
+Folder `rulesets` w głównym katalogu może zawierać do 32 plików `.json`, po jednym zestawie zasad, każdy do 256 KB. Podfoldery są pomijane. Podgląd pokazuje nazwę, wersję i zakres zestawu. Wskazówki GM trafiają do modelu w każdej grze używającej zestawu, dlatego instaluj je tylko od zaufanych autorów.
+
+Identyfikator zawiera właściciela repozytorium, np. `alice/my-5e`; nie zastąpi oficjalnego zestawu ani zestawu innego autora o nazwie `v20`. Każda importowana wersja pozostaje zapisana, a gra używa dokładnie przypisanej wersji. Ta sama wersja z inną treścią nie zastępuje instalacji: aplikacja prosi o podniesienie numeru wersji. Błędny plik jest pomijany z wyjaśnieniem, reszta repozytorium nadal się instaluje.
+
+Obsługiwane są tylko adresy głównego katalogu repozytorium GitHub. Aplikacja sprawdza rozmiary archiwum i definicje przed podglądem. Synchronizacja zastępuje zarządzane z repozytorium prompty, ustawienia i narzędzia wartościami z podglądu; połączenia i grafiki pozostają lokalne. Agent usunięty u źródła pozostaje zwykłym agentem lokalnym, bez powiązania z repozytorium. Usunięcie źródła działa tak samo, a jego zestawy zasad pozostają zainstalowane dla istniejących gier.
 
 ### Rozszerzenia zewnętrzne
 

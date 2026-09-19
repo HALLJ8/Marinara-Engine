@@ -28,6 +28,8 @@ El catálogo dentro de la app se respalda en el [repositorio público Marinara-A
 
 El catálogo incluye agentes de chat oficiales, World Maps, las llamadas de audio/video de Conversation y todos los juegos opcionales de Conversation. Los agentes instalados se agrupan en **Writer Agents**, **Tracker Agents** y **Misc Agents**, además de una sección **Custom Agents** para los que tú crees. Desinstalar un paquete del catálogo elimina su código y sus ajustes del Engine, pero conserva los mensajes y el historial del chat. Borrar un agente personalizado lo elimina para siempre.
 
+Un paquete marcado **Rules** aporta un conjunto de reglas de Game Mode, como 5e (SRD 5.1), no un agente; no cuenta en las cifras de agentes anteriores. Se elige al crear una partida en **Rules**; consulta [Elegir las reglas](../game/getting-started.md#choosing-rules). No tiene interruptor de activación por chat. El paquete 5e es una vista previa y solo aparece en el catálogo de Engine de la rama `staging`.
+
 Cuando actualizas desde una versión del Engine que incluía estas funciones, Marinara descarga los paquetes correspondientes una sola vez y conserva las selecciones de chat existentes, los ajustes de los agentes, los datos de tiempo de ejecución guardados y el historial. Si esa migración no puede llegar al catálogo, lo reintenta en el siguiente arranque en lugar de descartar nada.
 
 Las actualizaciones automáticas de arranque nunca instalan un paquete no seleccionado. Las instalaciones de computadora, Docker y Android/Termux actualizan los paquetes guardados por su servidor local. iOS, iPadOS y otros clientes de navegador usan los paquetes instalados y actualizados por el servidor de Marinara al que se conectan.

@@ -118,6 +118,29 @@ Kiedy jedno z nich działa, baner pokazuje ten wariant obok DC i zaznacza, któr
 
 Własny rzut `d20` można wstawić do kolejki z menu kości jeszcze przed testem. Wtedy test umiejętności korzysta z wylosowanej liczby zamiast rzucać nową kością. Modyfikatory umiejętności i atrybutu doliczają się do niej normalnie.
 
+<a id="games-that-use-a-ruleset"></a>
+
+## Gry z zestawem zasad
+
+Zestaw wybiera się raz przy tworzeniu gry w polu **Rules**; zobacz [Wybór zasad](getting-started.md#choosing-rules). Gra bez zestawu zachowuje opisane wyżej reguły, w tym proste pule sukcesów bez eksplodujących kości i innych reguł specjalnych.
+
+- GM podaje umiejętność lub rzut obronny oraz trudność według skali zestawu. Ta skala może przekraczać zakres 1–40; awaryjne rozliczanie testu zaległego w zapisanej turze nadal używa 1–40.
+- Silnik rzuca kośćmi zestawu. Modyfikator bierze z jego arkusza: cechy, wyszkolenia (wielokrotność premii biegłości, stała wartość lub oba składniki) i dodatkowej premii. Nie używa wbudowanych atrybutów ani premii umiejętności.
+- `who="Name"` wskazuje członka drużyny; brak wskazania oznacza gracza. Członek bez arkusza używa wartości domyślnych. Nieznana lub niejednoznaczna nazwa daje rzut bez modyfikatora. Wyjątkiem jest imię persony: zawsze wskazuje gracza, nawet gdy ktoś w drużynie ma to samo imię. Silnik nigdy nie pożycza cudzego arkusza.
+- Wyniki naturalne zależą od zestawu. W 5e (SRD 5.1) naturalne 20 i 1 nie mają specjalnego skutku w testach i rzutach obronnych; naturalne 20 może więc nie wystarczyć.
+- Liczby wpisane przez GM są sprawdzane. Błędny modyfikator, liczba lub rodzaj kości, wybrana kość albo nieobsługiwany wynik naturalny powodują ponowny rzut i zastąpienie wyniku.
+- Wcześniejszy własny rzut jest używany tylko przy pojedynczej d20. Inne kości, np. 2d6 lub pula, są rzucane od nowa.
+- `with="Ability"` pozwala użyć innej cechy zadeklarowanej przez zestaw dla testu lub rzutu obronnego. Nieznana cecha jest ignorowana. Znaczniki rzutów mogą nazywać cechy, umiejętności, rzuty obronne i `PROF`, jeśli zestaw ma premię biegłości.
+- Brak pakietu lub zbyt stara wersja pozostawia test bez liczb jako zaległy. Silnik nie zastępuje zasad innym systemem. Zasoby, stany i odpoczynki opisuje [Arkusz zestawu zasad](party-and-npcs.md#the-ruleset-sheet).
+
+### Zestawy z pulą kości
+
+W takim zestawie wynik arkusza określa liczbę kości: cecha 3 i umiejętność 2 dają pięć kości. Edytor i tekst dla GM pokazują "5 dice" zamiast "+5". Trudność oznacza liczbę wymaganych sukcesów, np. trzy, a nie sumę 15.
+
+Silnik ustala wyniki według zestawu: próg sukcesu, podwójne sukcesy, eksplozje, odejmowanie sukcesów przez niskie wyniki, pech i wyjątkowy sukces. Karta pokazuje wszystkie kości, wyróżnia udane wyniki i porównuje sukcesy z wymaganą liczbą. Duże pule przechodzą do kolejnych wierszy bez zmniejszania kości; nie pojawia się fikcyjna suma.
+
+GM może zmienić próg pojedynczej kości lub liczbę kości za okoliczności tylko w granicach zestawu. Wynik puli wymyślony przez model zawsze zastępuje rzeczywisty rzut. Przewaga, wcześniejszy własny rzut i pokazywane GM kości d20 nie dotyczą tych testów: silnik rzuca pulą w ciemno.
+
 ## Powiązane przewodniki
 
 - [Game Mode: walka](combat.md)

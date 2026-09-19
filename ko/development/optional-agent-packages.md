@@ -239,6 +239,131 @@ export async function activate({ api }) {
 
 분리는 다음 조건을 모두 만족해야 끝난 것으로 봅니다. 기본 배포용 클라이언트와 서버 번들에 패키지 구현이 더 이상 들어 있지 않고, 새로 설치한 환경에서는 패키지를 다운로드하지 않으면 해당 기능을 활성화할 수 없으며, 업그레이드한 환경에서는 기능이 그대로 유지되고, 패키지 설치/업데이트/제거가 데스크톱, 모바일, Termux 호환 파일 시스템에서 모두 통과해야 합니다.
 
+### Capability API 1.20: Game Mode 규칙 집합
+
+규칙 집합은 검증된 데이터입니다. Engine이 지원하는 판정 방식, 정해진 요소로 만든 시트, 휴식, GM 지침을 제공합니다. 예약 리소스 `ruleset.json`은 `gm-verbs.json`처럼 `contributions.assets.paths`에 등록하고 `files[]`에 해시를 둡니다.
+
+```json
+{
+  "schemaVersion": 2,
+  "capabilityApi": { "major": 1, "minor": 20 },
+  "id": "ruleset-5e-2014",
+  "kind": ["ruleset"],
+  "permissions": [],
+  "entrypoints": {},
+  "contributions": { "assets": { "paths": ["ruleset.json"] } },
+  "files": [{ "path": "ruleset.json", "sha256": "<sha256 of the file>", "bytes": 25767 }]
+}
+```
+
+예시는 관련 필드만 보여 줍니다. `name`, `version`, `description`, `engine`, `builtAgainst`는 여전히 필수입니다. 권한, 에이전트, 클라이언트나 서버 진입점은 필요하지 않습니다. `ruleset` 종류와 `ruleset.json`은 서로를 요구합니다. 코드나 문자열 표현식을 실행하지 않으므로 새 판정 방식에는 Engine 변경이 필요합니다. 형식과 5e 예시는 [`game-rulesets-and-sheets-implementation.md`](game-rulesets-and-sheets-implementation.md)에 있습니다.
+
+매니페스트는 API 1.20을 선언해야 하며 이전 Engine은 설치를 거부합니다. 선언 크기 256 KB 초과는 읽기 전에 거부하고 설치 해시를 다시 확인한 뒤 엄격한 `packages/shared/src/schemas/ruleset.schema.ts`로 검증합니다. 잘못된 파일은 건너뛰고 패키지와 첫 `path: message` 오류를 로그 한 건에 기록합니다. ID가 겹치면 패키지 ID 순서상 첫 패키지가 우선하며 다른 패키지는 로그와 함께 제외합니다. `engine-legacy`와 `traditional`은 예약 ID입니다.
+
+선택은 `chat.metadata.gameRuleset`에 한 번 저장합니다. 고정 정보가 없으면 기존 규칙입니다. 패키지가 없거나 정의가 오래되면 사용할 수 없는 상태로 두며 다른 규칙을 대신 쓰지 않습니다. 집합 ID와 제공 패키지를 함께 검사해 같은 ID의 다른 패키지가 게임을 가져가지 못하게 합니다.
+
+### Capability API 1.21: 카탈로그
+
+카탈로그는 시트 편집기에 준비된 주문, 직업 능력, 장비를 제공합니다. 헤더는 `ruleset.json`의 `catalogs`에 두며 항목은 인라인 또는 예약 파일로 저장합니다.
+
+```json
+{
+  "capabilityApi": { "major": 1, "minor": 21 },
+  "kind": ["ruleset"],
+  "contributions": { "assets": { "paths": ["ruleset.json", "catalogs/spells.json"] } },
+  "files": [
+    { "path": "ruleset.json", "sha256": "<sha256>", "bytes": 25767 },
+    { "path": "catalogs/spells.json", "sha256": "<sha256>", "bytes": 418204 }
+  ]
+}
+```
+
+`catalogs/<id>.json`은 해당 카탈로그 ID와 일치해야 하며 다른 카탈로그를 가리킬 수 없습니다. `files[]`의 해시와 선언한 `ruleset.json`이 필요합니다. 선언 크기 1 MB 초과는 읽기 전에 거부합니다. 인라인과 파일 항목은 같은 시트에 대해 검증합니다. 집합당 12개 카탈로그, 카탈로그당 2000개 항목이 한도입니다.
+
+클라이언트는 선택기를 열 때 `GET /api/capability-packages/rulesets/catalog?rulesetId=&catalogId=&version=`로 내용을 불러옵니다. 설치 목록에는 개수만 포함됩니다. 카탈로그 글은 프롬프트에 자동으로 들어가지 않으며 GM은 `gm.sheetSummary`가 고른 정보만 봅니다. 리소스와 검증된 파일의 `catalogs` 필드는 API 1.21이 필요합니다. 이전 엄격한 스키마는 전체 파일을 거부하기 때문입니다. 권한은 필요하지 않습니다.
+
+### Capability API 1.22: battle 블록
+
+선택적인 `battle`은 체력, 선택적인 MP, 주문 슬롯 풀, 카탈로그 행을 `CombatSkill`로 바꿀 목록을 지정합니다. 전투가 끝나면 플레이어 버튼과 같은 시트 작업으로 값을 돌려줍니다.
+
+```json
+{
+  "capabilityApi": { "major": 1, "minor": 22 },
+  "kind": ["ruleset"],
+  "contributions": { "assets": { "paths": ["ruleset.json"] } }
+}
+```
+
+Engine 전투와 데이터를 연결하는 기능이며 완전한 테이블톱 어댑터는 아닙니다. 내장 계산은 `attackRoll`, `save`, `concentration`, `perCostStep`을 읽지 않습니다. 정확한 시스템 규칙은 별도 어댑터 연결에서 다룹니다. `coverage.combat`는 독립된 의미를 유지하며 이 연결에서는 읽지 않습니다. 검증된 `ruleset.json`의 `battle`은 API 1.22가 필요하며 `catalogs`의 1.21 제한과 같습니다. 새 권한이나 블록이 없는 집합의 변경은 없습니다.
+
+### Capability API 1.23: 연동되는 카탈로그 값
+
+`scaled`는 행 자체의 숫자 열을 최대 4개까지 집합이 관리하게 합니다. 기존 값 참조와 선택적인 단계 표를 사용해 레벨별 자원이나 능력치별 횟수를 표현하며 새 산술 연산은 추가하지 않습니다.
+
+```json
+{
+  "capabilityApi": { "major": 1, "minor": 23 },
+  "kind": ["ruleset"],
+  "contributions": { "assets": { "paths": ["ruleset.json", "catalogs/spells.json"] } }
+}
+```
+
+읽을 때가 아니라 편집할 때 계산합니다. 게임 상태, GM 프롬프트, 전투는 저장된 숫자를 읽습니다. 행은 `ruleset.json`이나 `catalogs/<id>.json`에 둘 수 있으며, 검증된 내용의 `scaled`는 API 1.23을 요구합니다. 새 권한이나 연동하지 않는 카탈로그의 변경은 없습니다.
+
+`[sheet: op="use" name="..."]`는 `mechanics.cost`와 항목이 만든 각 행 풀의 사용 횟수 1회를 지불합니다. 이미 지원하는 카탈로그를 읽으므로 새 선언이 필요하지 않습니다.
+
+### Capability API 1.24: 주사위 풀
+
+`resolution`은 `"dice-sum"` 대신 `"kind": "dice-pool"`을 선언할 수 있습니다. 시트 값이 주사위 수가 되며 기준 이상인 결과를 셉니다. 집합은 두 배 성공, 폭발, 취소, 대실패, 뛰어난 성공과 GM의 상황별 조정 범위를 지정할 수 있습니다.
+
+```json
+{
+  "capabilityApi": { "major": 1, "minor": 24 },
+  "kind": ["ruleset"],
+  "contributions": { "assets": { "paths": ["ruleset.json"] } }
+}
+```
+
+시트는 그대로이며 합계 수정치가 주사위 수가 됩니다. 새 시트 요소, 편집기 슬롯, 패키지 코드는 없습니다. 검증된 `ruleset.json`의 `dice-pool`은 API 1.24가 필요합니다. `dice-sum`만 지원하는 이전 Engine은 전체를 거부하기 때문입니다. 새 권한이나 합계 방식 집합의 변경은 없습니다.
+
+### Capability API 1.25: 레이어와 세계 지침
+
+`layers`는 생성 시 선택하고 게임 고정 정보에 저장하는 이름 붙은 변형입니다. `gm.worldGuidance`는 세계 생성 시 한 번 읽어 세계를 파티 규칙에 맞춥니다.
+
+```json
+{
+  "capabilityApi": { "major": 1, "minor": 25 },
+  "kind": ["ruleset"],
+  "contributions": { "assets": { "paths": ["ruleset.json"] } }
+}
+```
+
+효과는 정해진 종류만 허용합니다. 집합 지침 뒤에 지침 추가, 열거형 값 제거, 같은 판정 방식의 난이도 표로 교체, 시트 선택기에서 카탈로그 항목 숨기기입니다. 시트 요소를 추가하지 않으므로 어떤 레이어에서도 기존 시트를 읽을 수 있습니다. 패키지 코드나 추가 모델 호출은 없습니다. 다른 제작자의 레이어는 추후 지원 대상입니다. 내용 검증 후 두 필드 모두 API 1.25를 요구합니다. 새 권한이나 필드를 쓰지 않는 집합의 변경은 없습니다.
+
+### Capability API 1.26–1.27: 전투 형식과 생물 카탈로그
+
+API 1.26은 굴림, 대상, 행동 예산, 공격과 능력 목록, 상태, 집중, 체력 0 규칙, 피해 유형, 적의 위협 단계를 정하는 `combat`을 추가합니다. 카탈로그 `mechanics`는 대상, 확정 명중, 상태, 임시 점수, 시트 연동, 예산 소모를 설명할 수 있습니다.
+
+```json
+{
+  "capabilityApi": { "major": 1, "minor": 26 },
+  "kind": ["ruleset"],
+  "contributions": { "assets": { "paths": ["ruleset.json"] } }
+}
+```
+
+API 1.27은 `"holds": "creatures"`를 허용합니다. 생물 데이터는 `combat` 값을 사용합니다. 고정 체력 또는 전투 시작 시 굴리는 체력, 방어, 우선권, 시트 ID에 따른 능력치와 내성 굴림, 저항, 취약성, 면역, 위협 단계와 GM용 특성을 담습니다. 행동은 공격, 내성 요구, 상태 적용, 사용 횟수 제한, 굴림으로 재충전, 한 예산으로 행동 연쇄 실행, 자체 특수 점수 소모를 표현할 수 있습니다.
+
+```json
+{
+  "capabilityApi": { "major": 1, "minor": 27 },
+  "kind": ["ruleset"],
+  "contributions": { "assets": { "paths": ["ruleset.json", "catalogs/beasts.json"] } }
+}
+```
+
+생물 카탈로그는 `feeds`를 선언하지 않으며 시트 선택기에 나타나지 않습니다. 전투 디렉터가 켜져 있고 `combat`이 있는 게임은 전투 화면에서 해당 규칙과 생물 도감을 사용하며 행동마다 시트를 저장합니다. 이는 추가 Capability API 단계가 필요 없는 `ruleset` 스타일입니다. `combat`이 없으면 기존 `battle` 블록이나 Classic/Tactical 설정을 사용합니다. 설치 시 검증된 `ruleset.json`과 `catalogs/<id>.json`을 확인합니다. `combat`과 새 `mechanics` 키는 1.26, `holds`와 `creature`는 1.27이 필요합니다. 이전의 엄격한 스키마는 파일을 거부합니다. 새 권한은 없으며 해당 필드가 없는 규칙집은 바뀌지 않습니다.
+
 ### Capability API 1.18: Game 마법사 안에서 Experience 설정
 
 `game-surface` 패키지는 스키마 버전 2와 Capability API 1.18에서 `contributions.gameSurface.setup`을 선언할 수 있습니다. Engine은 **Party**(파티), 목표, 모델, 로어북을 포함한 기존 7단계 설정을 유지합니다. 새 게임에서만 Experiences를 제공합니다. 기존 게임의 설정을 다시 열면 해당 Experience와 패키지 설정을 유지합니다. 이 선언이 없는 패키지는 기존 설정 대화상자를 사용합니다.

@@ -38,7 +38,7 @@ Toda importação mostra as capacidades solicitadas pelo agente antes de salvar 
 
 Os repositórios personalizados vêm desativados por padrão, porque os prompts e as ferramentas deles são conteúdo de terceiros sem revisão. Defina `ENABLE_CUSTOM_AGENT_REPOS=true`, ative a opção **Allow custom Agent imports** na Danger Zone e abra **Agents → Download Agents → Custom Sources** para pré-visualizar um repositório público do GitHub. Adicionar uma fonte e aplicar qualquer mudança de conteúdo posterior exigem confirmação explícita. A sincronização é manual: Marinara não clona repositórios nem os consulta em segundo plano.
 
-A raiz do repositório precisa ter um array `agents.json` no mesmo formato de definição de agente usado pelos pacotes que podem ser baixados. Um arquivo mínimo fica assim:
+Um repositório pode publicar agentes, conjuntos de regras de Game Mode ou ambos; pelo menos um tipo é necessário. O arquivo opcional `agents.json` na raiz contém um array no formato de definições de agentes baixáveis. Exemplo mínimo:
 
 ```json
 [
@@ -54,7 +54,11 @@ A raiz do repositório precisa ter um array `agents.json` no mesmo formato de de
 ]
 ```
 
-Marinara aceita apenas URLs da raiz de repositórios do GitHub e valida o arquivo compactado, dentro de um limite de tamanho, e cada definição de agente antes de mostrar a pré-visualização. Durante a sincronização, os valores remotos de prompt, configurações e ferramentas substituem os valores gerenciados pelo repositório que aparecem nessa pré-visualização. As escolhas de conexão e de imagens continuam locais. Se um agente sumir do repositório de origem, Marinara o mantém como um agente personalizado local comum e remove só o vínculo com o repositório. Ao remover uma fonte, vale a mesma política de manter o que é local.
+A pasta raiz `rulesets` aceita até 32 arquivos `.json`, cada um com um conjunto de até 256 KB. Subpastas são ignoradas. A prévia mostra nome, versão e cobertura. As orientações do GM vão para o modelo em cada partida que usa o conjunto; instale apenas conteúdo de autores confiáveis.
+
+Os IDs incluem o proprietário, como `alice/my-5e`, sem substituir conjuntos oficiais nem o `v20` de outro autor. Cada versão importada é preservada e cada partida usa exatamente sua versão fixada. Conteúdo diferente com a mesma versão não substitui a instalação: o aplicativo pede uma versão nova. Arquivos inválidos são ignorados com explicação; o restante pode ser instalado.
+
+Apenas URLs da raiz de repositórios GitHub são aceitas. O aplicativo verifica tamanho do arquivo compactado e definições antes da prévia. A sincronização substitui prompts, configurações e ferramentas gerenciados pelo repositório pelos valores da prévia; conexões e imagens continuam locais. Um agente removido da origem permanece como agente local comum, sem vínculo ao repositório. Remover a fonte também desfaz o vínculo, mas mantém os conjuntos instalados para partidas existentes.
 
 ### Extensões externas
 

@@ -38,7 +38,7 @@ Avant l'enregistrement, chaque import affiche les capacités demandées par l'ag
 
 Les dépôts personnalisés sont désactivés par défaut, car leurs prompts et leurs sélections d'outils sont du contenu tiers non vérifié. Un prompt, c'est le texte que Marinara envoie à l'IA. Définis `ENABLE_CUSTOM_AGENT_REPOS=true`, active **Allow custom Agent imports** dans la Danger Zone, puis ouvre **Agents → Download Agents → Custom Sources** pour prévisualiser un dépôt GitHub public. L'ajout d'une source et l'application de toute modification ultérieure du contenu demandent tous deux une confirmation explicite. La synchronisation est manuelle : Marinara ne clone pas les dépôts et ne les interroge pas en arrière-plan.
 
-La racine du dépôt doit contenir un tableau `agents.json` au même format de définition d'agent que les packages d'agents téléchargeables. Voici à quoi ressemble un fichier minimal :
+Un dépôt peut publier des agents, des ensembles de règles de Game Mode ou les deux ; au moins un type est requis. Le fichier facultatif `agents.json` à la racine contient un tableau au format des définitions d'agents téléchargeables. Exemple minimal :
 
 ```json
 [
@@ -54,7 +54,11 @@ La racine du dépôt doit contenir un tableau `agents.json` au même format de d
 ]
 ```
 
-Marinara n'accepte que les URL pointant sur la racine d'un dépôt GitHub, et valide l'archive bornée ainsi que chaque définition d'agent avant d'afficher l'aperçu. Pendant la synchronisation, les valeurs distantes de prompt, de réglages et d'outils remplacent les valeurs gérées par le dépôt qui figurent dans cet aperçu. Les choix de connexion et d'illustration restent locaux. Si un agent disparaît en amont, Marinara le conserve comme un agent personnalisé local ordinaire et supprime seulement son lien vers le dépôt. La suppression d'une source suit la même règle de conservation en local.
+Le dossier racine `rulesets` accepte jusqu'à 32 fichiers `.json`, chacun contenant un ensemble de 256 KB maximum. Les sous-dossiers sont ignorés. L'aperçu montre nom, version et couverture. Les consignes GM sont envoyées au modèle dans chaque partie utilisant l'ensemble ; n'installe que des sources de confiance.
+
+Les identifiants incluent le propriétaire, comme `alice/my-5e`, et ne remplacent ni les ensembles officiels ni le `v20` d'un autre auteur. Chaque version importée reste conservée ; chaque partie utilise exactement sa version fixée. Un contenu différent avec le même numéro ne remplace pas l'installation : l'app demande une nouvelle version. Un fichier invalide est ignoré avec une explication ; le reste peut s'installer.
+
+Seules les URL de racine de dépôt GitHub sont acceptées. L'app vérifie tailles d'archive et définitions avant l'aperçu. La synchronisation remplace prompts, réglages et outils gérés par le dépôt par les valeurs de l'aperçu ; connexions et images restent locales. Un agent supprimé à la source devient un agent local ordinaire, sans lien au dépôt. Retirer la source supprime aussi ce lien, mais conserve les ensembles installés pour les parties existantes.
 
 ### Extensions externes
 

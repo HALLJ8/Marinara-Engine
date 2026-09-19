@@ -42,6 +42,22 @@ Ao terminar, clique em **Start Game**.
 
 Nas partidas Tactical, deixar as opções do campo vazias permite que o GM escolha uma descrição adequada à cena e o motor gere o tabuleiro. Uma semente fixa repete a geração com as mesmas entradas do encontro; as orientações pedem ao GM elementos como uma parede em ruínas ou uma clareira. Veja [Game Mode: combate](combat.md#tactical-battles-and-terrain) para regras de movimento, bônus de terreno e falhas de geração.
 
+<a id="choosing-rules"></a>
+
+### Escolher as regras
+
+**Rules** (regras) aparece apenas ao criar uma partida, quando há algum conjunto de regras instalado. Ele define testes e fichas; **Combat Preference** escolhe a apresentação do combate separadamente. **Marinara's own rules** usa os testes d20 e os seis atributos integrados. Cada conjunto, como **5e (SRD 5.1)**, descreve sua cobertura. Se não incluir combate, o assistente informa que continuam valendo as regras de combate do Marinara Engine e a preferência escolhida. Depois de iniciar, não é possível adicionar nem trocar o conjunto.
+
+O assistente distingue três caminhos: combate resolvido pelo próprio conjunto de regras, combate do Marinara usando a vida, a energia e as habilidades da ficha ou combate do Marinara conforme **Combat Preference**. Quando o conjunto resolve a luta, o menu mostra os ataques e as habilidades do personagem com seus custos. O painel apresenta a ordem dos turnos, a rodada, as condições e os recursos de ação restantes; o registro mostra o cálculo real. Cada ação é salva imediatamente na ficha, então fechar a aba durante o combate não perde o resultado. Depois, o GM é informado de que os números já foram resolvidos. **Combat Preference** continua salva, mas não é usada nessas lutas.
+
+Alguns conjuntos oferecem **layers** (camadas), variantes como Low magic ou Hard winter. Os controles explicam seus efeitos: dificuldade, opções da ficha, entradas do catálogo e orientações ao GM, inclusive na criação do mundo. O assistente impede combinações incompatíveis. A escolha fica fixa durante toda a partida. Valores já salvos na ficha continuam presentes mesmo se uma camada os retirar das opções.
+
+Instale conjuntos oficiais em **Download Agents**, identificados como **Rules**. Importe os da comunidade de um arquivo ou do repositório GitHub do autor; eles recebem IDs de origem como `local/ember-roads` ou `alice/v20`. É necessário ativar **Allow custom Agent imports**. Desativar essa opção os oculta em novas partidas, mas as existentes continuam usando a versão fixada. Veja [Escrever conjuntos de regras](../extending/writing-rulesets.md).
+
+Em **Party**, a persona e os integrantes mostram **Has a sheet** (tem ficha) ou **Starts on a blank sheet** (começa com ficha em branco). Adicione fichas em **Stats** no editor de personagem ou persona; veja [Fichas de conjuntos de regras](../characters/colors-and-stats.md#ruleset-sheets). Ao gerar o mundo, a partida copia essas fichas. Mudanças na partida não alteram o cartão. Sem ficha, são usados os padrões do conjunto, não valores inventados pela IA.
+
+A configuração exportada lembra o conjunto. Se ele estiver ausente ou desatualizado na importação, o assistente avisa e usa as regras próprias do Marinara Engine, a menos que você instale e selecione o conjunto correto.
+
 ### Padrões que vale conhecer
 
 Estes são os valores iniciais das etapas **World**, **Party** e **Features**. Todos podem ser alterados.

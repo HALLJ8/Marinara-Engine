@@ -49,6 +49,25 @@ Klick auf **Edit Sheet** (Blatt bearbeiten), um selbst Hand anzulegen. Im Bearbe
 
 Zum Schluss klickst du auf **Save Sheet** (Blatt speichern). **Cancel** (Abbrechen) verwirft die Änderungen.
 
+<a id="the-ruleset-sheet"></a>
+
+### Der Regelsatzbogen
+
+In einem [Spiel mit Regelsatz](dice-and-skill-checks.md#games-that-use-a-ruleset) beginnt jeder Charakterbogen mit **Ruleset sheet** (Regelsatzbogen). Der Regelsatz bestimmt den Aufbau. Ohne Regelsatz erscheint dieser Bereich nicht.
+
+- **Resources** zeigt aktuellen Wert und Maximum, etwa Gesundheit, Zauberplätze oder Klassenressourcen. Nutze Plus, Minus oder die direkte Eingabe. **Temp** bezeichnet einen temporären Puffer.
+- **Tracks** sind begrenzte Zähler, etwa für Erschöpfung.
+- **Notes** sind kurze Notizen, etwa zur Konzentration.
+- **Conditions** schaltet Zustände ein und aus.
+- Rastschaltflächen stellen die im Regelsatz genannten Werte wieder her. Eine lange Rast in 5e (SRD 5.1) stellt Gesundheit, Zauberplätze und die Hälfte der Trefferwürfel wieder her, mindestens einen.
+- Darunter stehen Attribute, ausgebildete Fertigkeiten und Rettungswürfe sowie ausgewählte Werte wie Rüstungsklasse.
+
+Der GM kann Ressourcenverbrauch, Schaden, Heilung, Zustände und Rasten eintragen. Die Engine prüft jede Änderung. Unzulässige Änderungen, etwa ein Zauber ohne freien Platz, werden mit einem Hinweis vollständig abgelehnt.
+
+Die Nutzung eines Katalogeintrags bezahlt den ganzen Preis und je eine Nutzung jedes zugehörigen Zeilenzählers. Ein Zauberplatz wird auf der angegebenen Stufe verbraucht. Der GM kann eine höhere Stufe verlangen; die Engine stuft nie selbst hoch. Fehlt irgendein Bestandteil, wird nichts verbraucht. Kostenlose Aktionen wie Zaubertricks werden nur erzählt. Stufenabhängige Maxima und attributabhängige Nutzungen werden beim Bearbeiten neu berechnet.
+
+Der Zustand gehört zur Nachricht. Beim Wechsel der Antwortvariante oder Neugenerieren wird der Bogen auf den Stand vor der Runde zurückgesetzt, damit nichts doppelt verbraucht wird. **Edit sheet** bearbeitet Konfiguration, Listen, Ausbildung und Boni mit demselben Editor und denselben Katalogen wie die Karte, einschließlich schreibgeschützter Werte und **Review** für neue Texte. **Save sheet** speichert nur die Kopie dieses Spiels. Das separate **Edit Sheet** bearbeitet weiterhin den allgemeinen Bogen. Ein fehlendes oder zu altes Paket zeigt eine Warnung und sperrt Proben bis zur Wiederherstellung.
+
 ## Partymitglieder anwerben und entfernen
 
 Wer zur Party gehört, entscheidet der Game Master im Lauf der Geschichte. Eine Schaltfläche zum manuellen Hinzufügen von Gefährten gibt es nicht. Stattdessen nimmt der GM Partymitglieder über die Erzählung auf oder schickt sie weg – je nachdem, was in der Szene passiert.

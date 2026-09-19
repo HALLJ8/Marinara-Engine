@@ -239,6 +239,131 @@ export async function activate({ api }) {
 
 分離が完了したと言えるのは、次の条件がすべて満たされたときだけです。本番用のクライアントとサーバーの基本バンドルにパッケージの実装が含まれていないこと、新規インストールではパッケージをダウンロードしないと有効化できないこと、アップデートしたインストール環境では引き続き利用できること、そしてパッケージのインストール、アップデート、アンインストールが、デスクトップ、モバイル、Termux互換のファイルシステムで問題なく通ることです。
 
+### Capability API 1.20: Game Modeルールセット
+
+ルールセットは検証済みデータです。Engineが対応する判定方式、定義済み要素のシート、休息、GM指示を提供します。予約リソース `ruleset.json` は `gm-verbs.json` と同様、`contributions.assets.paths` と `files[]` のハッシュで登録します。
+
+```json
+{
+  "schemaVersion": 2,
+  "capabilityApi": { "major": 1, "minor": 20 },
+  "id": "ruleset-5e-2014",
+  "kind": ["ruleset"],
+  "permissions": [],
+  "entrypoints": {},
+  "contributions": { "assets": { "paths": ["ruleset.json"] } },
+  "files": [{ "path": "ruleset.json", "sha256": "<sha256 of the file>", "bytes": 25767 }]
+}
+```
+
+例は関連項目だけを示します。`name`、`version`、`description`、`engine`、`builtAgainst` は引き続き必須です。権限、エージェント、クライアントやサーバーの入口は不要です。`ruleset` 種別と `ruleset.json` は相互に必須です。コードや文字列式は実行されず、新しい判定方式にはEngineの変更が必要です。形式と5e例は [`game-rulesets-and-sheets-implementation.md`](game-rulesets-and-sheets-implementation.md)にあります。
+
+マニフェストはAPI 1.20を宣言する必要があり、古いEngineはインストールを拒否します。256 KBを超える宣言サイズは読み込み前に拒否し、インストール済みハッシュを再確認して厳密な `packages/shared/src/schemas/ruleset.schema.ts` で検証します。無効なファイルは除外し、パッケージと最初の `path: message` エラーを1件のログに出します。ID重複はパッケージID順で先のものを採用し、後をログ付きで除外します。`engine-legacy` と `traditional` は予約されています。
+
+選択は `chat.metadata.gameRuleset` に一度保存します。固定情報がなければ従来のルールです。パッケージがないか定義が古ければ利用不可となり、別のルールで代用しません。セットIDと提供パッケージの両方を確認するため、同じIDの別パッケージがゲームを引き継ぐことはありません。
+
+### Capability API 1.21: カタログ
+
+カタログは、シート選択画面に呪文、クラス能力、装備の候補を提供します。ヘッダーは `ruleset.json` の `catalogs` に置き、項目はインラインまたは予約リソースにします。
+
+```json
+{
+  "capabilityApi": { "major": 1, "minor": 21 },
+  "kind": ["ruleset"],
+  "contributions": { "assets": { "paths": ["ruleset.json", "catalogs/spells.json"] } },
+  "files": [
+    { "path": "ruleset.json", "sha256": "<sha256>", "bytes": 25767 },
+    { "path": "catalogs/spells.json", "sha256": "<sha256>", "bytes": 418204 }
+  ]
+}
+```
+
+`catalogs/<id>.json` はそのカタログIDと一致させ、別のカタログを参照できません。`files[]` のハッシュと、宣言元の `ruleset.json` が必要です。宣言サイズ1 MB超は読み込み前に拒否します。両形式とも同じシートに対して検証し、1セット12カタログ、1カタログ2000項目までです。
+
+クライアントは選択画面を開いてから `GET /api/capability-packages/rulesets/catalog?rulesetId=&catalogId=&version=` で読み込みます。インストール済み一覧には件数だけを含めます。カタログ本文はプロンプトに自動挿入せず、GMには `gm.sheetSummary` が選んだ情報だけを渡します。リソースと検証済みファイル内の `catalogs` はAPI 1.21が必要です。古い厳密なスキーマはファイル全体を拒否するためです。権限は不要です。
+
+### Capability API 1.22: battleブロック
+
+任意の `battle` はHP、任意のMP、呪文スロットプールと、カタログ行を `CombatSkill` にする一覧を指定します。終了後はプレイヤー用ボタンと同じシート操作で値を書き戻します。
+
+```json
+{
+  "capabilityApi": { "major": 1, "minor": 22 },
+  "kind": ["ruleset"],
+  "contributions": { "assets": { "paths": ["ruleset.json"] } }
+}
+```
+
+これはEngine戦闘へのデータ接続で、卓上ルールの完全なアダプターではありません。内蔵計算は `attackRoll`、`save`、`concentration`、`perCostStep` を読みません。正確なシステム別戦闘は別途アダプター接続で扱います。`coverage.combat` は独立した意味を保ち、この接続では読みません。検証済み `ruleset.json` の `battle` はAPI 1.22以上が必要で、`catalogs` の1.21制限と同じ扱いです。権限追加や、ブロックのないセットへの変更はありません。
+
+### Capability API 1.23: カタログ値の連動
+
+`scaled` は、1行の自身の数値列を最大4個までセットに管理させます。既存の値参照と任意の段階表を使い、レベル依存のリソースや能力値依存の回数を表現します。新しい算術演算は加えません。
+
+```json
+{
+  "capabilityApi": { "major": 1, "minor": 23 },
+  "kind": ["ruleset"],
+  "contributions": { "assets": { "paths": ["ruleset.json", "catalogs/spells.json"] } }
+}
+```
+
+計算は読み取り時でなく編集時です。ゲーム状態、GMプロンプト、戦闘は保存値を読みます。行は `ruleset.json` または `catalogs/<id>.json` に置け、検証済み内容に `scaled` があればAPI 1.23を要求します。権限や連動しないカタログへの変更はありません。
+
+`[sheet: op="use" name="..."]` は `mechanics.cost` と、その項目が作った全行プールの1回分を支払います。既存カタログを読むため追加宣言は不要です。
+
+### Capability API 1.24: ダイスプール
+
+`resolution` は `"dice-sum"` の代わりに `"kind": "dice-pool"` を指定できます。シート値をダイス数とし、しきい値以上の出目を数えます。セットは成功数2倍、爆発、相殺、大失敗、卓越した成功、GMの状況修正範囲を定義できます。
+
+```json
+{
+  "capabilityApi": { "major": 1, "minor": 24 },
+  "kind": ["ruleset"],
+  "contributions": { "assets": { "paths": ["ruleset.json"] } }
+}
+```
+
+シートは同じで、合計への修正値がダイス数になります。新しいシート要素、編集スロット、パッケージコードはありません。検証済み `ruleset.json` の `dice-pool` はAPI 1.24以上が必要です。`dice-sum` だけの旧Engineは全体を拒否するためです。権限追加や合計式セットへの変更はありません。
+
+### Capability API 1.25: レイヤーと世界指示
+
+`layers` は作成時に選び、ゲームの固定情報に保存する名前付き変体です。`gm.worldGuidance` は世界生成時に一度読み、世界をパーティーのルールに合わせます。
+
+```json
+{
+  "capabilityApi": { "major": 1, "minor": 25 },
+  "kind": ["ruleset"],
+  "contributions": { "assets": { "paths": ["ruleset.json"] } }
+}
+```
+
+効果は限定されており、セット指示の後への追記、列挙値の削除、同じ判定方式の難易度表への置換、選択画面からのカタログ項目の非表示だけです。シート要素を追加しないため、どのレイヤーでも既存シートは読み取れます。パッケージコードや追加モデル呼び出しはありません。他の作者によるレイヤーは今後の対応です。検証後、両項目にAPI 1.25を要求します。権限追加や未使用セットへの変更はありません。
+
+### Capability API 1.26–1.27: 戦闘形式とクリーチャー
+
+API 1.26は、ロール、対象、行動枠、攻撃・能力一覧、状態、精神集中、HPゼロ時、ダメージ種別、敵の強さを定義する `combat` を追加します。カタログの `mechanics` は対象、必中、状態、一時ポイント、シートに基づく連動、行動枠の消費を記述できます。
+
+```json
+{
+  "capabilityApi": { "major": 1, "minor": 26 },
+  "kind": ["ruleset"],
+  "contributions": { "assets": { "paths": ["ruleset.json"] } }
+}
+```
+
+API 1.27は `"holds": "creatures"` を許可します。データは `combat` の数値を使います。固定または開戦時ロールのHP、防御、イニシアチブ、シートIDによる能力値とセーヴ、抵抗・脆弱性・完全耐性、脅威段階、GM向け特徴を記述します。行動は攻撃、セーヴ要求、状態付与、回数制限、ロールによる再充填、1枠での行動列、自身の特殊ポイント消費に対応できます。
+
+```json
+{
+  "capabilityApi": { "major": 1, "minor": 27 },
+  "kind": ["ruleset"],
+  "contributions": { "assets": { "paths": ["ruleset.json", "catalogs/beasts.json"] } }
+}
+```
+
+クリーチャーのカタログは `feeds` を宣言せず、シートの選択画面にも表示されません。戦闘ディレクターが有効で `combat` を持つゲームは、戦闘画面でそのルールとベスティアリを使い、各行動後にシートを保存します。これは `ruleset` スタイルであり、追加の Capability API レベルは不要です。`combat` がなければ、従来どおり `battle` ブロックまたは Classic/Tactical の設定を使います。インストール時には検証済みの `ruleset.json` と `catalogs/<id>.json` を確認します。`combat` と新しい `mechanics` キーには 1.26、`holds` と `creature` には 1.27 が必要です。古い厳密なスキーマはファイルを拒否します。追加権限はなく、これらのフィールドを持たないルールセットは変わりません。
+
 ### Capability API 1.18: Gameウィザード内でのExperience設定
 
 `game-surface`パッケージは、スキーマバージョン2とCapability API 1.18で`contributions.gameSurface.setup`を宣言できます。Engineは、**Party**(パーティー)、目標、モデル、ロアブックを含む通常の7つの設定ステップを維持します。Experiencesを選べるのは新規ゲームだけです。既存ゲームの設定を開き直した場合、そのExperienceとパッケージ設定は保持されます。この宣言がないパッケージは、従来の設定ダイアログを引き続き使用します。

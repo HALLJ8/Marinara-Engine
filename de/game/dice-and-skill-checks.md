@@ -118,6 +118,29 @@ Ist eines von beiden aktiv, zeigt das Banner den Modus neben der DC an und marki
 
 Du kannst vor der Probe einen eigenen `d20` über das Würfelmenü in die Warteschlange legen. Dann übernimmt die Fertigkeitsprobe deine gewürfelte Zahl, statt neu zu würfeln. Fertigkeits- und Attribut-Modifikator kommen weiterhin obendrauf.
 
+<a id="games-that-use-a-ruleset"></a>
+
+## Spiele mit einem Regelsatz
+
+Wähle den Regelsatz beim Anlegen des Spiels unter **Rules**; siehe [Regeln auswählen](getting-started.md#choosing-rules). Ohne Regelsatz gelten die oben beschriebenen Regeln, einschließlich einfacher Erfolgspools ohne explodierende Würfel oder andere Sonderregeln.
+
+- Der GM nennt Fertigkeit oder Rettungswurf und eine Schwierigkeit aus der Skala des Regelsatzes. Diese darf über 1–40 hinausgehen; der Ersatzweg für eine ausstehende Probe in einer gespeicherten Runde bleibt auf 1–40 begrenzt.
+- Die Engine würfelt mit den vorgesehenen Würfeln. Der Modifikator stammt aus dem Regelsatzbogen: Attribut, Ausbildung (Vielfaches des Übungsbonus, fester Wert oder beides) und Zusatzbonus. Die eingebauten Attribute und Fertigkeitsboni werden nicht verwendet.
+- `who="Name"` wählt ein Gruppenmitglied; ohne Angabe ist der Spieler gemeint. Mitglieder ohne Bogen verwenden Standardwerte. Unbekannte oder mehrdeutige Namen ergeben einen Wurf ohne Modifikator. Der Name der Persona bezeichnet immer den Spieler, auch bei Namensgleichheit mit einem Gruppenmitglied. Ein fremder Bogen wird nie ersatzweise verwendet.
+- Natürliche Ergebnisse folgen dem Regelsatz. Bei 5e (SRD 5.1) haben natürliche 20 und 1 bei Proben und Rettungswürfen keine Sonderwirkung; auch eine 20 kann scheitern.
+- Vom GM eingetragene Zahlen werden geprüft. Falsche Modifikatoren, Würfelzahlen, Würfeltypen, ausgewählte Würfel oder nicht unterstützte natürliche Ergebnisse werden durch einen neuen Wurf ersetzt.
+- Ein vorheriger eigener Wurf wird nur für eine einzelne d20 übernommen. Andere Würfel, etwa 2d6 oder Pools, werden neu gewürfelt.
+- `with="Ability"` erlaubt ein anderes vom Regelsatz definiertes Attribut; unbekannte Attribute werden ignoriert. Würfelplatzhalter können Attribute, Fertigkeiten, Rettungswürfe und `PROF` nennen, sofern der Regelsatz einen Übungsbonus hat.
+- Ein fehlendes oder zu altes Paket lässt die Probe ohne Zahlen ausstehend. Die Engine wechselt nicht heimlich das Regelsystem. Ressourcen, Zustände und Rasten beschreibt [Der Regelsatzbogen](party-and-npcs.md#the-ruleset-sheet).
+
+### Regelsätze mit Würfelpools
+
+Hier bestimmt der Bogenwert die Zahl der Würfel: Attribut 3 plus Fertigkeit 2 ergibt fünf Würfel. Editor und GM-Kontext zeigen "5 dice" statt "+5". Die Schwierigkeit zählt benötigte Erfolge, etwa drei, statt einer Summe von 15.
+
+Der Regelsatz bestimmt Erfolgsschwellen, doppelte Erfolge, explodierende Würfel, durch niedrige Ergebnisse gestrichene Erfolge, Patzer und außergewöhnliche Erfolge. Die Ergebniskarte zeigt alle Würfel, hebt Erfolge hervor und vergleicht deren Anzahl mit dem Ziel. Große Pools umbrechen in weitere Zeilen, ohne die Würfel zu verkleinern oder eine erfundene Summe anzuzeigen.
+
+Der GM darf die Schwelle pro Würfel oder die Poolgröße nur innerhalb der Regelsatzgrenzen ändern. Vom Modell erfundene Poolergebnisse werden immer neu gewürfelt. Vorteil, vorherige eigene Würfe und die dem GM vorab gezeigten d20 gelten hier nicht; der Pool wird ohne Vorschau gewürfelt.
+
 ## Verwandte Anleitungen
 
 - [Game Mode: Kampf](combat.md)

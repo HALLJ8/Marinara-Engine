@@ -57,6 +57,24 @@ O primeiro bloco é **Persona Status Bars** (barras de status da persona), ativa
 
 O segundo bloco é **RPG Attributes** (atributos de RPG), ativado pela opção **Enable RPG Attributes**. Funciona igual a um card de personagem. Ele dá à sua persona as seções **Pools** (começando com HP e MP em 100 de 100) e **Attributes** (começando com STR, DEX, CON, INT, WIS e CHA em 10).
 
+<a id="ruleset-sheets"></a>
+
+### Fichas de conjuntos de regras
+
+Com um conjunto instalado, como 5e (SRD 5.1), ambas as abas **Stats** incluem **Ruleset sheets** (fichas de conjuntos de regras), com uma seção expansível por conjunto. O bloco também aparece se o cartão guarda uma ficha de um conjunto que não está mais instalado.
+
+1. Abra uma seção e clique em **Add a sheet** para usar os valores padrão.
+2. Edite atributos, campos, listas de ataques ou magias, treinamento e bônus extras de perícias e salvaguardas. O conjunto define a estrutura. Valores calculados, como proficiência ou Percepção passiva, mudam durante a edição e são somente leitura.
+3. Salve o personagem ou a persona normalmente.
+
+Essa é a configuração inicial. Uma nova partida copia a ficha; mudanças em jogo não alteram o cartão. **Add from catalog** abre a busca de magias, ataques e habilidades prontas. As linhas adicionadas são cópias editáveis.
+
+Números que dependem do nível ou de atributos são somente leitura, mostram "Set by the ruleset" e são recalculados ao editar. Se houver texto mais recente no catálogo, **Review** mostra o texto salvo ao lado do novo. **Update selected** atualiza apenas o texto das linhas escolhidas. Números, controles, outras colunas e linhas não selecionadas ficam intactos.
+
+Uma ficha sem seu conjunto continua salva, é exportada com o cartão e não é enviada à IA. Reinstale o conjunto para editá-la ou use **Remove**. O limite é de 64 KB por ficha. Uma ficha ilegível de versão mais recente também é preservada; só oferece **Remove this sheet**, evitando que uma ficha nova a sobrescreva por acidente.
+
+Essas fichas são independentes de **Enable RPG Stats** e **Enable RPG Attributes**. As regras próprias do Marinara Engine as ignoram; partidas com conjunto as usam no lugar dos atributos comuns para testes.
+
 ## Como os agentes atualizam os status
 
 Os valores da aba **Stats** são só o ponto de partida. Para os status mudarem durante o chat, ative o agente correspondente. Um agente é um ajudante de IA que trabalha junto com o chat.

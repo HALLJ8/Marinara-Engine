@@ -41,6 +41,14 @@ Tu ne déclenches pas le combat toi-même. Le GM lance un combat quand l'histoir
 
 L'écran de combat affiche ton équipe d'un côté et les ennemis de l'autre. Chaque combattant a une barre de vie (HP, points de vie) et, s'il utilise des compétences, une barre de magie (MP, points de magie). L'ordre des tours apparaît en haut sous la forme **Next:** suivi du nom de celui qui agit ensuite. Un compteur affiche **Round** et le numéro du round en cours.
 
+<a id="games-that-use-a-ruleset"></a>
+
+### Parties utilisant un ensemble de règles
+
+Si l'ensemble autorise le combat à utiliser sa [fiche](party-and-npcs.md#the-ruleset-sheet), la bataille commence avec les ressources et emplacements actuels. Les capacités de catalogue deviennent des compétences seulement si le combat de Marinara Engine sait les exécuter. Les entrées hors combat, réactions et coûts non pris en charge sont ignorés.
+
+La santé est transférée comme proportion du maximum : une fiche à moitié de sa santé commence avec une demi-barre. Après la bataille, cette proportion revient à la fiche ; ressources et emplacements sont transférés directement. Les calculs restent ceux du combat intégré, sans jets d'attaque, de sauvegarde ou de concentration du jeu sur table. Supprimer le message qui démarrait la bataille n'enregistre aucun résultat dans la fiche. Sans déclaration de combat, les règles décrites ici restent inchangées.
+
 ## Le menu d'actions
 
 À ton tour, tu choisis une action dans le menu. Les six actions sont :

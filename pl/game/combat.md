@@ -41,6 +41,14 @@ Walki nie zaczynasz samodzielnie. Robi to GM, kiedy wymaga tego fabuła – na p
 
 Ekran bitwy pokazuje drużynę po jednej stronie, a przeciwników po drugiej. Każdy walczący ma pasek zdrowia (HP, punkty życia), a jeśli korzysta z umiejętności – także pasek many (MP, punkty magii). Kolejność tur widać na górze jako **Next:** i imię tego, kto działa jako następny. Licznik rund pokazuje **Round** oraz numer bieżącej rundy.
 
+<a id="games-that-use-a-ruleset"></a>
+
+### Gry z zestawem zasad
+
+Jeżeli zestaw pozwala walce korzystać z [arkusza](party-and-npcs.md#the-ruleset-sheet), bitwa zaczyna się z jego bieżącymi zasobami i komórkami zaklęć. Zdolności z katalogów stają się umiejętnościami tylko wtedy, gdy walka aplikacji Marinara Engine umie je obsłużyć; pomija wpisy pozabojowe, reakcje i koszty, których nie potrafi rozliczyć.
+
+Zdrowie jest przenoszone jako część maksimum: połowa zdrowia arkusza daje połowę paska w bitwie. Po walce proporcja zdrowia wraca do arkusza, a wydane zasoby i komórki zapisują się bez przeliczenia. Matematyka pozostaje wbudowana: nie stosuje rzutów ataku, obrony ani koncentracji systemu stołowego. Usunięcie wiadomości rozpoczynającej walkę nie zapisuje niczego z powrotem. Zestaw bez deklaracji walki nie zmienia opisanej tu mechaniki.
+
 ## Menu akcji
 
 W swojej turze wybierasz z menu jedną akcję. Do dyspozycji jest sześć:

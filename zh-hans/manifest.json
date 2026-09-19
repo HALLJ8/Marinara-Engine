@@ -1,11 +1,11 @@
 {
   "language": "zh-hans",
-  "sourceCommit": "1f7fa53e5",
+  "sourceCommit": "930d11d677ee7ff02a5913777ce4753a3d63d5d4",
   "files": [
     {
       "path": "CONFIGURATION.md",
-      "sha256": "66c47727b14bf350d74103da6de5a967ebe68bc6dad5e6626761fc989b843a71",
-      "bytes": 30620
+      "sha256": "719cd1a31ca9cdbd367c9591b592991e559cb2765c1bfae893abef614a3fa149",
+      "bytes": 31174
     },
     {
       "path": "FAQ.md",
@@ -24,8 +24,8 @@
     },
     {
       "path": "TROUBLESHOOTING.md",
-      "sha256": "fe7ddeb67e5490346ebdbe1c71e70a145d52abec19e77553326c48b51655def5",
-      "bytes": 38182
+      "sha256": "c35926752aaf14c59f09de728f3a14b473e797e501e47c531458de664211003f",
+      "bytes": 39096
     },
     {
       "path": "UPGRADING.md",
@@ -34,8 +34,8 @@
     },
     {
       "path": "agents/agents-overview.md",
-      "sha256": "3fc1fd921cf51d42572a44053db15451b4f91c8afcc23b7a109889b88261cf15",
-      "bytes": 9377
+      "sha256": "98655db193531acd5cbf3f0a9349ad97638d7efdfef081d51d30f6c706da0111",
+      "bytes": 9741
     },
     {
       "path": "agents/approvals-and-agent-suite.md",
@@ -104,8 +104,8 @@
     },
     {
       "path": "characters/colors-and-stats.md",
-      "sha256": "45fccaac9dedf8acb365c7960f7b8e501ea2ab5078affa4051a0feb923489cc2",
-      "bytes": 5858
+      "sha256": "8ac8ef61be3051ce4d8e4ed42e2d9fbbef1f4cdb9f4a9ba201c6aa333c8e1be3",
+      "bytes": 7461
     },
     {
       "path": "characters/creating-and-editing-characters.md",
@@ -129,8 +129,8 @@
     },
     {
       "path": "characters/personas.md",
-      "sha256": "31e93cfb5a5e0db7adc28bb275ed17fcf9c201dc2aeb030bccabe927e30b78d0",
-      "bytes": 13811
+      "sha256": "875982c7c44ee6b76edbf43f25938063862a6e06f84ca8ca3aac9c0bc83717d2",
+      "bytes": 14073
     },
     {
       "path": "characters/sprites.md",
@@ -354,8 +354,8 @@
     },
     {
       "path": "development/optional-agent-packages.md",
-      "sha256": "586a52562e7c20f4cbb60dcd29b0d7c4d8bc7755f35d1b9af37184a7c8e81c89",
-      "bytes": 27992
+      "sha256": "44ad87ecd2f37a29c6b5b0224ebfbfeb98709f124e7b01adafb0e7ed6f1b625f",
+      "bytes": 36141
     },
     {
       "path": "development/personal-extensions.md",
@@ -384,13 +384,13 @@
     },
     {
       "path": "game/combat.md",
-      "sha256": "d12f294e3919aec8e1afe71ca8cef678917cf162cf9b7cc3ae4d6a3314591a56",
-      "bytes": 10010
+      "sha256": "e24f6507bef3e8114899b3446a2ce4ef8add84e31336c82d87297bdbfa572aec",
+      "bytes": 10724
     },
     {
       "path": "game/dice-and-skill-checks.md",
-      "sha256": "d37c92acd6eb68d50c38571db133ce91953ecc53fe1ef2a1ad712c69f104138f",
-      "bytes": 7933
+      "sha256": "234877de470f476d1bedc9b4989db02351b26304771e646f0dee3c7992500ad1",
+      "bytes": 10370
     },
     {
       "path": "game/game-assets.md",
@@ -399,8 +399,8 @@
     },
     {
       "path": "game/getting-started.md",
-      "sha256": "ac3d5c18efbc625a59b3e9f6f480510ea663c4df801347cd0535d3ecab5a6d79",
-      "bytes": 15615
+      "sha256": "86807bd4ffe1249a7d04bdad6c1ddd098d3661d3be4724d986d764f2b3520da1",
+      "bytes": 18164
     },
     {
       "path": "game/hud-widgets.md",
@@ -419,8 +419,8 @@
     },
     {
       "path": "game/party-and-npcs.md",
-      "sha256": "3b203e3e1a13b6afcc4430ea77927298092b8344267b7210635621e5e905eb13",
-      "bytes": 6613
+      "sha256": "a872d8e2bc12813562ba5abd1d0f426d3ca62c93ff159d8c38d84f687157aad9",
+      "bytes": 8412
     },
     {
       "path": "game/sessions-and-saves.md",

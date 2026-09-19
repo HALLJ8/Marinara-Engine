@@ -38,7 +38,7 @@ Cada importación muestra las capacidades solicitadas por el agente antes de gua
 
 Los repositorios personalizados están desactivados de forma predeterminada porque sus prompts y selecciones de herramientas son contenido de terceros sin verificar. Configura `ENABLE_CUSTOM_AGENT_REPOS=true`, activa **Allow custom Agent imports** en la Danger Zone y luego abre **Agents → Download Agents → Custom Sources** (Fuentes personalizadas) para previsualizar un repositorio público de GitHub. Añadir una fuente y aplicar cualquier cambio de contenido posterior requieren ambos una confirmación explícita. La sincronización es manual; Marinara no clona repositorios ni los sondea en segundo plano.
 
-La raíz del repositorio debe contener un array `agents.json` con el mismo formato de definición de agente que los paquetes de agentes descargables. Un archivo mínimo se ve así:
+Un repositorio puede publicar agentes, conjuntos de reglas de Game Mode o ambos; debe incluir al menos uno de esos tipos. El archivo opcional `agents.json` en la raíz contiene un array con el formato de definiciones de agentes descargables. Ejemplo mínimo:
 
 ```json
 [
@@ -54,7 +54,11 @@ La raíz del repositorio debe contener un array `agents.json` con el mismo forma
 ]
 ```
 
-Marinara acepta únicamente URLs de raíz de repositorio de GitHub y valida el archivo comprimido acotado más cada definición de agente antes de mostrar la vista previa. Durante la sincronización, los valores remotos de prompt, ajustes y herramientas reemplazan los valores gestionados por el repositorio que se muestran en esa vista previa. Las elecciones de conexión y de arte permanecen locales. Si un agente desaparece del origen remoto, Marinara lo mantiene como un agente personalizado local normal y elimina solo su enlace al repositorio. Quitar una fuente sigue la misma política de mantener lo local.
+La carpeta raíz `rulesets` puede contener hasta 32 archivos `.json`, cada uno con un conjunto de hasta 256 KB. Se ignoran subcarpetas. La vista previa muestra nombre, versión y cobertura. Las orientaciones del GM se envían al modelo en cada partida que usa ese conjunto; instala solo contenido de autores de confianza.
+
+Los identificadores incluyen al propietario, como `alice/my-5e`, y no sustituyen conjuntos oficiales ni el `v20` de otro autor. Cada versión importada se conserva y cada partida usa exactamente la suya. Un contenido diferente con la misma versión no reemplaza la instalación: la app pide aumentar el número de versión. Un archivo inválido se omite con explicación; el resto se puede instalar.
+
+Solo se aceptan URLs de la raíz de un repositorio GitHub. La app verifica tamaños del archivo comprimido y definiciones antes de la vista previa. La sincronización reemplaza prompts, ajustes y herramientas gestionados desde el repositorio por los valores mostrados; conexiones e imágenes siguen locales. Un agente eliminado del origen queda como agente local sin vínculo al repositorio. Eliminar la fuente también elimina ese vínculo, pero conserva los conjuntos instalados para partidas existentes.
 
 ### External Extensions
 

@@ -28,6 +28,8 @@ Hinter dem Katalog in der App steht das öffentliche [Repository Marinara-Agents
 
 Der Katalog umfasst Chat-Agenten aus erster Hand, World Maps, Audio- und Videoanrufe für Conversation sowie sämtliche optionalen Conversation-Spiele. Installierte Agenten sind in **Writer Agents**, **Tracker Agents** und **Misc Agents** gruppiert, dazu kommt ein Bereich **Custom Agents** für selbst gebaute. Deinstallierst du ein Katalogpaket, verschwinden Code und Einstellungen aus der Engine – Nachrichten und Chatverlauf bleiben erhalten. Löschst du einen eigenen Agenten, ist er endgültig weg.
 
+Ein mit **Rules** gekennzeichnetes Paket liefert einen Game Mode-Regelsatz wie 5e (SRD 5.1), keinen Agenten. Es zählt nicht zu den Agentenzahlen oben. Du wählst es beim Anlegen eines Spiels unter **Rules**; siehe [Regeln auswählen](../game/getting-started.md#choosing-rules). Im Chat gibt es dafür keinen Aktivierungsschalter. Das 5e-Paket ist eine Vorschau und erscheint derzeit nur im Katalog einer Engine aus dem Branch `staging`.
+
 Kommst du von einer Engine-Version, die diese Funktionen noch fest mitbrachte, lädt Marinara die passenden Pakete einmalig herunter. Chat-Auswahl, Agent-Einstellungen, gespeicherte Laufzeitdaten und Verlauf bleiben dabei bestehen. Erreicht diese Migration den Katalog nicht, versucht sie es beim nächsten Start erneut, statt irgendetwas zu verwerfen.
 
 Automatische Updates beim Start installieren nie ein Paket, das du nicht ausgewählt hast. Installationen auf dem Rechner, unter Docker und unter Android/Termux aktualisieren die Pakete ihres lokalen Servers. iOS, iPadOS und andere Browser-Clients nutzen die Pakete des Marinara-Servers, mit dem sie verbunden sind.

@@ -13,6 +13,14 @@ Antes de pedir ajuda à equipe, ative o **Debug mode** (modo de depuração) par
 
 ## Problemas de instalação e de inicialização
 
+### Termux: memória insuficiente ao compilar o cliente
+
+Se o Vite termina com `Reached heap limit` ou `JavaScript heap out of memory`, falta heap do Node.js para compilar o cliente. É diferente de um binário nativo do Rollup ausente. Atualize e execute `start-termux.sh` novamente: a compilação eleva temporariamente um limite automático menor em direção a 1536 MiB, limitado à metade da RAM conhecida, com piso de 1024 MiB. O servidor mantém o limite menor baseado no perfil. Um limite explícito em `NODE_OPTIONS` tem prioridade nos dois processos; verifique se sobrou uma configuração antiga de 1024 MiB.
+
+O limite baseado na RAM é arredondado para baixo em passos de 128 MiB. Se a metade da RAM for menor que 1024 MiB, o piso de 1024 MiB tem prioridade.
+
+Feche outros aplicativos antes de tentar de novo. Dispositivos com pouca memória ainda podem falhar ou ter o processo encerrado pelo Android; guarde toda a saída do launcher para relatar o caso. Não exclua chats nem o perfil para corrigir uma falha de compilação.
+
 ### Página em branco ou JavaScript servido como HTML depois de atualizar
 
 Um erro como "Failed to load module script" com o tipo MIME `text/html` pode indicar que o navegador pediu um arquivo JavaScript ausente na compilação instalada. O aviso sobre o encerramento da sessão anterior não identifica esse problema, e apagar um bloqueio de escrita (writer lease) ou seus dados não repara os arquivos.

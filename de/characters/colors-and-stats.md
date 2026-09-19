@@ -57,6 +57,24 @@ Der erste Block heißt **Persona Status Bars** (Statusleisten der Persona) und w
 
 Der zweite Block heißt **RPG Attributes** und wird über **Enable RPG Attributes** (RPG-Attribute aktivieren) eingeschaltet. Er funktioniert wie bei einer Charakterkarte: Die Persona bekommt **Pools** (Start: HP und MP mit 100 von 100) und **Attributes** (Start: STR, DEX, CON, INT, WIS und CHA mit 10).
 
+<a id="ruleset-sheets"></a>
+
+### Regelsatzbögen
+
+Mit einem installierten Regelsatz, etwa 5e (SRD 5.1), erscheint in beiden **Stats**-Reitern **Ruleset sheets** (Regelsatzbögen), mit einem aufklappbaren Eintrag je Regelsatz. Der Bereich bleibt auch sichtbar, wenn die Karte einen Bogen eines inzwischen fehlenden Regelsatzes enthält.
+
+1. Klapp einen Eintrag auf und klick auf **Add a sheet** (Bogen hinzufügen), um die Standardwerte zu übernehmen.
+2. Bearbeite Attribute, Abschnittsfelder, Angriffs- oder Zauberlisten sowie Ausbildung und Zusatzboni für Fertigkeiten und Rettungswürfe. Der Regelsatz bestimmt den Aufbau. Berechnete Werte wie Übungsbonus oder passive Wahrnehmung aktualisieren sich beim Bearbeiten und sind schreibgeschützt.
+3. Speichere Charakter oder Persona wie gewohnt.
+
+Das ist die Startkonfiguration. Neue Spiele kopieren den Bogen; Änderungen im Spiel ändern die Karte nicht. **Add from catalog** (Aus Katalog hinzufügen) öffnet durchsuchbare Vorlagen für Zauber, Angriffe und Fähigkeiten. Hinzugefügte Zeilen sind bearbeitbare Kopien.
+
+Zahlen, die von Stufe oder Attributen abhängen, sind mit "Set by the ruleset" gekennzeichnet und werden beim Bearbeiten neu berechnet. Bei neueren Katalogtexten zeigt **Review** (Prüfen) gespeicherten und neuen Text nebeneinander. Mit **Update selected** (Auswahl aktualisieren) änderst du nur den Text ausgewählter Zeilen. Zahlen, Schalter, andere Spalten und nicht ausgewählte Zeilen bleiben erhalten.
+
+Bögen fehlender Regelsätze bleiben gespeichert und werden mit der Karte exportiert, aber nicht an die KI geschickt. Nach erneuter Installation kannst du sie wieder bearbeiten; **Remove** entfernt sie. Ein Bogen darf höchstens 64 KB groß sein. Auch ein unlesbarer Bogen aus einer neueren Version bleibt erhalten. Dort gibt es nur **Remove this sheet**, damit ein neuer Bogen ihn nicht versehentlich überschreibt.
+
+Bögen sind unabhängig von **Enable RPG Stats** und **Enable RPG Attributes**. Die eigenen Regeln von Marinara Engine ignorieren sie; Spiele mit Regelsatz verwenden sie anstelle der normalen Attribute für Proben.
+
 ## Wie Agenten die Werte aktualisieren
 
 Die Angaben im Tab **Stats** sind nur die Startwerte. Damit sich Werte während eines Chats ändern, schaltest du den passenden Agenten ein. Ein Agent ist ein KI-Helfer, der neben dem Chat mitläuft.
