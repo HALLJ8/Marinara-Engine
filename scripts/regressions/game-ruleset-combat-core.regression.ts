@@ -250,7 +250,7 @@ function firstOf<T extends RulesetCombatEvent["type"]>(events: RulesetCombatEven
   // entry that asks for a save, its own or one that ends a condition, is refused rather than
   // quietly saved against nothing.
   const noDifficulty = structuredClone(fiveE);
-  delete (noDifficulty.combat!.abilities[0] as { saveDifficulty?: unknown }).saveDifficulty;
+  delete (noDifficulty.combat!.abilities![0]! as { saveDifficulty?: unknown }).saveDifficulty;
   const bare = (mechanics: Record<string, unknown>) =>
     rulesetCatalogEntryIssues(noDifficulty, header(["spells"]), [entry(mechanics)])
       .map((issue) => `${issue.path.join(".")}: ${issue.message}`)
@@ -1012,6 +1012,25 @@ const labels = (definition: RulesetDefinition, state: RulesetEncounterState, id:
   );
   assert.deepEqual(who(second.state, "snag").tracked, [], "what the first one held goes with it");
   assert.equal(who(second.state, "rot").tracked[0]!.condition, "paralyzed");
+}
+
+// ── The blow that takes her down ends her concentration without a roll ──
+{
+  // Corwin holds Snag, then Rot takes him to zero. Going down ends what he was holding outright:
+  // there is no save to keep it, so the only dice thrown are the attack and its damage.
+  let state = fight(fiveE, [wizard({ pools: { hp: { value: 3 } } }), snag(), rot()], 20, 5, 3);
+  const hold = rulesetCombatOptions(fiveE, state, "corwin").find((option) => option.label === "Hold Fast")!;
+  state = act(fiveE, state, { actorId: "corwin", optionId: hold.id, targetIds: ["snag"] }, 5).state;
+  state = endTurn(fiveE, state, "corwin").state;
+  state = endTurn(fiveE, state, "snag", 3).state;
+  assert.equal(currentRulesetActor(state)?.id, "rot");
+  const felled = act(fiveE, state, { actorId: "rot", optionId: "bite", targetIds: ["corwin"] }, 18, 8);
+  assert.equal(eventsOf(felled.events, "save").length, 0, "nothing is rolled to keep it");
+  assert.deepEqual(
+    eventsOf(felled.events, "concentration").map((event) => [event.state, event.reason ?? null]),
+    [["ended", "down"]],
+  );
+  assert.deepEqual(who(felled.state, "snag").tracked, [], "and what he held lets go");
 }
 
 // ── Down, dying, and back again ──

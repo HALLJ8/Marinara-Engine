@@ -187,7 +187,9 @@ function dealDamage(ctx: RulesetCombatContext, target: RulesetCombatant, input: 
   });
   if (dealt <= 0) return 0;
   endConditionsOnDamage(ctx, target);
-  concentrationFromDamage(ctx, target, dealt);
+  // A blow that leaves somebody standing tests their concentration. One that takes them to zero
+  // does not: going down ends it outright (`dropToZero`), so nothing is rolled for it.
+  if (after.value > 0) concentrationFromDamage(ctx, target, dealt);
   if (after.value <= 0) {
     if (before.value > 0) dropToZero(ctx, target);
     else if (target.dying && !target.defeated) {
