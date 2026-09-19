@@ -200,6 +200,11 @@ function resolvedWithLayers(
       );
     }
   }
+  // ponytail: no cache. With a layer on, this re-validates one definition per resolution, which
+  // is what `buildRulesetRegistry` already does for EVERY installed ruleset on every call, because
+  // the registry is deliberately re-read so install, update and import need no invalidation. A
+  // cache here would have nothing stable to key on (the registry and its definitions are new
+  // objects each time) until the registry itself is cached, and that is the upgrade path.
   return {
     status: "ok",
     ref,
