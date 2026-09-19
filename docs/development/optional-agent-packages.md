@@ -682,8 +682,9 @@ score without the format learning any new arithmetic.
 The value is worked out when the sheet is edited and never when it is read, so live state, the Game
 Master's prompt block and the battle bridge all keep reading the stored number.
 
-A scaled row can sit inline in `ruleset.json` or in a `catalogs/<id>.json` asset, and neither is in
-the manifest, so install reads the verified bytes of both and refuses a `scaled` key under a
+A scaled row can sit inline in `ruleset.json` or in a `catalogs/<id>.json` asset. The manifest
+declares both files as assets but cannot show the keys inside them, so install reads the verified
+bytes of both and refuses a `scaled` key under a
 declaration older than 1.23, exactly as it does for `catalogs` under 1.21 and `battle` under 1.22. An
 older Engine's strict schema would refuse the file that holds it anyway. No permission, and no change
 for a ruleset whose catalogs ship none.
