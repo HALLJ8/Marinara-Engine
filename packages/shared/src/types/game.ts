@@ -424,6 +424,13 @@ export interface SkillCheckResult {
    * player, and always absent under the Engine's own rules, which only ever check the player.
    */
   who?: string;
+  /**
+   * Per-die target a success pool counted with, so a card can mark the dice that counted. Set by
+   * both pool paths: the legacy `resolution="successes"` tag, which knows the threshold it was
+   * given, and a `dice-pool` ruleset, which knows the one its rules chose. Absent on every summed
+   * check, where there is no such thing.
+   */
+  threshold?: number;
 }
 
 // ── The sighted dice pool (opt-in, last) ──

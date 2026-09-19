@@ -196,6 +196,19 @@ const proficiencyTierSchema = z
   })
   .strict();
 
+/** The sheet math every resolution kind shares: how a score becomes a modifier, and what training
+ *  is worth. Declared once and spread into each kind, so two kinds can never grow different rules
+ *  for the same number and the cross-checks below run for all of them. What the resulting number
+ *  MEANS is the kind's business: `dice-sum` adds it to the dice, `dice-pool` throws that many. */
+const sheetMathShape = {
+  abilityModifier: abilityModifierSchema,
+  /** Where the proficiency bonus comes from. Omit it for a system with no such number; its tiers
+   *  then use `flat` only. */
+  proficiency: z.object({ bonus: rulesetValueRefSchema }).strict().optional(),
+  /** The first tier is the untrained default for a skill or save the sheet does not mention. */
+  proficiencyTiers: z.array(proficiencyTierSchema).min(1).max(12),
+};
+
 /** Roll dice, add the sheet's modifiers, meet or beat a difficulty. The first resolution kind.
  *  The dice are a parameter so a 2d6+stat system does not need its own kind. */
 const diceSumResolutionSchema = z
@@ -205,12 +218,7 @@ const diceSumResolutionSchema = z
       .object({ count: z.number().int().min(1).max(10), sides: z.number().int().min(2).max(1000) })
       .strict()
       .default({ count: 1, sides: 20 }),
-    abilityModifier: abilityModifierSchema,
-    /** Where the proficiency bonus comes from. Omit it for a system with no such number; its tiers
-     *  then use `flat` only. */
-    proficiency: z.object({ bonus: rulesetValueRefSchema }).strict().optional(),
-    /** The first tier is the untrained default for a skill or save the sheet does not mention. */
-    proficiencyTiers: z.array(proficiencyTierSchema).min(1).max(12),
+    ...sheetMathShape,
     /** Whether the GM may ask for advantage or disadvantage (roll the dice twice, keep one). */
     advantage: z.boolean().default(false),
     naturals: z
@@ -224,9 +232,72 @@ const diceSumResolutionSchema = z
   })
   .strict();
 
+/** How many dice one pool check may throw, exploded dice included, whatever a ruleset asks for.
+ *  An Engine ceiling rather than an author's choice: the roll runs inside a turn. */
+export const RULESET_POOL_MAX_DICE = 100;
+
+/** How many faces a pool die may have. A pool counts faces one by one, so a percentile die here
+ *  would be a roll-under system wearing the wrong kind. */
+const POOL_DIE_MAX_SIDES = 100;
+
+const poolFace = z.number().int().min(2).max(POOL_DIE_MAX_SIDES);
+
+/** Throw a handful of dice and count the ones that reach a target number. The second resolution
+ *  kind, and the same sheet: what `dice-sum` adds to the roll is, here, the NUMBER OF DICE. So a
+ *  system whose ratings are the pool needs no new sheet vocabulary and no new editor. */
+const dicePoolResolutionSchema = z
+  .object({
+    kind: z.literal("dice-pool"),
+    die: z.object({ sides: poolFace }).strict().default({ sides: 10 }),
+    ...sheetMathShape,
+    /** The sheet's number is clamped into this. A `min` of 0 lets an empty pool fail with no roll. */
+    pool: z
+      .object({
+        min: z.number().int().min(0).max(RULESET_POOL_MAX_DICE),
+        max: z.number().int().min(1).max(RULESET_POOL_MAX_DICE),
+      })
+      .strict()
+      .default({ min: 1, max: 40 }),
+    /** The per-die success threshold. `min` below `max` lets the GM set it per check. */
+    target: z.object({ default: poolFace, min: poolFace, max: poolFace }).strict(),
+    /** Optional: a face at or above this counts twice. */
+    double: z.object({ from: poolFace }).strict().optional(),
+    /** Optional: a face at or above this rolls one more die, chained, up to the Engine's ceiling. */
+    explode: z.object({ from: poolFace }).strict().optional(),
+    /** Optional: a face at or below this takes one success away, never below none. */
+    cancel: z.object({ upTo: z.number().int().min(1).max(POOL_DIE_MAX_SIDES - 1) }).strict().optional(),
+    /** Optional: no die succeeded AND a face at or below this showed, which is worse than failing. */
+    botch: z.object({ upTo: z.number().int().min(1).max(POOL_DIE_MAX_SIDES - 1) }).strict().optional(),
+    /** Optional: this many net successes or more is a critical success. */
+    exceptional: z.object({ successes: z.number().int().min(1).max(RULESET_POOL_MAX_DICE) }).strict().optional(),
+    /** Optional: lets the GM add or take dice for one check (a stunt, a wound, bad light). */
+    situationalDice: z
+      .object({ min: z.number().int().min(-20).max(0), max: z.number().int().min(0).max(20) })
+      .strict()
+      .optional(),
+    /** `successes` is how many the check needs. A step names a `target` only where the ruleset
+     *  lets the target move. */
+    difficultyLadder: z
+      .array(
+        z
+          .object({
+            label,
+            successes: z.number().int().min(1).max(RULESET_POOL_MAX_DICE),
+            target: poolFace.optional(),
+          })
+          .strict(),
+      )
+      .min(1)
+      .max(12),
+  })
+  .strict();
+
 /** Closed registry of resolution kinds. Adding a kind is an Engine PR with regressions. */
-export const rulesetResolutionSchema = z.discriminatedUnion("kind", [diceSumResolutionSchema]);
-export const RULESET_RESOLUTION_KINDS = Object.freeze(["dice-sum"] as const);
+export const rulesetResolutionSchema = z.discriminatedUnion("kind", [
+  diceSumResolutionSchema,
+  dicePoolResolutionSchema,
+]);
+export const RULESET_RESOLUTION_KINDS = Object.freeze(["dice-sum", "dice-pool"] as const);
 
 // ── Sheet primitives ──
 
@@ -1007,8 +1078,44 @@ function refineRulesetDefinition(def: RulesetDefinitionBase, ctx: z.RefinementCt
       }
     });
   }
-  if (resolution.dice.count !== 1 && (resolution.naturals.check !== "none" || resolution.naturals.save !== "none")) {
-    issue(["resolution", "naturals"], "Natural results need a single die; with several dice use none");
+  if (resolution.kind === "dice-sum") {
+    if (resolution.dice.count !== 1 && (resolution.naturals.check !== "none" || resolution.naturals.save !== "none")) {
+      issue(["resolution", "naturals"], "Natural results need a single die; with several dice use none");
+    }
+  } else {
+    const { die, pool, target } = resolution;
+    // Every face a pool rule names has to be a face this die actually has, or the rule could never
+    // fire and the author would find out in play rather than at import.
+    const faceIssue = (value: number, path: (string | number)[]) => {
+      if (value < 2 || value > die.sides) issue(path, `A face of this die is from 2 to ${die.sides}`);
+    };
+    if (pool.min > pool.max) issue(["resolution", "pool", "min"], "min is above max");
+    faceIssue(target.min, ["resolution", "target", "min"]);
+    faceIssue(target.max, ["resolution", "target", "max"]);
+    faceIssue(target.default, ["resolution", "target", "default"]);
+    if (target.min > target.max) issue(["resolution", "target", "min"], "min is above max");
+    if (target.default < target.min || target.default > target.max) {
+      issue(["resolution", "target", "default"], "default is outside min..max");
+    }
+    if (resolution.double) faceIssue(resolution.double.from, ["resolution", "double", "from"]);
+    if (resolution.explode) faceIssue(resolution.explode.from, ["resolution", "explode", "from"]);
+    // A face that both succeeds and cancels, or both succeeds and botches, would count itself
+    // twice in opposite directions. The lowest target the GM can set is the line.
+    for (const key of ["cancel", "botch"] as const) {
+      const rule = resolution[key];
+      if (rule && rule.upTo >= target.min) {
+        issue(["resolution", key, "upTo"], `A ${key} face must be below the lowest target (${target.min})`);
+      }
+    }
+    const adjustable = target.min < target.max;
+    resolution.difficultyLadder.forEach((step, index) => {
+      if (step.target === undefined) return;
+      const path = ["resolution", "difficultyLadder", index, "target"];
+      if (!adjustable) issue(path, "A step names a target only where target.min is below target.max");
+      else if (step.target < target.min || step.target > target.max) {
+        issue(path, `A step's target is inside ${target.min} to ${target.max}`);
+      }
+    });
   }
 
   sheet.lists.forEach((list, index) => {
@@ -1193,6 +1300,10 @@ export const rulesetDefinitionSchema = rulesetDefinitionBaseSchema.superRefine(r
 
 export type RulesetDefinition = z.infer<typeof rulesetDefinitionSchema>;
 export type RulesetResolution = RulesetDefinition["resolution"];
+/** The two kinds, narrowed. Every reader of a field only one kind has takes one of these, so the
+ *  compiler finds the readers a third kind would break. */
+export type RulesetDiceSumResolution = Extract<RulesetResolution, { kind: "dice-sum" }>;
+export type RulesetDicePoolResolution = Extract<RulesetResolution, { kind: "dice-pool" }>;
 export type RulesetSheetSchema = RulesetDefinition["sheet"];
 export type RulesetField = z.infer<typeof rulesetFieldSchema>;
 export type RulesetListColumn = z.infer<typeof rulesetListColumnSchema>;

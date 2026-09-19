@@ -643,22 +643,63 @@ function renderRulesetSkillCheckLine(
   playerDiceRollSubmitted: boolean,
   oneRequestDice: boolean,
 ): string {
-  const { dice, advantage, difficultyLadder } = ruleset.resolution;
+  const resolution = ruleset.resolution;
+  // `with=` needs somewhere to go: a sheet with one ability has no other ability to roll with.
+  const withClause =
+    ruleset.sheet.abilities.length >= 2
+      ? [`Add with="Ability" to roll a skill or save with another ability than its own.`]
+      : [];
+  const branchClause = oneRequestDice
+    ? [`When the outcome splits two ways, add branch="label" to this tag and write the branch block described under DICE.`]
+    : [];
+  const whoClause = `Add who="Character Name" to roll for a party member; without it the player is checked.`;
+
+  if (resolution.kind === "dice-pool") {
+    const { target, situationalDice, difficultyLadder } = resolution;
+    const ladder = difficultyLadder
+      .map(
+        (step) =>
+          `${step.label} ${step.successes} ${step.successes === 1 ? "success" : "successes"}${
+            step.target === undefined ? "" : ` (target ${step.target})`
+          }`,
+      )
+      .join(", ");
+    return [
+      `- [skill_check: skill="Name" dc="N"] - ${ruleset.gm.checkGuidance}`,
+      `dc is how many successes the check needs.`,
+      `Difficulty: ${ladder}.`,
+      whoClause,
+      // Both are offered only where this ruleset declares them, so the prompt never teaches an
+      // attribute the resolver would then ignore.
+      ...(target.min < target.max
+        ? [
+            `Add threshold="N" to move the per-die target, from ${target.min} to ${target.max}; without it the target is ${target.default}.`,
+          ]
+        : []),
+      ...(situationalDice
+        ? [
+            `Add bonus="+N" or bonus="-N" to add or take dice for this check, from ${situationalDice.min} to ${situationalDice.max}.`,
+          ]
+        : []),
+      ...withClause,
+      `Do NOT write rolls, modifier, total or result: the engine rolls the pool from the character sheet and counts the successes.`,
+      ...branchClause,
+    ].join(" ");
+  }
+
+  const { dice, advantage, difficultyLadder } = resolution;
   const ladder = difficultyLadder.map((step) => `${step.label} ${step.dc}`).join(", ");
   const playerDie = playerDiceRollSubmitted && dice.count === 1 && dice.sides === 20;
   return [
     `- [skill_check: skill="Name" dc="N"${playerDie ? ` rolls="the player's d20 result"` : ""}] - ${ruleset.gm.checkGuidance}`,
     `Difficulty: ${ladder}.`,
-    `Add who="Character Name" to roll for a party member; without it the player is checked.`,
+    whoClause,
     ...(advantage ? [`Add mode="advantage" or mode="disadvantage" when the rules grant one.`] : []),
+    ...withClause,
     playerDie
       ? `Use the player's exact die. Do NOT write modifier, total or result: the engine applies the character sheet.`
       : `Do NOT write rolls, modifier, total or result: the engine rolls ${dice.count}d${dice.sides} and applies the character sheet.`,
-    ...(oneRequestDice
-      ? [
-          `When the outcome splits two ways, add branch="label" to this tag and write the branch block described under DICE.`,
-        ]
-      : []),
+    ...branchClause,
   ].join(" ");
 }
 
@@ -781,6 +822,13 @@ export function buildGmFormatReminder(
   // One-request dice (#6215). Everything this gates is additive: with the switch
   // off every line below renders exactly the bytes it renders today.
   const oneRequestDice = ctx.oneRequestDice === true;
+  // A die the player threw is one d20, so it stands in only for a ruleset that rolls exactly that.
+  // A pool ruleset has no `dice` at all, which is why the kind is read before the count.
+  const rulesetResolution = ctx.ruleset?.resolution;
+  const rulesetRollsOneD20 =
+    rulesetResolution?.kind === "dice-sum" &&
+    rulesetResolution.dice.count === 1 &&
+    rulesetResolution.dice.sides === 20;
 
   const partyNames = normalizePromptTextList(ctx.partyNames);
   const hasParty = partyNames.length > 0;
@@ -1029,8 +1077,7 @@ export function buildGmFormatReminder(
         ? `- Do not use roll_dice for an ability check, skill check or saving throw. Write the [skill_check: ...] tag above without numbers and the engine rolls it from the character sheet.`
         : `- If roll_dice has already returned a skill check's roll, override the sparse-check instructions above: write a complete [skill_check: skill="Skill Name" dc="chosen DC" rolls="actual tool rolls joined with |" modifier="tool modifier" total="tool total" result="critical_success|success|failure|critical_failure" resolution="sum" dice="tool notation"] record using that result. Do not request another engine roll or stop at the attempt; narrate its consequence in this same turn. Use the sparse form only when no roll result is available.`,
       // A player's d20 only stands in for a check where a single d20 is what the rules roll.
-      ctx.playerDiceRollSubmitted &&
-        (!ctx.ruleset || (ctx.ruleset.resolution.dice.count === 1 && ctx.ruleset.resolution.dice.sides === 20))
+      ctx.playerDiceRollSubmitted && (!rulesetResolution || rulesetRollsOneD20)
         ? `- The player already threw for this turn. Use their roll rather than calling the tool again for the same action.`
         : `- A skill check is still written down with the [skill_check: ...] tag above. roll_dice is how you get a number your narration needs in hand; it does not replace that record.`,
       `- If the tool is not available to you on this connection, work from the tag alone and say nothing about tools.`,

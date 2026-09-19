@@ -82,6 +82,10 @@ export interface SkillCheckTagExtras {
   pool?: string;
   /** `who="Name"` — the party member a ruleset game rolled for. Written only by that path. */
   who?: string;
+  /** `with="Ability"` — the ability a ruleset check rolled with instead of the skill's own. */
+  with?: string;
+  /** `bonus="+2"` — dice a pool ruleset added or took for this check. Written only by that path. */
+  bonus?: number;
 }
 
 function serializeSkillCheckExtras(extras: SkillCheckTagExtras | undefined): string {
@@ -90,6 +94,11 @@ function serializeSkillCheckExtras(extras: SkillCheckTagExtras | undefined): str
   if (extras.threshold != null && Number.isFinite(extras.threshold)) parts.push(`threshold="${extras.threshold}"`);
   if (extras.pool) parts.push(`pool="${serializeSkillCheckAttribute(extras.pool)}"`);
   if (extras.who) parts.push(`who="${serializeSkillCheckAttribute(extras.who)}"`);
+  // Appended after everything a tag has always carried, so no shipped call site changes its bytes.
+  if (extras.with) parts.push(`with="${serializeSkillCheckAttribute(extras.with)}"`);
+  if (extras.bonus != null && Number.isFinite(extras.bonus)) {
+    parts.push(`bonus="${extras.bonus > 0 ? "+" : ""}${extras.bonus}"`);
+  }
   return parts.length > 0 ? ` ${parts.join(" ")}` : "";
 }
 
@@ -116,6 +125,14 @@ export function serializeSparseSkillCheckTag(
 }
 
 export function serializeResolvedSkillCheckTag(result: SkillCheckResult, extras?: SkillCheckTagExtras): string {
+  // A result that carries its own `who` or per-die threshold writes them without the caller
+  // repeating itself. An explicit extra still wins: a caller that passes one is the path that
+  // measured it, and the legacy pool path has always passed its own.
+  const merged: SkillCheckTagExtras = {
+    ...(result.threshold != null ? { threshold: result.threshold } : {}),
+    ...(result.who ? { who: result.who } : {}),
+    ...extras,
+  };
   return `${[
     `[skill_check: skill="${serializeSkillCheckAttribute(result.skill)}"`,
     `dc="${result.dc}"`,
@@ -127,5 +144,5 @@ export function serializeResolvedSkillCheckTag(result: SkillCheckResult, extras?
     `mode="${result.rollMode}"`,
     `resolution="${result.resolution}"`,
     `dice="${serializeSkillCheckAttribute(result.dice ?? "1d20")}"`,
-  ].join(" ")}${serializeSkillCheckExtras(result.who && !extras?.who ? { ...extras, who: result.who } : extras)}]`;
+  ].join(" ")}${serializeSkillCheckExtras(merged)}]`;
 }

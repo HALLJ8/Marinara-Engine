@@ -63,6 +63,19 @@ export interface SkillCheckTag {
    * the name matches a sheet is the resolver's business.
    */
   who?: string;
+  /**
+   * `with=` as the GM wrote it: roll this skill or save with another ability than its own. Carried,
+   * never judged — whether the ruleset has such an ability is the resolver's business, and a name
+   * no ability answers to is ignored there rather than refused here.
+   */
+  withAbility?: string;
+  /**
+   * `bonus=` as a whole number, when the GM wrote a readable one: dice a pool ruleset adds or
+   * takes for this one check. Read like `threshold=` and held to the same rule — `Number` rather
+   * than `parseInt`, so "1.5" stays unusable instead of becoming 1, and whether the ruleset allows
+   * situational dice at all is decided by the resolver.
+   */
+  bonusDice?: number;
   /** `pool=` exactly as written, for the mismatch log. Present whenever `poolDeclared` is. */
   poolRaw?: string;
   /**
@@ -326,8 +339,14 @@ export function parseSkillCheckTagBody(body: string): SkillCheckTag | null {
     const threshold = Number(values.get("threshold"));
     if (Number.isFinite(threshold)) tag.threshold = threshold;
   }
+  if (values.has("bonus")) {
+    const bonus = Number(values.get("bonus"));
+    if (Number.isInteger(bonus)) tag.bonusDice = bonus;
+  }
   const who = values.get("who")?.trim();
   if (who) tag.who = who.slice(0, 100);
+  const withAbility = values.get("with")?.trim();
+  if (withAbility) tag.withAbility = withAbility.slice(0, 100);
   if (values.has("pool")) {
     tag.poolDeclared = true;
     tag.poolRaw = values.get("pool")!;

@@ -279,16 +279,16 @@ export function resolveGameDiceRequests(
       rollMode: "normal",
       resolution,
       dice: dice.dice,
+      // The threshold this path counted with rides on the result itself now, so the dice card can
+      // mark the dice that counted and the serializer writes `threshold=` from one place.
+      ...(resolution === "successes" ? { threshold } : {}),
     };
     checkResults.push(check);
     if (pool && poolResult) logPoolDcFit(pool, boundedDc, check.usedRoll, check.modifier);
     // `threshold=` is written by the serializer now rather than spliced onto a finished
     // tag by this caller, so the two spellings of the same attribute cannot drift. The
     // bytes are the ones this path has always written.
-    return serializeResolvedSkillCheckTag(check, {
-      ...(resolution === "successes" ? { threshold } : {}),
-      ...(poolName ? { pool: poolName } : {}),
-    });
+    return serializeResolvedSkillCheckTag(check, { ...(poolName ? { pool: poolName } : {}) });
   });
   return { content: resolved, diceRolls, checkResults, rolled, unresolved };
 }

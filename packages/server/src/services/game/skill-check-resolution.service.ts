@@ -24,6 +24,7 @@ import {
   evaluateRulesetSheet,
   matchRulesetCheckTarget,
   parseDiceNotation,
+  rollDicePoolCheck,
   rollDiceSumCheck,
   rulesetCheckModifier,
   rulesetSheetEnvelopeSchema,
@@ -101,6 +102,12 @@ export interface SkillCheckRequest {
   preRolledD20?: number;
   /** The party member to roll for, in a game with a pinned ruleset. Absent means the player. */
   who?: string;
+  /** `with=`: roll the skill or save with another ability than its own. Ruleset games only. */
+  withAbility?: string;
+  /** `threshold=`: the per-die target a pool check counts with, where the ruleset lets it move. */
+  threshold?: number;
+  /** `bonus=`: dice a pool check adds or takes, where the ruleset declares situational dice. */
+  bonusDice?: number;
 }
 
 function parsePlayerStats(raw: unknown, chatId: string): Record<string, unknown> | null {
@@ -279,9 +286,15 @@ export function buildSkillCheckRulesetContext(
   };
 }
 
-/** The sheet modifier a ruleset game applies for `who` (or the player) on the named check. */
-export function rulesetCheckModifierFor(ruleset: SkillCheckRulesetContext, skill: string, who?: string): number {
-  const target = matchRulesetCheckTarget(ruleset.definition, skill);
+/** The sheet modifier a ruleset game applies for `who` (or the player) on the named check. Under
+ *  `dice-pool` this is not a modifier but the size of the pool; the caller's kind decides. */
+export function rulesetCheckModifierFor(
+  ruleset: SkillCheckRulesetContext,
+  skill: string,
+  who?: string,
+  withAbility?: string,
+): number {
+  const target = matchRulesetCheckTarget(ruleset.definition, skill, withAbility);
   if (who) {
     // A name that matches nobody (or two cards at once) is a stranger: no modifier at all.
     const named = ruleset.sheets.get(normalizeCharacterLookupName(who));
@@ -296,17 +309,52 @@ function resolveRulesetSkillCheck(
   request: SkillCheckRequest,
   rollD20?: () => number,
 ): SkillCheckResult {
-  const target = matchRulesetCheckTarget(ruleset.definition, request.skill);
-  const modifier = rulesetCheckModifierFor(ruleset, request.skill, request.who);
+  const { definition } = ruleset;
+  const resolution = definition.resolution;
+  const target = matchRulesetCheckTarget(definition, request.skill, request.withAbility);
+  // An ability nobody on this sheet answers to is ignored rather than refused, so the check still
+  // happens with the skill's own ability. Said once, here, where the ruleset is actually in hand.
+  if (request.withAbility && target && target.type !== "ability" && !target.withAbility) {
+    logger.debug(
+      "[game/skill-check] No ability named %s in ruleset %s; rolling %s with its own",
+      request.withAbility,
+      definition.id,
+      request.skill,
+    );
+  }
+  const modifier = rulesetCheckModifierFor(ruleset, request.skill, request.who, request.withAbility);
   // The injected d20 (tests, the sighted pool) stands in only where a d20 is what is rolled.
   const rollDie = (sides: number) => (sides === 20 && rollD20 ? rollD20() : rollDieSecurely(sides));
-  const { sides, count } = ruleset.definition.resolution.dice;
+  const isSave = target?.type === "save";
+
+  if (resolution.kind === "dice-pool") {
+    // The DC is a count of successes, so its ceiling is the pool's. Clamped rather than refused:
+    // the sighted pool's own bound is applied before any ruleset is loaded, so this is the only
+    // place that knows what this ruleset's ceiling is.
+    const dc = Math.min(resolution.pool.max, Math.max(1, Math.round(request.dc)));
+    const rolled = rollDicePoolCheck(
+      definition,
+      { modifier, required: dc, isSave, threshold: request.threshold, bonusDice: request.bonusDice },
+      rollDie,
+    );
+    return {
+      skill: request.skill,
+      dc,
+      // The sheet's number bought the dice; nothing is added to the count of successes.
+      modifier: 0,
+      resolution: "successes",
+      ...rolled,
+      ...(request.who ? { who: request.who } : {}),
+    };
+  }
+
+  const { sides, count } = resolution.dice;
   const rolled = rollDiceSumCheck(
-    ruleset.definition,
+    definition,
     {
       modifier,
       dc: request.dc,
-      isSave: target?.type === "save",
+      isSave,
       advantage: request.advantage,
       disadvantage: request.disadvantage,
       preRolled: sides === 20 && count === 1 ? request.preRolledD20 : undefined,
@@ -326,6 +374,11 @@ function resolveRulesetSkillCheck(
 /** Whether a ruleset game rolls this tag: a `sum` check whose dice label, when the GM wrote one,
  *  is exactly what the ruleset throws for that mode. Anything else names another system. */
 function isRulesetRollableSkillCheckTag(tag: SkillCheckTag, definition: RulesetDefinition): boolean {
+  // A pool ruleset rolls every check it is asked for. The pool comes from the character sheet, so
+  // a `dice=` or `resolution=` the model wrote from habit describes nothing the Engine has to
+  // honour, and `mode=` names an advantage this kind does not have. All three are ignored, which
+  // is safe here and nowhere else: the Engine is not guessing at the rules, it has them.
+  if (definition.resolution.kind === "dice-pool") return true;
   // Refused on purpose, exactly as `isEngineRollableSkillCheckTag` refuses it: a tag that declares
   // both modes names no roll, and the guide promises a check is never rolled with both at once.
   if (tag.advantage && tag.disadvantage) return false;
@@ -341,10 +394,15 @@ function isRulesetRollableSkillCheckTag(tag: SkillCheckTag, definition: RulesetD
 /** Whether a complete tag's numbers are the ones this ruleset and this sheet would have produced.
  *  A GM that writes its own modifier has not rolled the character's check, however tidy the sum. */
 function rulesetVouchesFor(ruleset: SkillCheckRulesetContext, tag: SkillCheckTag): boolean {
+  const resolution = ruleset.definition.resolution;
+  // A pool is never vouched for. Its numbers are auditable, but a handful of dice has so many
+  // consistent outcomes that an audit constrains nothing: the model could pick eight favourable
+  // faces and count them correctly. So a pool check is always the Engine's own roll.
+  if (resolution.kind === "dice-pool") return false;
   const result = tag.resolvedResult;
   if (!result || result.resolution !== "sum") return false;
-  const { count, sides } = ruleset.definition.resolution.dice;
-  if (result.rollMode !== "normal" && !ruleset.definition.resolution.advantage) return false;
+  const { count, sides } = resolution.dice;
+  if (result.rollMode !== "normal" && !resolution.advantage) return false;
   const sets = result.rollMode === "normal" ? 1 : 2;
   if (result.rolls.length !== count * sets || result.rolls.some((roll) => roll < 1 || roll > sides)) return false;
   // The die that counted has to be the one the mode keeps: the only set, or the higher or lower of two.
@@ -357,13 +415,10 @@ function rulesetVouchesFor(ruleset: SkillCheckRulesetContext, tag: SkillCheckTag
         ? Math.max(first, sum(result.rolls.slice(count)))
         : Math.min(first, sum(result.rolls.slice(count)));
   if (result.usedRoll !== kept) return false;
-  if (result.modifier !== rulesetCheckModifierFor(ruleset, tag.skill, tag.who)) return false;
+  if (result.modifier !== rulesetCheckModifierFor(ruleset, tag.skill, tag.who, tag.withAbility)) return false;
   if (result.usedRoll + result.modifier !== result.total) return false;
   const target = matchRulesetCheckTarget(ruleset.definition, tag.skill);
-  const policy =
-    target?.type === "save"
-      ? ruleset.definition.resolution.naturals.save
-      : ruleset.definition.resolution.naturals.check;
+  const policy = target?.type === "save" ? resolution.naturals.save : resolution.naturals.check;
   const single = count === 1;
   const autoSuccess = single && result.usedRoll === sides && (policy === "both" || policy === "max-only");
   const autoFailure = single && result.usedRoll === 1 && (policy === "both" || policy === "min-only");
@@ -421,8 +476,14 @@ export async function resolveChatSkillCheck(
  */
 export function isResolvableSkillCheckRequest(request: SkillCheckRequest, definition?: RulesetDefinition): boolean {
   if (!request.skill || request.skill.length > SKILL_CHECK_MAX_SKILL_LENGTH) return false;
+  const resolution = definition?.resolution;
+  // A pool check's difficulty is a count of successes, not a target number, so the d20 bounds say
+  // nothing about it: it can never need more successes than the pool can hold dice.
+  if (resolution?.kind === "dice-pool") {
+    return Number.isInteger(request.dc) && request.dc >= 1 && request.dc <= resolution.pool.max;
+  }
   // A ruleset's own difficulty ladder may reach past the Engine's d20 bounds in either direction.
-  const ladder = definition?.resolution.difficultyLadder.map((step) => step.dc) ?? [];
+  const ladder = resolution?.difficultyLadder.map((step) => step.dc) ?? [];
   const min = Math.min(SKILL_CHECK_MIN_DC, ...ladder);
   const max = Math.max(SKILL_CHECK_MAX_DC, ...ladder);
   return Number.isInteger(request.dc) && request.dc >= min && request.dc <= max;
@@ -531,7 +592,17 @@ export async function resolveSkillCheckTagsInContent(
   // Starts from the hint, so a context that fails to load on ANY path (the pool's included) still
   // saves the sparse ask with the name it was for, instead of handing the check to the player.
   let keepWho = options.rulesetPinned === true;
-  const whoExtras = (tag: SkillCheckTag) => (keepWho && tag.who ? { who: tag.who } : undefined);
+  // The ask a rewrite keeps when the numbers go: who it was for, and the two per-check freedoms a
+  // ruleset may grant. All three are only ever written by a ruleset game, so nothing else changes.
+  const askExtras = (tag: SkillCheckTag) => {
+    if (!keepWho) return undefined;
+    const extras = {
+      ...(tag.who ? { who: tag.who } : {}),
+      ...(tag.withAbility ? { with: tag.withAbility } : {}),
+      ...(tag.bonusDice != null ? { bonus: tag.bonusDice } : {}),
+    };
+    return Object.keys(extras).length > 0 ? extras : undefined;
+  };
   const toRequest = (tag: SkillCheckTag): SkillCheckRequest => ({
     skill: tag.skill,
     dc: tag.dc,
@@ -539,6 +610,9 @@ export async function resolveSkillCheckTagsInContent(
     disadvantage: tag.disadvantage,
     preRolledD20: tag.preRolledD20,
     who: tag.who,
+    withAbility: tag.withAbility,
+    threshold: tag.threshold,
+    bonusDice: tag.bonusDice,
   });
   /** Pool checks the resolver could not roll, written back without the numbers they claimed. */
   const stripped: Array<{ start: number; end: number; replacement: string }> = [];
@@ -684,7 +758,7 @@ export async function resolveSkillCheckTagsInContent(
                 disadvantage: tag.disadvantage,
                 declaredDice: tag.declaredDice,
               },
-              whoExtras(tag),
+              askExtras(tag),
             ),
           });
           left += 1;
@@ -705,8 +779,15 @@ export async function resolveSkillCheckTagsInContent(
     const results: SkillCheckResult[] = [];
     // The pool holds d20s. A ruleset that rolls anything else gets an ordinary Engine roll for its
     // checks, so a pool value is never spent on, or recorded against, a roll it did not decide.
-    const rulesetDice = context.ruleset?.definition.resolution.dice;
-    const poolServesChecks = !rulesetDice || (rulesetDice.count === 1 && rulesetDice.sides === 20);
+    // That covers both other shapes: a `dice-sum` ruleset whose dice are not one d20, and a
+    // `dice-pool` ruleset, which throws a handful of its own die and would otherwise be handed a
+    // d20 face to count as one of them.
+    const rulesetResolution = context.ruleset?.definition.resolution;
+    const poolServesChecks =
+      !rulesetResolution ||
+      (rulesetResolution.kind === "dice-sum" &&
+        rulesetResolution.dice.count === 1 &&
+        rulesetResolution.dice.sides === 20);
     let poolTagIndex = 0;
     // Pool checks the allotment could not serve. Saved sparse, so they are counted with the
     // sparse tags rather than the resolved ones: a caller reading `resolved` as "rolled"
@@ -717,7 +798,7 @@ export async function resolveSkillCheckTagsInContent(
         // A ruleset that has no advantage rolls one die whatever the tag asked for, so only one
         // pool value may be reserved and recorded for it.
         const poolRequest =
-          context.ruleset && !context.ruleset.definition.resolution.advantage
+          rulesetResolution && rulesetResolution.kind === "dice-sum" && !rulesetResolution.advantage
             ? { ...entry.request, advantage: false, disadvantage: false }
             : entry.request;
         const spent = resolvePoolCheckTag(options.pool, context, poolRequest, entry.tag, entry.poolBody, poolTagIndex);
@@ -737,7 +818,7 @@ export async function resolveSkillCheckTagsInContent(
             disadvantage: entry.request.disadvantage,
             declaredDice: entry.tag.declaredDice,
           },
-          whoExtras(entry.tag),
+          askExtras(entry.tag),
         );
       }
       const result = resolveSkillCheckWithContext(context, entry.request, options.rollD20);
@@ -788,7 +869,7 @@ export async function resolveSkillCheckTagsInContent(
           preRolledD20: entry.request.preRolledD20,
           declaredDice: entry.tag.declaredDice,
         },
-        whoExtras(entry.tag),
+        askExtras(entry.tag),
       ),
     );
     return {

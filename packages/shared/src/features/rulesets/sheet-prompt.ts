@@ -10,7 +10,7 @@
 
 import type { RulesetDefinition, RulesetField, RulesetSheetBuild } from "../../schemas/ruleset.schema.js";
 import { readRulesetLive } from "./live-state.js";
-import { evaluateRulesetSheet, isRulesetItemHidden } from "./sheet-math.js";
+import { evaluateRulesetSheet, formatRulesetCheckValue, isRulesetItemHidden } from "./sheet-math.js";
 
 /** How much of one sheet value reaches the prompt. */
 const MAX_VALUE_LENGTH = 80;
@@ -31,10 +31,6 @@ function safeValue(value: string): string {
       .trim()
       .slice(0, MAX_VALUE_LENGTH)
   );
-}
-
-function signed(value: number): string {
-  return value >= 0 ? `+${value}` : `${value}`;
 }
 
 function own(row: Record<string, unknown>, key: string): unknown {
@@ -73,10 +69,12 @@ export function renderRulesetSheetBlock(
   push(safeValue(card.name));
 
   // A score is only ever shown through the ruleset's own modifier rule, so an `identity` system
-  // shows its one number and a 3d6 system shows what it adds.
+  // shows its one number and a 3d6 system shows what it adds. How it is SPELLED follows the
+  // resolution kind: a pool ruleset's number is dice, not a bonus, and "+5" would read as one.
+  const checkValue = (value: number) => formatRulesetCheckValue(definition, value);
   push(
     sheet.abilities
-      .map((ability) => `${ability.short ?? ability.label} ${signed(evaluated.abilityMods[ability.id] ?? 0)}`)
+      .map((ability) => `${ability.short ?? ability.label} ${checkValue(evaluated.abilityMods[ability.id] ?? 0)}`)
       .join(", "),
   );
 
@@ -86,10 +84,10 @@ export function renderRulesetSheetBlock(
   const trained = [
     ...sheet.skills
       .filter((skill) => (evaluated.skillTiers[skill.id] ?? firstTier) !== firstTier)
-      .map((skill) => `${skill.label} ${signed(evaluated.skillMods[skill.id] ?? 0)}`),
+      .map((skill) => `${skill.label} ${checkValue(evaluated.skillMods[skill.id] ?? 0)}`),
     ...sheet.saves
       .filter((save) => (evaluated.saveTiers[save.id] ?? firstTier) !== firstTier)
-      .map((save) => `${save.label} ${signed(evaluated.saveMods[save.id] ?? 0)}`),
+      .map((save) => `${save.label} ${checkValue(evaluated.saveMods[save.id] ?? 0)}`),
   ];
   if (trained.length > 0) push(`Trained: ${trained.join(", ")}`);
 
