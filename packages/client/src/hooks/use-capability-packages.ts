@@ -11,7 +11,7 @@ import {
   type InstalledRuleset,
   type RulesetCatalogPayload,
 } from "@marinara-engine/shared";
-import { api } from "../lib/api-client";
+import { api, ApiError } from "../lib/api-client";
 import {
   beginCapabilityClientImport,
   capabilityClientNeedsRefresh,
@@ -54,7 +54,10 @@ export function useRulesetCatalog(rulesetId: string, catalogId: string, version:
     },
     enabled: enabled && !!rulesetId && !!catalogId,
     staleTime: 30 * 60_000,
-    retry: 1,
+    // A 4xx is the server's considered answer (no such catalog, an unusable file): asking again
+    // only delays the message. A dropped connection or a 5xx gets one more try.
+    retry: (failures, error) =>
+      failures < 1 && !(error instanceof ApiError && error.status >= 400 && error.status < 500),
   });
 }
 
