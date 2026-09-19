@@ -380,6 +380,8 @@ This file is the release-notes source of truth for Marinara Engine. Reuse these 
 
 ### Fixed
 
+- Inventory Tracker preserves saved items when a model response is incomplete or contains malformed rows, including batched agent calls. Failed updates use the existing retry path instead of repairing missing inventory into deletions (#6387).
+
 - SwarmUI video downloads reject foreign output URLs before sending the server's authentication cookie (#6158).
 
 - Storyboard planning retries explicitly local connections behind proxies once without reasoning, and reports empty final answers or exhausted output limits when planning still fails (#6165).

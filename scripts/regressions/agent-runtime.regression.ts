@@ -22,6 +22,7 @@ import {
 } from "../../packages/server/src/services/llm/base-provider.js";
 import { agentResultTypeSchema } from "../../packages/shared/src/schemas/agent.schema.js";
 import { resolveTrackerRowsUpdate } from "../../packages/shared/src/utils/tracker-updates.js";
+import { buildLockedInventoryTrackerPatch } from "../../packages/server/src/routes/generate/generate-route-utils.js";
 import {
   AGENT_RESULT_TYPE_VALUES,
   getAgentContextSources,
@@ -208,6 +209,63 @@ const repairedJsonResult = await executeAgent(
 assert.equal(repairedJsonResult.success, true, "structured agents should recover repairable JSON without a retry");
 assert.equal(repairedJsonProvider.calls, 1, "repairable JSON should not spend another model call");
 assert.deepEqual(repairedJsonResult.data, { weather: "rain", nested: { value: 1 } });
+
+// Inventory replacement is destructive: incomplete JSON and malformed rows
+// must fail before the same patch helper used by generation/retry can save them.
+const inventoryAgent = makeAgent("inventory-tracker", "inventory_tracker_update");
+const savedInventory = {
+  inventoryTrackerCurrencies: [{ name: "Gold", qty: 8 }],
+  inventoryTrackerEquipped: [{ name: "Sword" }],
+  inventoryTrackerInventory: [{ name: "Rope" }, { name: "Potion", qty: 3 }],
+};
+for (const output of [
+  '{"currencies": [], "equipped": [], "inventory": [',
+  '{"inventory": [{"name":"Rope"}',
+  '{"inventory": [null]}',
+  '{"inventory": [{"name":"Rope"}, {"qty":3}]}',
+  '{"inventory": {"updates":[{"name":""}], "removed":["Potion"]}}',
+  '{"inventory": {"updates":[], "removed":[42]}}',
+  '{"inventory": null}',
+]) {
+  const provider = new RecordingProvider(output);
+  const result = await executeAgent(inventoryAgent, context, provider, "agent-model");
+  assert.equal(result.success, false, `unsafe inventory output must fail: ${output}`);
+  assert.equal(provider.calls, 2, "unsafe output keeps the existing single retry");
+  const next = result.success
+    ? buildLockedInventoryTrackerPatch({
+        data: result.data as Record<string, unknown>,
+        snapshot: { playerStats: savedInventory },
+        lockState: null,
+      }).playerStats
+    : savedInventory;
+  assert.deepEqual(next, savedInventory, "a failed result must not remove any saved group or row");
+}
+for (const output of [
+  {},
+  { inventory: [] },
+  { inventory: [{ name: "Rope", qty: 2 }] },
+  { inventory: { updates: [{ name: "Potion", qty: 2 }], removed: ["Rope"] } },
+]) {
+  const result = await executeAgent(
+    inventoryAgent,
+    context,
+    new RecordingProvider(`\`\`\`json\n${JSON.stringify(output)}\n\`\`\``),
+    "agent-model",
+  );
+  assert.equal(result.success, true, "complete legacy/incremental output and no-op objects remain supported");
+  assert.deepEqual(result.data, output);
+}
+const brokenInventoryBatch = await executeAgentBatch(
+  [inventoryAgent, makeAgent("world-state", "game_state_update")],
+  context,
+  new RecordingProvider('{"world-state":{"weather":"rain"},"inventory-tracker":{"inventory":['),
+  "agent-model",
+);
+assert.equal(
+  brokenInventoryBatch.find((result) => result.agentType === "inventory-tracker")?.success,
+  false,
+  "batch JSON repair must not hide an incomplete inventory array from validation",
+);
 
 // Custom Tracker accepts the same incremental envelope at the root or under fields.
 const trackerUpdates = { updates: [{ name: "Trust", value: "49/100" }], removed: ["Obsolete"] };
