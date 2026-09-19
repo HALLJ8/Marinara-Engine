@@ -19,6 +19,9 @@ import {
 } from "react";
 import { isMessageShadowedByLiveStream } from "../../lib/generation-stream-policy";
 import { splitRoleplayParagraphs } from "../../lib/roleplay-vn-paragraphs";
+import { ROLEPLAY_TTS_PARAGRAPH_EVENT, type RoleplayTTSParagraphDetail } from "../../lib/roleplay-vn-tts";
+import { ttsService } from "../../lib/tts-service";
+import { usePageActivity } from "../../hooks/use-page-activity";
 import {
   normalizeChatSummaryEntries,
   isLongTermMemoryChatSummaryPromptAllowed,
@@ -1501,6 +1504,8 @@ export function ChatRoleplaySurface({
   const roleplayReducedPaintEffects = useUIStore((s) => s.roleplayReducedPaintEffects);
   const defaultDisplayStyle = useUIStore((s) => s.roleplayDisplayStyle);
   const vnSpriteScale = useUIStore((s) => s.roleplayVnSpriteScale);
+  const vnAutoPlay = useUIStore((s) => s.roleplayVnAutoPlay);
+  const vnAutoPlayDelay = useUIStore((s) => s.roleplayVnAutoPlayDelay);
   const visualNovel = isRoleplay && (chatMeta.roleplayDisplayStyle ?? defaultDisplayStyle) === "visual-novel";
   const [vnHistoryOpen, setVnHistoryOpen] = useState(false);
   const [vnHistoryHasDraft, setVnHistoryHasDraft] = useState(false);
@@ -1528,6 +1533,7 @@ export function ChatRoleplaySurface({
   const [vnSelectedMessageId, setVnSelectedMessageId] = useState<string | null>(null);
   const [vnParagraphIndex, setVnParagraphIndex] = useState<number | null>(null);
   const [vnParagraphCount, setVnParagraphCount] = useState<number>(1);
+  const [vnSpeech, setVnSpeech] = useState<RoleplayTTSParagraphDetail | null>(null);
   const pendingVnPrevious = useRef<string | null>(null);
 
   // Active message in VN view:
@@ -1547,6 +1553,7 @@ export function ChatRoleplaySurface({
   useEffect(() => {
     setVnSelectedMessageId(null);
     setVnParagraphIndex(null);
+    setVnSpeech(null);
     pendingVnPrevious.current = null;
   }, [activeChatId, hasLiveStream]);
 
@@ -1577,6 +1584,21 @@ export function ChatRoleplaySurface({
   }, [activeChatId, hasLiveStream, latestVnMessage, pendingVnReply]);
 
   const currentParagraphIndex = vnParagraphIndex ?? Math.max(0, vnParagraphCount - 1);
+
+  const [ttsState, setTtsState] = useState(ttsService.getState());
+  useEffect(() => ttsService.subscribe((state) => setTtsState(state)), []);
+  useEffect(() => {
+    if (!visualNovel) return;
+    const followSpeech = (event: Event) => {
+      const detail = (event as CustomEvent<RoleplayTTSParagraphDetail>).detail;
+      if (detail?.chatId !== activeChatId || !visibleVnMessages.some((message) => message.id === detail.messageId))
+        return;
+      setVnSelectedMessageId(detail.messageId);
+      setVnSpeech(detail);
+    };
+    window.addEventListener(ROLEPLAY_TTS_PARAGRAPH_EVENT, followSpeech);
+    return () => window.removeEventListener(ROLEPLAY_TTS_PARAGRAPH_EVENT, followSpeech);
+  }, [activeChatId, visibleVnMessages, visualNovel]);
 
   // Navigation handlers
   const canGoPreviousParagraph =
@@ -1647,6 +1669,36 @@ export function ChatRoleplaySurface({
   const compactAuthorNotesOpen = authorNotesOpenOwner === "compact";
   const keyboardOpen = useChatKeyboardOpen();
   const composerFocused = useChatComposerFocused();
+  const modalOpen = useUIStore((s) => s.modal !== null);
+  const pageActive = usePageActivity();
+  useEffect(() => {
+    if (!visualNovel || !vnAutoPlay || vnHistoryOpen || hasLiveStream || composerFocused || modalOpen || !pageActive)
+      return;
+    if (ttsState !== "idle" && ttsState !== "error") return;
+    if (currentParagraphIndex >= vnParagraphCount - 1) return;
+    const timer = window.setTimeout(() => {
+      if (
+        document.hidden ||
+        document.querySelector('[data-component="Modal"], [data-macro-modal], textarea:focus, input:focus')
+      )
+        return;
+      setVnParagraphIndex(currentParagraphIndex + 1);
+    }, vnAutoPlayDelay);
+    return () => window.clearTimeout(timer);
+  }, [
+    visualNovel,
+    vnAutoPlay,
+    vnAutoPlayDelay,
+    vnHistoryOpen,
+    hasLiveStream,
+    ttsState,
+    currentParagraphIndex,
+    vnParagraphCount,
+    activeVnMessage?.id,
+    composerFocused,
+    modalOpen,
+    pageActive,
+  ]);
   const mobileComposerActive = isMobileToolbarViewport && composerFocused;
   const ambientVisualsPaused =
     generationVisualsPaused || (isMobileToolbarViewport && (keyboardOpen || composerFocused || hasMobileDraftInput));
@@ -2600,6 +2652,7 @@ export function ChatRoleplaySurface({
                       ) : (
                         <ChatMessage
                           message={msg}
+                          followSpeechParagraphs={visualNovel}
                           isStreaming={false}
                           onDelete={onDelete}
                           onRegenerate={onRegenerate}
@@ -2738,6 +2791,8 @@ export function ChatRoleplaySurface({
                               key={`${activeChatId}:${activeVnMessage.id}:${activeVnMessage.activeSwipeIndex}`}
                               message={activeVnMessage}
                               visualNovel
+                              visualNovelSpeech={vnSpeech}
+                              onVisualNovelSpeechParagraph={setVnParagraphIndex}
                               visualNovelParagraphIndex={vnParagraphIndex ?? undefined}
                               onVisualNovelParagraphCount={setVnParagraphCount}
                               visualNovelMediaTarget={vnMediaTarget}

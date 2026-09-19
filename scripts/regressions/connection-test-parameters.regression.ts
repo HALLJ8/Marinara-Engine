@@ -7,6 +7,7 @@ import Fastify from "../../packages/server/node_modules/fastify/fastify.js";
 import { connectionsRoutes } from "../../packages/server/src/routes/connections.routes.js";
 import { translateRoutes } from "../../packages/server/src/routes/translate.routes.js";
 import { createConnectionsStorage } from "../../packages/server/src/services/storage/connections.storage.js";
+import { createChatsStorage } from "../../packages/server/src/services/storage/chats.storage.js";
 
 const previousDirectory = process.env.FILE_STORAGE_DIR;
 let directory: string | undefined;
@@ -15,6 +16,7 @@ let db:
   | undefined;
 const app = Fastify();
 const requests: Record<string, unknown>[] = [];
+const longTranslation = `${"Zażółć gęślą jaźń. ".repeat(3000)}KONIEC PEŁNEGO TŁUMACZENIA`;
 const provider = createServer(async (request, response) => {
   if (request.method === "GET" && request.url === "/v1/models") {
     response.writeHead(200, { "content-type": "application/json" });
@@ -36,7 +38,13 @@ const provider = createServer(async (request, response) => {
     );
     return;
   }
-  response.end(JSON.stringify({ choices: [{ message: { content: "hello" } }] }));
+  response.end(
+    JSON.stringify({
+      choices: [
+        { message: { content: body.model === "long-translation" ? longTranslation : "hello" }, finish_reason: "stop" },
+      ],
+    }),
+  );
 });
 try {
   directory = mkdtempSync(join(tmpdir(), "marinara-test-parameters-"));
@@ -150,6 +158,46 @@ try {
     assert.equal(sent.max_tokens, expected, `translation budget: ${JSON.stringify({ maxTokensOverride, defaults })}`);
     assert.equal(sent.temperature, 0.3, "translation keeps its dedicated sampling temperature");
   }
+
+  // #6374: preserve the entire provider response, including text well beyond
+  // 4096 tokens, through parsing, translation and the message/active-swipe store.
+  const longConnection = await storage.create({
+    name: "Long translation fixture",
+    provider: "custom",
+    baseUrl: `http://127.0.0.1:${address.port}/v1`,
+    apiKey: "",
+    model: "long-translation",
+    maxContext: 32768,
+    maxTokensOverride: 8192,
+  });
+  const longResponse = await app.inject({
+    method: "POST",
+    url: "/api/translate/",
+    payload: {
+      provider: "ai",
+      connectionId: longConnection.id,
+      text: "Translate all of this.",
+      targetLanguage: "Polish",
+    },
+  });
+  assert.equal(longResponse.statusCode, 200, longResponse.body);
+  assert.equal(longResponse.json().translatedText, longTranslation);
+  assert.equal(requests.at(-1)!.max_tokens, 8192);
+  const chats = createChatsStorage(db);
+  const longChat = await chats.create({ name: "Long translation", mode: "roleplay", characterIds: [] });
+  assert.ok(longChat);
+  const longMessage = await chats.createMessage({
+    chatId: longChat.id,
+    role: "assistant",
+    content: "Translate all of this.",
+  });
+  assert.ok(longMessage);
+  await chats.updateMessageExtra(longMessage.id, {
+    translation: longResponse.json().translatedText,
+    translationSource: longMessage.content,
+  });
+  assert.equal(JSON.parse((await chats.getMessage(longMessage.id))!.extra).translation, longTranslation);
+  assert.equal(JSON.parse((await chats.getSwipes(longMessage.id))[0]!.extra).translation, longTranslation);
 
   const localDefault = await storage.create({
     name: "Loaded local model",

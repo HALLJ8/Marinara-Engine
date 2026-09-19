@@ -37,6 +37,7 @@ import {
   normalizeRpgStatPools,
   resolveMacros,
   extractLeadingThinkingBlocks,
+  findInvalidInventoryTrackerRow,
   type CustomAgentContextSources,
 } from "@marinara-engine/shared";
 import { getAgentCallTimeoutMs, getMaxToolRounds, isDebugAgentsEnabled } from "../../config/runtime-config.js";
@@ -1746,7 +1747,8 @@ function parseBatchResponse(
 
 function extractBatchJsonResults(configs: AgentExecConfig[], responseText: string): Map<string, string> | null {
   try {
-    const parsed = JSON.parse(extractJson(responseText)) as unknown;
+    const allowRepair = !configs.some((config) => resolveAgentResultType(config) === "inventory_tracker_update");
+    const parsed = JSON.parse(extractJson(responseText, allowRepair)) as unknown;
     const container = isRecord(parsed) && isRecord(parsed.results) ? parsed.results : parsed;
     if (!isRecord(container)) return null;
 
@@ -3490,10 +3492,25 @@ function parseAgentResponse(
 
   if (agentResponseIsJson(config)) {
     try {
-      const jsonStr = extractJson(responseText);
+      // Repairing a cut-off inventory array turns missing rows into deletions.
+      // Require complete JSON before any saved inventory can be replaced.
+      const jsonStr = extractJson(responseText, resultType !== "inventory_tracker_update");
       const parsedData: unknown = JSON.parse(jsonStr);
       if (!parsedData || typeof parsedData !== "object" || Array.isArray(parsedData)) {
         throw new Error("Structured agent response must be a JSON object");
+      }
+      if (resultType === "inventory_tracker_update") {
+        for (const group of ["currencies", "equipped", "inventory"] as const) {
+          if (!(group in parsedData)) continue;
+          const value = (parsedData as Record<string, unknown>)[group];
+          const incremental = isTrackerRowsUpdate(value);
+          if (
+            findInvalidInventoryTrackerRow(incremental ? (value.updates ?? []) : value) ||
+            (incremental && value.removed?.some((name) => typeof name !== "string" || !name.trim()))
+          ) {
+            throw new Error(`Invalid inventory tracker group: ${group}`);
+          }
+        }
       }
       let data = config.type === "cyoa" ? normalizeCyoaChoiceOutput(parsedData) : parsedData;
       // Custom Tracker has one row group; tolerate the incremental envelope at
@@ -3519,7 +3536,7 @@ function parseAgentResponse(
 }
 
 /** Extract JSON from a response that may contain markdown fences. */
-function extractJson(text: string): string {
+function extractJson(text: string, allowRepair = true): string {
   // Strip leading thinking blocks BEFORE the fence match: with
   // reasoning_format "none" a local runtime leaves thinking inline in content,
   // and a fenced block inside the thinking region would win the fence regex
@@ -3539,5 +3556,5 @@ function extractJson(text: string): string {
     if (starts.length > 0) text = text.slice(Math.min(...starts));
   }
 
-  return repairJsonText(text) ?? text;
+  return allowRepair ? (repairJsonText(text) ?? text) : text;
 }
