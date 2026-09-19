@@ -547,7 +547,7 @@ export function getCapabilityPackageInstallIssue(
   }
   const ruleset =
     rulesetDocument && typeof rulesetDocument === "object"
-      ? (rulesetDocument as { catalogs?: unknown; battle?: unknown })
+      ? (rulesetDocument as { catalogs?: unknown; battle?: unknown; resolution?: unknown })
       : undefined;
   const api = manifest.schemaVersion === 2 ? manifest.capabilityApi : null;
   const declaresApi = (minor: number) => !!api && (api.major > 1 || (api.major === 1 && api.minor >= minor));
@@ -584,6 +584,15 @@ export function getCapabilityPackageInstallIssue(
   // installed with no rules at all.
   if (ruleset?.battle && typeof ruleset.battle === "object" && !declaresApi(22)) {
     return "A ruleset with a battle block requires schemaVersion 2 and capabilityApi 1.22 or newer";
+  }
+  // The resolution kind is read the same way and for the same reason. An Engine that knows only
+  // `dice-sum` refuses the whole file, so the package would be installed with no rules at all.
+  const resolution =
+    ruleset?.resolution && typeof ruleset.resolution === "object"
+      ? (ruleset.resolution as { kind?: unknown })
+      : undefined;
+  if (resolution?.kind === "dice-pool" && !declaresApi(24)) {
+    return "A ruleset with a dice-pool resolution requires schemaVersion 2 and capabilityApi 1.24 or newer";
   }
   return null;
 }

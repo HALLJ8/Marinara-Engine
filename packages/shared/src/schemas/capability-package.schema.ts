@@ -249,7 +249,13 @@ const capabilityPackageManifestBaseSchema = z
 //        each a value reference with an optional step table. Not a soft seam, for the same reason as
 //        1.20, 1.21 and 1.22: an engine that cannot read `scaled` refuses the whole ruleset file, or
 //        the catalog file that holds it, so a package that ships one declares 1.23. No permission.
-export const supportedCapabilityApi = Object.freeze({ major: 1, minor: 23 } as const);
+// 1.24: the `dice-pool` resolution kind — a ruleset may resolve a check by throwing the sheet's own
+//        number of dice and counting the ones that reach a target, with optional doubling,
+//        exploding, cancelling, botches, exceptional successes and situational dice. Not a soft
+//        seam, for the same reason as 1.20 through 1.23: an engine that knows only `dice-sum`
+//        refuses the whole ruleset file, so a package whose ruleset declares the kind declares
+//        1.24. No permission.
+export const supportedCapabilityApi = Object.freeze({ major: 1, minor: 24 } as const);
 
 const capabilityApiVersionSchema = z
   .object({
