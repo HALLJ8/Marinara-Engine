@@ -193,6 +193,8 @@ function dealDamage(ctx: RulesetCombatContext, target: RulesetCombatant, input: 
     else if (target.dying && !target.defeated) {
       // Already down: a blow while down costs the rule's own number of failures.
       const rule = input.critical ? ctx.combat.dying?.criticalWhileDown : ctx.combat.dying?.damageWhileDown;
+      // A stable member who is hurt is no longer stable: the count starts again with this blow.
+      if (rule && rule !== "none") target.stable = false;
       if (rule === "one-failure") addDeathFailures(ctx, target, 1);
       else if (rule === "two-failures") addDeathFailures(ctx, target, 2);
     }
@@ -278,16 +280,24 @@ function trackMax(ctx: RulesetCombatContext, track: string): number {
 
 /** Back on their feet: the fight's own bookkeeping is cleared, and so are the tracks the rules
  *  counted the rolls on. */
+/** Both counts back to where they start. Reviving does it, and so does becoming stable: the count
+ *  is over once it is decided, and a stable member who is hurt again starts a fresh one. */
+function clearDyingTracks(ctx: RulesetCombatContext, target: RulesetCombatant): void {
+  const dying = ctx.combat.dying;
+  if (!dying) return;
+  for (const track of [dying.successes, dying.failures]) {
+    const declared = ctx.definition.sheet.live.tracks.find((entry) => entry.id === track);
+    writeRulesetSheet(ctx.definition, target, { op: "track", track, to: declared?.default ?? declared?.min ?? 0 });
+  }
+}
+
 function revive(ctx: RulesetCombatContext, target: RulesetCombatant): void {
   target.down = false;
   target.dying = false;
   target.stable = false;
   const dying = ctx.combat.dying;
   if (dying) {
-    for (const track of [dying.successes, dying.failures]) {
-      const declared = ctx.definition.sheet.live.tracks.find((entry) => entry.id === track);
-      writeRulesetSheet(ctx.definition, target, { op: "track", track, to: declared?.default ?? declared?.min ?? 0 });
-    }
+    clearDyingTracks(ctx, target);
     if (dying.condition) removeCondition(ctx, target, dying.condition, "revived");
   }
   ctx.events.push({ type: "revived", actorId: target.id, health: healthOf(ctx, target).value });
@@ -359,6 +369,7 @@ function deathSave(ctx: RulesetCombatContext, actor: RulesetCombatant): void {
   if (trackValue(ctx, actor, dying.successes) >= trackMax(ctx, dying.successes)) {
     actor.stable = true;
     say("stable");
+    clearDyingTracks(ctx, actor);
     return;
   }
   say("success");

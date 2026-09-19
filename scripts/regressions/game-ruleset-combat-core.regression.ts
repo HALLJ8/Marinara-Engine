@@ -1056,6 +1056,34 @@ const labels = (definition: RulesetDefinition, state: RulesetEncounterState, id:
   assert.equal(firstOf(healed.events, "spend").pool, "slots_1");
 }
 
+// ── Three successes make her stable, and a blow while stable starts the count again ──
+{
+  let state = fight(fiveE, [fighter({ pools: { hp: { value: 0 } } }), wizard(), rot()], 10, 9, 18);
+  const track = (source: RulesetEncounterState, id: string) =>
+    readRulesetLive(fiveE, who(source, "brenna").sheet!.build, who(source, "brenna").sheet!.live).tracks.find(
+      (entry) => entry.id === id,
+    )!.value;
+  let last = endTurn(fiveE, state, "rot", 12);
+  for (const face of [14, 16]) {
+    state = endTurn(fiveE, endTurn(fiveE, last.state, "brenna").state, "corwin").state;
+    last = endTurn(fiveE, state, "rot", face);
+  }
+  assert.equal(eventsOf(last.events, "dying").at(-1)!.result, "stable");
+  assert.equal(who(last.state, "brenna").stable, true);
+  assert.deepEqual(
+    [track(last.state, "death_save_successes"), track(last.state, "death_save_failures")],
+    [0, 0],
+    "the count is over once it is decided",
+  );
+  // Stable and still down: no more rolls for her, until something hurts her.
+  state = endTurn(fiveE, endTurn(fiveE, last.state, "brenna").state, "corwin").state;
+  const kicked = act(fiveE, state, { actorId: "rot", optionId: "bite", targetIds: ["brenna"] }, 15, 4, 6);
+  assert.equal(who(kicked.state, "brenna").stable, false, "a blow while stable ends it");
+  assert.equal(track(kicked.state, "death_save_failures"), 1, "and the new count opens with that blow");
+  const again = endTurn(fiveE, kicked.state, "rot", 11);
+  assert.equal(firstOf(again.events, "dying").result, "success", "she is rolling again");
+}
+
 // ── Defeat, and a fight that is over ──
 {
   const state = fight(fiveE, [fighter({ pools: { hp: { value: 3 } } }), rot()], 5, 18);
