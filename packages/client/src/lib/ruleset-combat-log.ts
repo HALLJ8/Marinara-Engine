@@ -244,6 +244,33 @@ export function rulesetCombatEventLine(
         actor: names.combatant(event.actorId),
         label: event.label,
       });
+    case "move":
+      // Movement spent and nowhere gone is getting back up, which the condition's own line already
+      // says: this one only has to say what it cost.
+      if (event.path.length === 0) return key("moveStood", { actor: names.combatant(event.actorId), cost: event.cost });
+      return key(event.stopped ? "moveStopped" : "move", {
+        actor: names.combatant(event.actorId),
+        x: event.to.x,
+        y: event.to.y,
+        cost: event.cost,
+        left: event.left,
+      });
+    case "opportunity":
+      return key("opportunity", {
+        actor: names.combatant(event.actorId),
+        target: names.combatant(event.targetId),
+        label: event.label,
+      });
+    case "cover":
+      return key("cover", { target: names.combatant(event.targetId), bonus: event.bonus, defense: event.defense });
+    case "area":
+      return key("area", {
+        actor: names.combatant(event.actorId),
+        label: event.label,
+        x: event.at.x,
+        y: event.at.y,
+        cells: event.cells.length,
+      });
     case "standard":
       // The kind implements a closed list, so an action outside it is a save from another Engine
       // and prints its own id rather than nothing.
