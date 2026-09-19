@@ -2354,7 +2354,7 @@ function creatureIssues(
   const conditions = new Set(definition.sheet.live.conditions.map((condition) => condition.id));
   // Only checked where the ruleset says what its types are. One that declares none reads a type as
   // free text, exactly as a fight matches it.
-  const damageTypes = combat.damageTypes ? new Set(combat.damageTypes.map((type) => type.toLowerCase())) : null;
+  const damageTypes = combat.damageTypes ? new Set(combat.damageTypes.map((type) => type.trim().toLowerCase())) : null;
 
   const tiers = combat.threat?.tiers ?? [];
   if (tiers.length === 0) add([...at, "tier"], "This ruleset declares no threat tiers for a creature to sit on");

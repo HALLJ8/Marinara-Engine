@@ -627,6 +627,74 @@ const traveller = (live: unknown = {}): RulesetCombatantInput => ({
   assert.equal(eventsOf(last.events, "attack").length, 1, "the vine has nobody left to reach");
 }
 
+// ── A part of a sequence keeps its own books: one budget, and still one use ──
+{
+  const spitter: RulesetCombatantInput = {
+    id: "spitter",
+    name: "Spitter",
+    side: "enemy",
+    block: {
+      health: 30,
+      defense: 12,
+      initiativeModifier: 0,
+      actions: [
+        {
+          id: "spit",
+          name: "Spit",
+          budget: "action",
+          toHit: 10,
+          damage: { count: 1, sides: 4, flat: 0 },
+          uses: { per: "encounter", count: 1 },
+        },
+        { id: "bite", name: "Bite", budget: "action", toHit: 10, damage: { count: 1, sides: 4, flat: 0 } },
+        {
+          id: "spit_and_bite",
+          name: "Spit and bite",
+          budget: "action",
+          sequence: [
+            { action: "spit", times: 1 },
+            { action: "bite", times: 1 },
+          ],
+        },
+      ],
+    },
+  };
+  let state = fight(fiveE, [fighter(), spitter], fiveBestiary, 18, 5);
+  state = endTurn(fiveE, state, "brenna").state;
+  const first = act(
+    fiveE,
+    state,
+    { actorId: "spitter", optionId: "spit_and_bite", targetIds: ["brenna"] },
+    16,
+    3,
+    16,
+    3,
+  );
+  assert.equal(first.events.filter((event) => event.type === "attack").length, 2, "both parts strike the first time");
+  const counted = first.events.find((event) => event.type === "uses");
+  assert.ok(
+    counted && counted.type === "uses" && counted.optionId === "spit" && counted.left === 0,
+    "the part's one use is spent",
+  );
+  assert.equal(who(first.state, "spitter").uses.spit, 0);
+
+  // Round two: the sequence is still one action, and the part with nothing left does not happen.
+  state = endTurn(fiveE, first.state, "spitter").state;
+  state = endTurn(fiveE, state, "brenna").state;
+  assert.deepEqual(
+    rulesetCombatOptions(fiveE, state, "spitter").find((option) => option.id === "spit_and_bite")?.forecast,
+    { averageDamage: 2.5 },
+    "and the menu promises only the part that will still happen",
+  );
+  const second = act(fiveE, state, { actorId: "spitter", optionId: "spit_and_bite", targetIds: ["brenna"] }, 16, 3);
+  const strikes = second.events.filter((event) => event.type === "attack");
+  assert.deepEqual(
+    strikes.map((event) => (event.type === "attack" ? event.optionId : "")),
+    ["bite"],
+    "a sequence never hands a part a use it no longer has",
+  );
+}
+
 // ── A sequence with a target for each part, on Ember Roads ──
 {
   const state = fight(

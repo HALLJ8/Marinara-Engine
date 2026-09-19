@@ -787,7 +787,12 @@ function resolveSequence(
       (target) => !target.defeated,
     );
     cursor += count;
-    if (chosen.length > 0) resolveAction(ctx, actor, part, chosen);
+    // One budget for the whole sequence, and each part still keeps its own books: a part that counts
+    // its uses spends one, a part that recharges is spent until its dice bring it back, and a part
+    // that has none left simply does not happen.
+    if (chosen.length === 0 || !rulesetActionAvailable(actor, part)) continue;
+    spendAvailability(ctx, actor, part);
+    resolveAction(ctx, actor, part, chosen);
   }
 }
 

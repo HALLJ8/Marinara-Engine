@@ -169,8 +169,11 @@ function forecastFor(
   if (action.sequence) {
     const byId = new Map(actor.actions.map((entry) => [entry.id, entry]));
     const total = action.sequence.reduce((sum, step) => {
-      const damage = byId.get(step.actionId)?.damage;
-      return sum + (damage ? step.times * rulesetAverageAmount(damage) : 0);
+      const part = byId.get(step.actionId);
+      // A part that has no use left, or is waiting for its dice, will not happen, so it is not
+      // promised either.
+      if (!part?.damage || !rulesetActionAvailable(actor, part)) return sum;
+      return sum + step.times * rulesetAverageAmount(part.damage);
     }, 0);
     if (total > 0) forecast.averageDamage = Math.round(total * 100) / 100;
     return forecast.averageDamage === undefined ? undefined : forecast;
@@ -200,8 +203,11 @@ function optionFrom(
   // A signature action is bought with points at the end of somebody else's turn, so it is never on
   // the actor's own menu. `rulesetSignatureOptions` is where it is offered.
   if (action.signature) return null;
-  // A sequence whose parts are all gone would spend a budget and do nothing.
-  if (action.sequence && action.sequence.length === 0) return null;
+  // A sequence whose parts are all gone, or all spent, would spend a budget and do nothing.
+  if (action.sequence) {
+    const parts = action.sequence.map((step) => actor.actions.find((entry) => entry.id === step.actionId));
+    if (!parts.some((part) => part && !part.sequence && rulesetActionAvailable(actor, part))) return null;
+  }
   if ((actor.budgets[action.budget] ?? 0) < 1) return null;
   if (!rulesetActionAvailable(actor, action)) return null;
   const paid = planRulesetCombatCost(definition, actor, action);
