@@ -561,7 +561,7 @@ for (const setup of [
   },
 ]) {
   let resolved = 0;
-  for (let seed = 1; seed <= 25; seed++) {
+  for (let seed = 1; seed <= 40; seed++) {
     const state = started({
       definition: setup.definition,
       cards: setup.cards,
@@ -597,6 +597,51 @@ for (const setup of [
     }
   }
   assert.ok(resolved >= 100, `${setup.what}: ${resolved} seeded turns were resolved`);
+}
+
+// ── The picker leaves the dying alone, and points an ability at everybody it may take ──
+{
+  let blows = 0;
+  let widest = 0;
+  for (let seed = 1; seed <= 40; seed++) {
+    const state = started({
+      definition: fiveE,
+      cards: fiveECards,
+      partyCatalogs: spellCatalogs,
+      party: fiveEParty,
+      enemies: [
+        { id: "a", name: "Grave Piper" },
+        { id: "b", name: "Thorn Lurker" },
+      ],
+      seed,
+    });
+    for (const member of fiveEParty) {
+      commandRulesetCombatDirector(fiveE, state, { type: "control", unitId: member.id, controller: "ai" });
+    }
+    for (let turn = 0; turn < 30 && !state.outcome; turn++) {
+      const before = state.rulesetFight!.encounter;
+      const actor = rulesetCombatant(before, before.order[before.turn]!)!;
+      const downBefore = new Set(before.combatants.filter((entry) => entry.down).map((entry) => entry.id));
+      const seen = state.rulesetFight!.eventSeq;
+      assert.ok(commandRulesetCombatDirector(fiveE, state, { type: "continue" }).ok);
+      if (actor.side !== "enemy") continue;
+      const fresh = state.rulesetFight!.events.filter((entry) => entry.seq > seen).map((entry) => entry.event);
+      for (const event of fresh) {
+        if (event.type !== "attack" && event.type !== "damage") continue;
+        blows++;
+        assert.ok(
+          !downBefore.has(event.targetId),
+          `seed ${seed}: ${actor.name} went for ${event.targetId}, who was already down`,
+        );
+      }
+      const saved = new Set(
+        fresh.flatMap((event) => (event.type === "save" && event.sourceId === actor.id ? [event.actorId] : [])),
+      );
+      widest = Math.max(widest, saved.size);
+    }
+  }
+  assert.ok(blows > 50, `${blows} blows from opponents were looked at`);
+  assert.equal(widest, 2, "an ability that may take three people took both members of a party of two");
 }
 
 // ── Victory, defeat, and the Engine's own summary ──

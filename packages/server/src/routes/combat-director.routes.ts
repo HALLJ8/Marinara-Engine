@@ -263,6 +263,11 @@ export async function combatDirectorRoutes(
               action: z
                 .object({ unitId: key, classic: classicAction.optional(), tactical: tacticalAction.optional() })
                 .optional(),
+              // What a ruleset fight's candidate carries. Bounded like the rest, because a save can
+              // arrive through an import as well as through this route.
+              optionId: key.optional(),
+              targetIds: z.array(key).max(40).optional(),
+              label: z.string().max(1000).optional(),
             })
             .passthrough(),
         )

@@ -437,7 +437,12 @@ function rulesetCandidates(
       });
       continue;
     }
-    for (const targetId of rulesetOptionTargets(encounter, actorId, option)) {
+    const legal = rulesetOptionTargets(encounter, actorId, option);
+    // An action made of other actions sends all of them at one opponent. Anything else that may
+    // take several targets takes as many as it is allowed: a breath that could catch three people
+    // and is pointed at one is an opponent played badly, not an opponent played kindly.
+    const spreads = option.targets.count > 1 && !actor.actions.find((entry) => entry.id === option.id)?.sequence;
+    for (const targetId of legal) {
       const target = rulesetCombatant(encounter, targetId);
       if (!target) continue;
       // Whose side the TARGET is on, not whose side the option was written for: an author may let a
@@ -458,8 +463,19 @@ function rulesetCandidates(
         if (!ally || (health.value >= health.max && !target.down)) continue;
         candidate.healing = Math.min(1, average / Math.max(1, health.max)) + (target.down ? 1 : 0);
       } else if (average > 0) {
-        if (ally) continue;
-        candidate.damage = Math.min(2, average / pool) * chance;
+        // Never its own side, and never somebody who is already down: the rules let a blow land on
+        // them, and a table where every opponent finishes off the dying is not one anybody plays
+        // at. A human, or a Game Master's boss, may still choose it; the picker does not.
+        if (ally || target.down) continue;
+        const others = spreads
+          ? legal
+              .filter((id) => id !== targetId)
+              .map((id) => rulesetCombatant(encounter, id))
+              .filter((other): other is RulesetCombatant => !!other && other.side !== actor.side && !other.down)
+              .slice(0, option.targets.count - 1)
+          : [];
+        candidate.action.choice.targetIds = [targetId, ...others.map((other) => other.id)];
+        candidate.damage = Math.min(2, (average / pool) * (1 + others.length)) * chance;
         if (average >= pool) candidate.finish = chance;
       } else if (ally) candidate.support = 0.4;
       else candidate.setup = 0.4;
