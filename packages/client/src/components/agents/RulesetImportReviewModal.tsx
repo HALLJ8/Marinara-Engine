@@ -115,10 +115,14 @@ export function RulesetImportReviewModal({
                   </span>
                 ))}
               </ReviewRow>
+              {/* Read from the blocks the file declares, not from `coverage.combat`: the flag is
+                  what the author claims, and what a battle will really do is what is carried. */}
               <ReviewRow label={t("game.ruleset.import.combatLabel")}>
-                {review.coverage.combat
-                  ? t("game.ruleset.import.combatCovered")
-                  : t("game.ruleset.import.combatNotCovered")}
+                {review.combat
+                  ? t("game.ruleset.import.combatOwnRules")
+                  : review.battle
+                    ? t("game.ruleset.import.combatFromSheets")
+                    : t("game.ruleset.import.combatNotCovered")}
               </ReviewRow>
             </section>
 

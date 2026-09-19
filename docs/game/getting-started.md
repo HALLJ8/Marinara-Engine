@@ -47,7 +47,9 @@ For Tactical games, leaving the battlefield options blank lets the GM choose a s
 **Rules** only appears when at least one ruleset is installed, and only for a new game. It is separate from **Combat Preference**: one decides how checks and character sheets work, the other decides how battles are shown.
 
 - **Marinara's own rules** is the default: the built-in d20 checks and the six-attribute sheet.
-- A ruleset, such as **5e (SRD 5.1)**, shows a short summary of what it covers. If it does not cover combat, the wizard says that battles still run on Marinara's combat, and names the **Combat Preference** you picked.
+- A ruleset, such as **5e (SRD 5.1)**, shows a short summary of what it covers, and one line saying what battles will do. A ruleset that resolves its own fights says so. One that only lends the sheet says that battles run on Marinara's combat with the sheet's own health, energy and abilities. One that does neither says that battles run on Marinara's combat and names the **Combat Preference** you picked.
+
+When the ruleset resolves its own fights, the battle screen is that ruleset's: the menu is your character's own attacks and abilities, each saying what it spends out of the ruleset's own action economy and pools; the panel below shows the turn order, the round, everybody's conditions by the ruleset's own names, and what is left of each budget; and the log prints the real arithmetic, such as "Juno attacks Rust jackal with Road axe: 8 (5 + 3) + 3 = 11 against Guard 6, a hit." Every action is written to the character sheet the moment it lands, so closing the tab mid-fight loses nothing and the Game Master is told afterwards that the numbers are already settled. The **Combat Preference** is kept for that game and not used while the ruleset resolves the fight.
 
 The ruleset is set when the game is created and stays with that game. It cannot be changed or added later.
 

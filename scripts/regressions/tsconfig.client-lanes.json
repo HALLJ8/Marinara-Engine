@@ -17,6 +17,7 @@
     "ruleset-catalog-picker.regression.ts",
     "ruleset-catalog-refresh.regression.ts",
     "ruleset-combat-bridge-client.regression.ts",
+    "ruleset-combat-screen-client.regression.ts",
     "ruleset-dice-pool-client.regression.ts",
     "ruleset-layers-client.regression.ts"
   ]

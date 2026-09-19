@@ -43,9 +43,11 @@ import type {
   CombatMechanic,
   CombatSkill,
   CombatStatus,
+  DirectedRulesetView,
   PartyDialogueLine,
   TTSConfig,
 } from "@marinara-engine/shared";
+import { RulesetCombatMenu } from "./RulesetCombatMenu";
 import {
   Heart,
   Droplets,
@@ -442,6 +444,18 @@ interface GameCombatUIProps {
     outcome?: "victory" | "defeat" | "flee";
     onAction: (action: CombatPlayerAction) => void;
     onControl: (id: string, controller: "manual" | "ai") => void;
+    /** Present only for a fight the game's own ruleset resolves. The stage above is unchanged (the
+     *  server keeps `party` and `enemies` in step with the fight), and this replaces the hardcoded
+     *  attack/skill/defend menu with the ruleset's own legal menu. Absent, every path below is the
+     *  Classic one it has always been. */
+    ruleset?: {
+      view: DirectedRulesetView;
+      /** The ruleset's own name for a budget id. */
+      budgetLabel: (id: string) => string;
+      busy: boolean;
+      onChoose: (optionId: string, targetIds: string[], payWith?: string) => void;
+      onFlee: () => void;
+    };
   };
   chatId: string;
   /** Player party combatants. */
@@ -1653,6 +1667,19 @@ export function GameCombatUI({
     ],
   );
 
+  // A fight the game's own ruleset resolves brings its whole menu with it, so none of the Classic
+  // menu, its sub-phases or its keyboard handling is reachable while this is set.
+  const rulesetFight = directed?.ruleset;
+  const rulesetMenu = rulesetFight ? (
+    <RulesetCombatMenu
+      view={rulesetFight.view}
+      budgetLabel={rulesetFight.budgetLabel}
+      busy={rulesetFight.busy}
+      onChoose={rulesetFight.onChoose}
+      onFlee={rulesetFight.onFlee}
+    />
+  ) : null;
+
   const actionMenu = (
     activePlayerIndex === party.findIndex((c) => c.hp > 0)
       ? ACTION_MENU
@@ -1784,7 +1811,9 @@ export function GameCombatUI({
       party={party}
       enemies={enemies}
       defaultController="ai"
-      locked={phase !== "player-turn" || Object.keys(queuedOrders).length > 0}
+      // A ruleset fight has no queued orders and lets anybody be handed over at any point, so the
+      // only thing that locks the toggle is a step already on its way to the server.
+      locked={rulesetFight ? rulesetFight.busy : phase !== "player-turn" || Object.keys(queuedOrders).length > 0}
       onChange={(id, controller) => {
         if (directed) {
           directed.onControl(id, controller);
@@ -1799,7 +1828,9 @@ export function GameCombatUI({
 
   // ── Keyboard navigation for action menu ──
   useEffect(() => {
-    if (phase !== "player-turn") return;
+    // The ruleset's own menu is a list of ordinary buttons, reached with Tab, so the Classic
+    // menu's arrow keys must not also be sending Classic actions the fight would refuse.
+    if (phase !== "player-turn" || rulesetFight) return;
 
     const handleKey = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLElement && e.target.closest("input, select, textarea, summary")) return;
@@ -1819,7 +1850,7 @@ export function GameCombatUI({
 
     window.addEventListener("keydown", handleKey);
     return () => window.removeEventListener("keydown", handleKey);
-  }, [phase, actionMenuIndex, handleActionSelect, playSfx, actionMenu]);
+  }, [phase, actionMenuIndex, handleActionSelect, playSfx, actionMenu, rulesetFight]);
 
   // ── Mobile layout state ──
   // Keyboard parity for tablets / external keyboards: Escape dismisses the drawer
@@ -2096,7 +2127,8 @@ export function GameCombatUI({
           {aiControls}
           {/* Phase-specific content — bounded so the action sheet never grows past ~half the screen */}
           <div className="max-h-[42svh] overflow-y-auto">
-            {phase === "player-turn" && activePlayer && (
+            {phase === "player-turn" && rulesetMenu}
+            {phase === "player-turn" && activePlayer && !rulesetFight && (
               <div className="grid grid-cols-3 gap-1.5 p-2">
                 {actionMenu.map((action, i) => (
                   <button
@@ -2642,7 +2674,8 @@ export function GameCombatUI({
 
         {aiControls}
         {/* Player turn: action menu */}
-        {phase === "player-turn" && activePlayer && (
+        {phase === "player-turn" && rulesetMenu}
+        {phase === "player-turn" && activePlayer && !rulesetFight && (
           <div className="flex flex-col gap-2 p-3 sm:flex-row sm:items-end sm:gap-4">
             {/* Active character indicator */}
             <div className="mb-1 flex items-center gap-2 sm:mb-0 sm:min-w-[140px]">

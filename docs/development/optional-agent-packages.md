@@ -684,8 +684,9 @@ creature's own signature points.
 ```
 
 A catalog of creatures declares no `feeds` and is never offered by the sheet editor's picker: it is
-read by a fight, not by a character sheet. The server can now resolve and save ruleset fights,
-but their battle screen is not available yet. Players still see Marinara's existing combat UI.
+read by a fight, not by a character sheet. The fight that reads it is the combat director's
+`ruleset` style, which needs no Capability API level of its own: it plays whatever `combat` block
+and bestiary an installed ruleset already carries.
 
 Not a soft seam, for the same reason as 1.20 through 1.26: an Engine that cannot read `holds` or an
 entry's `creature` refuses the whole ruleset file, or the catalog file that holds it, so install
@@ -709,9 +710,9 @@ what temporary points it grants, how it grows with the sheet and which budget it
 }
 ```
 
-The server can now resolve and save fights using this block, including per-action sheet updates.
-The corresponding battle screen is not available yet, so players still use Marinara's existing
-combat UI until that integration ships.
+A game on a ruleset that declares `combat`, with the combat director on, fights its battles by
+this block on the battle screen. A ruleset without it fights the way it did before, through its
+`battle` block or the player's Classic or Tactical preference.
 
 Not a soft seam, for the same reason as 1.20 through 1.25: an Engine that cannot read `combat` or
 the new `mechanics` keys refuses the whole ruleset file, or the catalog file that holds them, so

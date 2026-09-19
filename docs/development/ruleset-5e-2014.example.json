@@ -15,8 +15,8 @@
     "sheet": true,
     "resources": true,
     "rests": true,
-    "combat": false,
-    "summary": "Ability checks, skill checks, saving throws, the full character sheet, spell slots, hit dice, class resources, conditions and rests. Battles use Marinara's default combat, not 5e combat."
+    "combat": true,
+    "summary": "Ability checks, skill checks, saving throws, the full character sheet, spell slots, hit dice, class resources, conditions and rests. Battles follow these rules: initiative, the action economy, attack rolls against AC, saves, conditions and dying."
   },
   "resolution": {
     "kind": "dice-sum",

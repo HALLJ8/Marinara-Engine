@@ -8,6 +8,9 @@
 //
 // A game with no ruleset, or one whose ruleset has no `battle` block, never reaches any of it: the
 // party handed in is the party handed back, combatant references included.
+//
+// It also holds the one decision that says whether a fight is the ruleset's own, and the recap such
+// a fight hands the Game Master. Both are pure, and both belong beside the bridge they switch off.
 import {
   applyCombatResultToLive,
   combatSkillsFromSheet,
@@ -21,6 +24,7 @@ import {
   type RulesetCatalogEntriesById,
   type RulesetCombatSeed,
   type RulesetDefinition,
+  type RulesetEncounterSummary,
   type RulesetLiveStates,
   type RulesetSheetOp,
   type RulesetSheetRefusal,
@@ -28,6 +32,63 @@ import {
 
 /** What each seeded member started a battle with, keyed the way live state is keyed. */
 export type RulesetCombatSeeds = Record<string, RulesetCombatSeed>;
+
+/**
+ * Whether this game's next fight is resolved by the ruleset itself.
+ *
+ * All three have to hold: the combat director is on for this game, the ruleset the game resolved
+ * declares a `combat` block, and there is a message for the fight to hang off. Without the director
+ * there is no server session to resolve anything; without `combat` the ruleset never said how a
+ * fight goes; without an anchor no directed screen mounts at all and the fight is Marinara's own.
+ *
+ * The decision is read off the BLOCKS, never off `coverage.combat`: that flag is what the author
+ * says the file covers, and a fight has to be decided by what the file actually declares.
+ */
+export function isRulesetCombatFight(input: {
+  combatDirector: boolean;
+  definition: RulesetDefinition | null | undefined;
+  anchor: string | null | undefined;
+}): boolean {
+  return Boolean(input.combatDirector && input.definition?.combat && input.anchor);
+}
+
+/**
+ * The recap a ruleset fight hands the Game Master, in the ruleset's own pool and its own condition
+ * names. Plain English, like every other line of a recap: it is a prompt, not UI copy.
+ *
+ * It replaces the share-of-maximum lines a bridged battle writes, because here the numbers ARE the
+ * sheet's: the server wrote every accepted step to the live state as it happened, which is what the
+ * last line tells the Game Master so it does not decide to spend anything again.
+ */
+export function rulesetCombatRecapLines(definition: RulesetDefinition, summary: RulesetEncounterSummary): string[] {
+  const combat = definition.combat;
+  const poolLabel =
+    definition.sheet.live.pools.find((pool) => pool.id === combat?.health.pool)?.label ?? combat?.health.pool ?? "";
+  const conditionLabel = new Map(definition.sheet.live.conditions.map((entry) => [entry.id, entry.label]));
+  // Stable outranks dying, because a member who has stopped slipping is not still on the clock, and
+  // both outrank plain "down": the ruleset's own dying rule is what put them there.
+  const standing = (member: RulesetEncounterSummary["party"][number]) =>
+    member.stable ? "stable" : member.dying ? "dying" : member.down ? "down" : "";
+  const party = summary.party.map((member) => {
+    const notes = [
+      standing(member),
+      member.temp > 0 ? `${member.temp} temporary` : "",
+      member.conditions.length > 0 ? member.conditions.map((id) => conditionLabel.get(id) ?? id).join(", ") : "",
+    ].filter(Boolean);
+    const suffix = notes.length > 0 ? ` (${notes.join("; ")})` : "";
+    return `${member.name}: ${member.health}/${member.maxHealth} ${poolLabel}${suffix}`;
+  });
+  const lines = [`Party on ${definition.name} rules: ${party.join("; ")}`];
+  const alive = summary.enemies.filter((enemy) => !enemy.defeated);
+  if (alive.length > 0) {
+    const left = alive.map((enemy) => `${enemy.name} (${enemy.health}/${enemy.maxHealth})`).join(", ");
+    lines.push(`Still standing: ${left}`);
+  }
+  lines.push(
+    `Sheets: the ${definition.name} sheets were kept up to date while the fight ran, so every cost is already paid. Do not change those numbers again.`,
+  );
+  return lines;
+}
 
 export interface RulesetBattleParty {
   /** The party the battle starts with, or the very array handed in when nothing was seeded. */

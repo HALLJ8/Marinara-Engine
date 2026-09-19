@@ -4,7 +4,13 @@ import type { CombatAiHints, CombatController, CombatTactics } from "../features
 // Game Mode Types
 // ──────────────────────────────────────────────
 import type { GenerationParameters } from "./prompt.js";
-import type { CombatItemEffect, CombatMechanic, CombatDialogueCue, CombatStyleNotes } from "./combat-encounter.js";
+import type {
+  CombatItemEffect,
+  CombatMechanic,
+  CombatDialogueCue,
+  CombatStyleNotes,
+  RulesetEncounterBlueprint,
+} from "./combat-encounter.js";
 import type { SpotifySourceType } from "./spotify.js";
 import type { SpatialMapDraftSize, SpatialMapGroundingMode } from "./spatial-context.js";
 import type {
@@ -517,7 +523,9 @@ export interface GameDicePoolSlotName {
 // ── Combat ──
 
 /** A combatant (player or enemy) in the battle system. */
-export interface Combatant extends CombatAttackTraits {
+/** The ruleset terms (`creature`, `tier`, `proposed`) ride along for a fight the game's ruleset
+ *  resolves; the numbers below stay the Engine's. */
+export interface Combatant extends CombatAttackTraits, RulesetEncounterBlueprint {
   boss?: import("../features/combat-director.js").CombatBoss;
   spellSlots?: Record<string, number>;
   combatRound?: number;
@@ -693,6 +701,9 @@ export interface CombatSummary {
   /** Resolved tactical terrain retained after the live combat snapshot is cleared. */
   battlefieldSummary?: string;
   loot?: Array<{ name: string; quantity?: number }>;
+  /** What a ruleset fight really ended on, in the ruleset's own numbers. Present only for a fight
+   *  the ruleset resolved, and the recap is written from it instead of the shares above. */
+  ruleset?: import("../features/ruleset-combat/types.js").RulesetEncounterSummary;
 }
 
 // ── Cinematic Direction ──

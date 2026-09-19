@@ -15,8 +15,8 @@
     "sheet": true,
     "resources": true,
     "rests": true,
-    "combat": false,
-    "summary": "2d6 plus a stat against a difficulty, a short sheet with Grit and Luck, and one rest."
+    "combat": true,
+    "summary": "2d6 plus a stat against a difficulty, a short sheet with Grit and Luck, one rest, and fights resolved by these rules."
   },
   "resolution": {
     "kind": "dice-sum",
