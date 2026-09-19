@@ -13,8 +13,7 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
-  activeRulesetLayers,
-  applyRulesetLayers,
+  resolveRulesetLayers,
   rulesetRefSchema,
   type InstalledRuleset,
   type RulesetDefinition,
@@ -36,6 +35,9 @@ export type ResolvedGameRulesetClient =
       baseDefinition: RulesetDefinition;
       /** The layers the pin turned on, in the order they applied, for naming them on screen. */
       layers: Array<{ id: string; label: string }>;
+      /** The option record of the APPLIED layers only. The catalog picker hides entries by this,
+       *  never by the pin's own record, so a skipped layer hides nothing. */
+      layerOptions: RulesetRef["options"];
     }
   /** The pin cannot be honoured here: unreadable, not installed, another package's, or older. */
   | { status: "unavailable"; ref: RulesetRef | null };
@@ -80,13 +82,19 @@ export function useGameRuleset(chatMeta: Record<string, unknown> | null | undefi
     // the rules the Game Master is playing by. `applyRulesetLayers` hands back the SAME object when
     // no layer is on, and this memo is the only thing that builds it, so the reference downstream
     // memos key on is stable as long as neither the definition nor the pin moves.
-    const resolved = (definition: RulesetDefinition): ResolvedGameRulesetClient => ({
-      status: "ok",
-      ref: ref!,
-      definition: applyRulesetLayers(definition, ref!.options),
-      baseDefinition: definition,
-      layers: activeRulesetLayers(definition, ref!.options).map((layer) => ({ id: layer.id, label: layer.label })),
-    });
+    const resolved = (definition: RulesetDefinition): ResolvedGameRulesetClient => {
+      const layered = resolveRulesetLayers(definition, ref!.options);
+      return {
+        status: "ok",
+        ref: ref!,
+        definition: layered.definition,
+        baseDefinition: definition,
+        // Only the layers whose rules are really on: a layer that was skipped shows no name and
+        // hides nothing in the picker.
+        layers: layered.applied.map((layer) => ({ id: layer.id, label: layer.label })),
+        layerOptions: layered.options,
+      };
+    };
     if (!hasPin) return { status: "none" };
     if (!ref) return { status: "unavailable", ref: null };
     // A failed lookup says nothing about what is installed, but the consequence for this game is

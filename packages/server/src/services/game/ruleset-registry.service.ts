@@ -14,7 +14,7 @@
 // ──────────────────────────────────────────────
 import {
   activeRulesetLayers,
-  applyRulesetLayers,
+  resolveRulesetLayers,
   isCommunityRulesetId,
   parseRulesetDefinition,
   rulesetLayerOptionKey,
@@ -205,12 +205,22 @@ function resolvedWithLayers(
   // the registry is deliberately re-read so install, update and import need no invalidation. A
   // cache here would have nothing stable to key on (the registry and its definitions are new
   // objects each time) until the registry itself is cached, and that is the upgrade path.
+  const layered = resolveRulesetLayers(definition, ref.options);
+  for (const layer of active) {
+    if (layered.applied.includes(layer)) continue;
+    logger.debug(
+      '[game/rulesets] The layer "%s" of ruleset "%s" does not validate with the layers before it; it was not applied',
+      layer.id,
+      definition.id,
+    );
+  }
   return {
     status: "ok",
     ref,
-    definition: applyRulesetLayers(definition, ref.options),
+    definition: layered.definition,
     baseDefinition: definition,
-    layers: active.map((layer) => ({ id: layer.id, label: layer.label })),
+    // The layers whose rules are REALLY on, so a name is never shown for a layer that was skipped.
+    layers: layered.applied.map((layer) => ({ id: layer.id, label: layer.label })),
     packageId,
   };
 }

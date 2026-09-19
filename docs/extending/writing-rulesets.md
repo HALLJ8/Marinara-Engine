@@ -479,6 +479,11 @@ exactly like the ruleset itself.
     "fields": [{ "id": "calling", "removeValues": ["Sailor"], "default": "Hauler" }],
     "difficultyLadder": [{ "label": "Easy", "dc": 7 }],
     "catalogs": [{ "id": "knacks", "hide": { "filter": "grit", "above": 0 } }]
+  },
+  {
+    "id": "mud_season",
+    "label": "Mud season",
+    "summary": "Thaw, flooded roads and slow going."
   }
 ]
 ```

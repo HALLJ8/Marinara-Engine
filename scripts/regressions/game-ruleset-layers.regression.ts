@@ -25,6 +25,7 @@ import { fileURLToPath } from "node:url";
 import {
   activeRulesetLayers,
   applyRulesetLayers,
+  resolveRulesetLayers,
   catalogEntryHiddenByLayers,
   parseRulesetDefinition,
   rulesetEffectiveDefinitionSchema,
@@ -399,6 +400,42 @@ const on = (...ids: string[]) => Object.fromEntries(ids.map((id) => [rulesetLaye
   const together = applyRulesetLayers(roads, on("no_lowlands", "no_glass"));
   assert.deepEqual(values(together), ["glass"], "the game keeps every layer that works");
   assert.ok(rulesetEffectiveDefinitionSchema.safeParse(together).success);
+  // And the resolver SAYS which ones those were, so a skipped layer is never named on the sheet and
+  // never hides anything in the picker.
+  const told = resolveRulesetLayers(roads, on("no_lowlands", "no_glass"));
+  assert.deepEqual(
+    told.applied.map((layer) => layer.id),
+    ["no_lowlands"],
+  );
+  assert.deepEqual(told.options, { "layer.no_lowlands": true });
+  assert.deepEqual(resolveRulesetLayers(roads, {}), { definition: roads, applied: [], options: {} });
+}
+
+// ── The LISTED form of a ruleset (what a client holds) is layered too ──
+{
+  // The listing leaves a catalog's inline entries out and puts a count in their place. The file
+  // schema refuses that shape, and a client that could not layer it would show the base rules
+  // while the server plays the layered ones.
+  const listed = {
+    ...ember,
+    catalogs: ember.catalogs!.map(({ entries, ...header }) => ({ ...header, entryCount: entries?.length ?? 0 })),
+  } as unknown as RulesetDefinition;
+  const onClient = resolveRulesetLayers(listed, on("hard_winter"));
+  assert.deepEqual(
+    onClient.applied.map((layer) => layer.id),
+    ["hard_winter"],
+    "the layer is applied to the listed form",
+  );
+  assert.deepEqual(
+    onClient.definition.resolution.difficultyLadder,
+    applyRulesetLayers(ember, on("hard_winter")).resolution.difficultyLadder,
+    "and the ladder is the one the server plays by",
+  );
+  assert.deepEqual(
+    onClient.definition.catalogs,
+    listed.catalogs,
+    "the catalog summaries come back exactly as they came",
+  );
 }
 
 // ── Hiding by a word and by a list of words ──

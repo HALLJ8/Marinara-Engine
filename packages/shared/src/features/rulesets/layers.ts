@@ -111,10 +111,33 @@ export function applyRulesetLayers(
   definition: RulesetDefinition,
   options: RulesetLayerOptions | null | undefined,
 ): RulesetDefinition {
+  return resolveRulesetLayers(definition, options).definition;
+}
+
+/** What a pin's layers came to: the ruleset the game plays by, the layers that are REALLY on it, and
+ *  the option record that names exactly those. */
+export interface ResolvedRulesetLayers {
+  definition: RulesetDefinition;
+  /** In declaration order. A chosen layer that lost a conflict, or that would not validate with the
+   *  ones before it, is not here. */
+  applied: RulesetLayer[];
+  /** `layer.<id>: true` for the applied layers only. Whatever shows a layer's name or hides what a
+   *  layer hides reads THIS, so a layer whose rules were skipped never shows up half applied. */
+  options: RulesetLayerOptions;
+}
+
+/** `applyRulesetLayers` with its working shown. Same rules, same fallback, same reference when no
+ *  layer is on. */
+export function resolveRulesetLayers(
+  definition: RulesetDefinition,
+  options: RulesetLayerOptions | null | undefined,
+): ResolvedRulesetLayers {
   const active = activeRulesetLayers(definition, options);
-  if (active.length === 0) return definition;
+  if (active.length === 0) return { definition, applied: [], options: {} };
+  const asOptions = (layers: readonly RulesetLayer[]): RulesetLayerOptions =>
+    Object.fromEntries(layers.map((layer) => [rulesetLayerOptionKey(layer.id), true]));
   const together = validated(layered(definition, active));
-  if (together) return together;
+  if (together) return { definition: together, applied: [...active], options: asOptions(active) };
   let result = definition;
   const applied: RulesetLayer[] = [];
   for (const layer of active) {
@@ -123,12 +146,31 @@ export function applyRulesetLayers(
     applied.push(layer);
     result = candidate;
   }
-  return result;
+  return { definition: result, applied, options: asOptions(applied) };
 }
 
+/** A catalog as the ruleset LISTING sends it to a client: the inline entries are left out (they are
+ *  asked for on their own) and a count stands in for them. The file schema rightly refuses that
+ *  shape, and a layer never touches a catalog's entries, so such a catalog is checked with an empty
+ *  entry list and handed back exactly as it came. The file schema itself is not loosened. */
 function validated(candidate: RulesetDefinition): RulesetDefinition | null {
-  const parsed = rulesetEffectiveDefinitionSchema.safeParse(candidate);
-  return parsed.success ? (parsed.data as RulesetDefinition) : null;
+  const catalogs = candidate.catalogs as ReadonlyArray<Record<string, unknown>> | undefined;
+  const listed = (catalogs ?? []).some(
+    (catalog) => "entryCount" in catalog || (catalog.entries === undefined && catalog.asset === undefined),
+  );
+  const subject = listed
+    ? {
+        ...candidate,
+        catalogs: catalogs!.map((catalog) => {
+          const { entryCount: _entryCount, ...rest } = catalog;
+          return rest.entries === undefined && rest.asset === undefined ? { ...rest, entries: [] } : rest;
+        }),
+      }
+    : candidate;
+  const parsed = rulesetEffectiveDefinitionSchema.safeParse(subject);
+  if (!parsed.success) return null;
+  const checked = parsed.data as RulesetDefinition;
+  return listed ? { ...checked, catalogs: candidate.catalogs } : checked;
 }
 
 /** The base definition with these layers' effects on it, before validation. */
