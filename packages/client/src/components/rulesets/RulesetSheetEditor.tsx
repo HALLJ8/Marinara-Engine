@@ -350,7 +350,7 @@ export function RulesetSheetEditor({
   const scaledCells = useMemo(() => {
     const byList = new Map<string, Map<number, string[]>>();
     const anyScaled = Object.values(loadedCatalogs).some((entries) =>
-      entries.some((entry) => entry.rows.some((row) => row.scaled)),
+      entries.some((entry) => entry.rows?.some((row) => row.scaled)),
     );
     if (!anyScaled) return byList;
     const byRef = rulesetCatalogEntriesByRef(loadedCatalogs);
@@ -455,7 +455,8 @@ export function RulesetSheetEditor({
           )}
           {lists.map((list) => {
             const rows = (Array.isArray(build.lists[list.id]) ? build.lists[list.id] : []) as ListRow[];
-            const feeding = catalogs.filter((catalog) => catalog.feeds.includes(list.id));
+            // A catalog of creatures feeds no list, so the picker never offers it anywhere.
+            const feeding = catalogs.filter((catalog) => catalog.feeds?.includes(list.id));
             const atLimit = rows.length >= list.maxItems;
             const locked = scaledCells.get(list.id);
             const stale = refreshByList.get(list.id) ?? [];

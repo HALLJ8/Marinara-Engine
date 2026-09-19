@@ -39,10 +39,32 @@ export interface RulesetCombatSaveRider {
   onSuccess: "none" | "half" | "negates";
 }
 
+/** How often something can be done at all, and over what stretch. `day` outlives one fight, so the
+ *  encounter only counts down what it was handed. */
+export interface RulesetCombatUses {
+  per: "encounter" | "day";
+  count: number;
+}
+
+/** Spent when it is used, and rolled for at the start of its owner's turn: `from` or higher on
+ *  these dice brings it back. It starts the fight available. */
+export interface RulesetCombatRecharge {
+  dice: { count: number; sides: number };
+  from: number;
+}
+
+/** One step of a sequence: another action of the same block, done this many times. */
+export interface RulesetCombatSequenceStep {
+  /** The id of the action this step resolves, as the fight knows it. */
+  actionId: string;
+  times: number;
+}
+
 /** One thing a stat block can do. `reach` and `range` are carried and not read: distance starts to
  *  mean something in the slice that gives a fight positions. */
 export interface RulesetStatBlockAction {
-  /** The block's own id when it has one, so a bestiary keeps its names across a reload. */
+  /** The block's own id when it has one, so a bestiary keeps its names across a reload. A sequence
+   *  names its parts by this id, so a block with sequences needs them. */
   id?: string;
   name: string;
   budget: string;
@@ -57,16 +79,29 @@ export interface RulesetStatBlockAction {
   targetCount?: number;
   reach?: number;
   range?: number;
+  uses?: RulesetCombatUses;
+  recharge?: RulesetCombatRecharge;
+  /** Other actions of this block, in order. ONE budget pays for the lot, and each part takes its
+   *  own targets: this is how a creature that strikes twice in one action is written. */
+  sequence?: Array<{ action: string; times: number }>;
+  /** Bought out of the block's own `signaturePoints` instead of a budget. */
+  signature?: { cost: number };
 }
 
-/** An opponent's numbers. Written by hand today; a bestiary fills these in a later slice, which is
- *  why everything a hand-written block can do without is optional. */
+/** An opponent's numbers. A bestiary entry becomes one of these, and a hand-written one is still
+ *  accepted, which is why everything a block can do without is optional. */
 export interface RulesetStatBlock {
+  /** What it can take. With `healthDice` beside it this is the AVERAGE, which is what a forecast
+   *  reads while the dice decide the fight. */
   health: number;
   defense: number;
   initiativeModifier: number;
   actions: RulesetStatBlockAction[];
+  /** Thrown once when the encounter is created, in place of the flat number. */
+  healthDice?: RulesetCombatAmount;
   speed?: number;
+  /** Ability scores by the ruleset's own ability ids. Carried for the Game Master, not resolved. */
+  abilities?: Record<string, number>;
   /** Save modifiers by the ruleset's own save ids. A save it does not name reads as zero. */
   saves?: Record<string, number>;
   /** Damage types, matched without case: half damage, double damage, none at all. */
@@ -76,6 +111,10 @@ export interface RulesetStatBlock {
   conditionImmunities?: string[];
   /** The threat tier a bestiary filed it under, read when creatures are clamped to the scale. */
   tier?: string;
+  /** Lines the Game Master is shown and nothing resolves. */
+  traits?: Array<{ name: string; text: string }>;
+  /** Points given back at the start of its own turn, spent on `signature` actions. */
+  signaturePoints?: number;
 }
 
 /** Who is in the fight. A party member is sheet-backed and reads and writes its numbers through the
@@ -91,7 +130,9 @@ export type RulesetCombatantInput =
       /** The catalogs this member's own rows came from, so the fight knows what an ability costs. */
       catalogs?: RulesetCatalogEntriesById;
     }
-  | { id: string; name: string; side: "enemy"; block: RulesetStatBlock };
+  | { id: string; name: string; side: "enemy"; block: RulesetStatBlock }
+  /** An opponent out of a bestiary, looked up in the catalogs the encounter was handed. */
+  | { id: string; name: string; side: "enemy"; creature: { catalogId: string; entryId: string } };
 
 /** One thing a combatant may do, with every number already read off the sheet or the stat block.
  *  Resolved once, when the fight begins: armour and bonuses do not change mid-fight in this kind. */
@@ -115,6 +156,12 @@ export interface RulesetCombatAction {
   /** How the price is paid. The name is what the sheet's own `use` command knows the row by, and
    *  the pool and its family are what a higher-pool payment is measured against. */
   use?: { name: string; pool?: string; group?: string; perCostStep?: RulesetCombatAmount };
+  uses?: RulesetCombatUses;
+  recharge?: RulesetCombatRecharge;
+  /** The other actions this one resolves, in order, for one budget. */
+  sequence?: RulesetCombatSequenceStep[];
+  /** Bought with the actor's own points at the end of somebody else's turn, not with a budget. */
+  signature?: { cost: number };
 }
 
 /** A condition the fight is keeping time on. The condition itself lives on the sheet for a party
@@ -141,6 +188,12 @@ export interface RulesetCombatant {
   /** What is left of each budget, keyed by budget id. */
   budgets: Record<string, number>;
   actions: RulesetCombatAction[];
+  /** How many uses are left of each action that counts them, keyed by action id. */
+  uses: Record<string, number>;
+  /** The ids of the actions that have been used and are waiting for a recharge roll. */
+  spent: string[];
+  /** The points a signature action is bought with, when this combatant has any. */
+  signature?: { points: number; max: number };
   tracked: RulesetTrackedCondition[];
   concentrating: { actionId: string; label: string } | null;
   /** What a standard action left behind. `dodging`, `dashed`, `disengaged`, `hidden` and `ready`
@@ -198,7 +251,9 @@ export type RulesetCombatRefusal =
   | "bad-target"
   | "no-budget"
   | "insufficient"
-  | "bad-pool";
+  | "bad-pool"
+  /** A bestiary reference the handed-in catalogs do not hold. */
+  | "unknown-creature";
 
 export type RulesetCombatAttackOutcome = "hit" | "miss" | "critical";
 export type RulesetCombatRollMode = "normal" | "advantage" | "disadvantage";
@@ -277,6 +332,19 @@ export type RulesetCombatEvent =
     }
   | { type: "spend"; actorId: string; pool: string; label: string; amount: number }
   | { type: "budget"; actorId: string; budget: string; left: number }
+  | { type: "uses"; actorId: string; optionId: string; label: string; left: number; of: number }
+  | {
+      type: "recharge";
+      actorId: string;
+      optionId: string;
+      label: string;
+      rolls: number[];
+      kept: number;
+      from: number;
+      /** Whether the roll brought it back. */
+      back: boolean;
+    }
+  | { type: "signature"; actorId: string; optionId: string; label: string; cost: number; left: number }
   | {
       type: "concentration";
       actorId: string;
@@ -315,14 +383,24 @@ export interface RulesetCombatOption {
   cost?: Array<{ pool: string; label: string; amount: number }>;
   /** Other pools of the same family this could be paid from instead, in declaration order. */
   payWith?: string[];
+  /** What it costs in the actor's own points, and how many they have. A signature option spends no
+   *  budget: it is bought at the end of somebody else's turn. */
+  signature?: { cost: number; points: number };
+  /** How many times this is left, for an action that counts its uses. */
+  left?: number;
   /** Expected values, never a future die: `averageDamage` is the average of the damage roll and
-   *  `hitChance` the share of rolls that would land against the first legal target. */
+   *  `hitChance` the share of rolls that would land against the first legal target. A sequence
+   *  forecasts the sum of its parts' damage and no single chance to hit, because its parts each
+   *  roll their own. */
   forecast?: { hitChance?: number; averageDamage?: number };
 }
 
 export interface RulesetCombatChoice {
   actorId: string;
   optionId: string;
+  /** Who it is pointed at. A sequence takes the targets of all its parts in order; hand it fewer
+   *  than that and every part takes the ones at the front of the list, so one id is "all of it at
+   *  the same target". */
   targetIds: string[];
   /** Pay out of another pool of the same family: the upcast, under the `use` command's own rule. */
   payWith?: string;

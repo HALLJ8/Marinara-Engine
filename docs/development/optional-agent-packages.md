@@ -664,6 +664,34 @@ Desktop uses a browse list with an adjacent detail region. Mobile uses one pane 
 
 An extraction is complete only when the base production client and server bundles no longer contain the package implementation, a fresh install cannot activate it without downloading the package, an upgraded install retains it, and package install/update/uninstall passes on desktop, mobile, and Termux-compatible filesystems.
 
+### Capability API 1.27: ruleset bestiaries
+
+A ruleset catalog may declare `"holds": "creatures"` and carry creature stat blocks instead of sheet
+rows. A creature is written in the numbers the `combat` block already declares: health that may be a
+number or dice thrown when the fight starts, a defense, an initiative modifier, ability scores and
+save modifiers under the sheet's own ids, damage types it resists, is hurt more by or ignores, the
+conditions it is never in, the threat tier it sits on, traits the Game Master is shown, and actions
+that may hit, force a save, apply a condition, be limited to so many uses, come back on a recharge
+roll, resolve a sequence of the block's other actions for one budget, or be bought with the
+creature's own signature points.
+
+```json
+{
+  "capabilityApi": { "major": 1, "minor": 27 },
+  "kind": ["ruleset"],
+  "contributions": { "assets": { "paths": ["ruleset.json", "catalogs/beasts.json"] } }
+}
+```
+
+A catalog of creatures declares no `feeds` and is never offered by the sheet editor's picker: it is
+read by a fight, not by a character sheet. Nothing plays on it yet, for the same reason as 1.26:
+this release is the shared resolver and the format, with no route, no session and no user interface.
+
+Not a soft seam, for the same reason as 1.20 through 1.26: an Engine that cannot read `holds` or an
+entry's `creature` refuses the whole ruleset file, or the catalog file that holds it, so install
+reads the verified bytes of `ruleset.json` and of every declared `catalogs/<id>.json` and refuses
+either one under an older declaration. No permission, and no change for a ruleset without a bestiary.
+
 ### Capability API 1.26: ruleset combat
 
 A ruleset may carry an optional top-level `combat` block saying how a fight is RESOLVED by its own

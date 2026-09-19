@@ -270,7 +270,14 @@ const capabilityPackageManifestBaseSchema = z
 //        for the same reason as 1.20 through 1.25: an Engine that cannot read `combat` or the new
 //        `mechanics` keys refuses the whole ruleset file, or the catalog file that holds them, so a
 //        package that ships either declares 1.26. No permission.
-export const supportedCapabilityApi = Object.freeze({ major: 1, minor: 26 } as const);
+// 1.27: ruleset bestiaries. A ruleset catalog may declare `"holds": "creatures"` and carry creature
+//        stat blocks instead of sheet rows: health that may be dice, a defense, saves, resistances,
+//        condition immunities, a threat tier, traits the Game Master is shown and actions with
+//        sequences, limited uses, recharge rolls and signature points. Not a soft seam, for the
+//        same reason as 1.20 through 1.26: an Engine that cannot read `holds` or `creature` refuses
+//        the whole ruleset file, or the catalog file that holds them, so a package that ships
+//        either declares 1.27. No permission.
+export const supportedCapabilityApi = Object.freeze({ major: 1, minor: 27 } as const);
 
 const capabilityApiVersionSchema = z
   .object({

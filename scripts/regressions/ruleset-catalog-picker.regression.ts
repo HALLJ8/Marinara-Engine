@@ -172,23 +172,23 @@ assert.equal(filterCatalogEntries(numericEntries, blankViews, "", { callings: "S
 
 const roadSense = entries.find((entry) => entry.id === "road-sense")!;
 const lastEmber = entries.find((entry) => entry.id === "last-ember")!;
-assert.equal(catalogEntryAlreadyAdded(catalog.id, roadSense, catalog.feeds, {}), false);
+assert.equal(catalogEntryAlreadyAdded(catalog.id, roadSense, catalog.feeds ?? [], {}), false);
 assert.equal(
-  catalogEntryAlreadyAdded(catalog.id, roadSense, catalog.feeds, {
+  catalogEntryAlreadyAdded(catalog.id, roadSense, catalog.feeds ?? [], {
     knacks: [{ name: "Road Sense", [RULESET_CATALOG_ROW_KEY]: "knacks/road-sense" }],
   }),
   true,
 );
 // The mark is found even when it sits in the OTHER list the catalog feeds.
 assert.equal(
-  catalogEntryAlreadyAdded(catalog.id, roadSense, catalog.feeds, {
+  catalogEntryAlreadyAdded(catalog.id, roadSense, catalog.feeds ?? [], {
     tricks: [{ name: "Road Sense", [RULESET_CATALOG_ROW_KEY]: "knacks/road-sense" }],
   }),
   true,
 );
 // A hand-typed row that happens to share the name is not the catalog's row.
 assert.equal(
-  catalogEntryAlreadyAdded(catalog.id, roadSense, catalog.feeds, { knacks: [{ name: "Road Sense" }] }),
+  catalogEntryAlreadyAdded(catalog.id, roadSense, catalog.feeds ?? [], { knacks: [{ name: "Road Sense" }] }),
   false,
 );
 
@@ -255,7 +255,7 @@ assert.equal(aroundHidden.dropped, 0);
 assert.equal(planCatalogAddition(definition, catalog.id, [lastEmber], {}, new Set(["knacks", "tricks"])).dropped, 1);
 // A stored sheet is read tolerantly: a list that is not rows reads as empty instead of throwing.
 const malformed = { knacks: "not rows" } as unknown as Parameters<typeof planCatalogAddition>[3];
-assert.equal(catalogEntryAlreadyAdded(catalog.id, roadSense, catalog.feeds, malformed), false);
+assert.equal(catalogEntryAlreadyAdded(catalog.id, roadSense, catalog.feeds ?? [], malformed), false);
 assert.equal(planCatalogAddition(definition, catalog.id, [roadSense], malformed).lists.knacks?.length, 1);
 // An entry for a list this ruleset does not have is dropped the same way.
 const strayEntry = {

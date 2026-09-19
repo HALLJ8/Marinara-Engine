@@ -729,9 +729,10 @@ function renderRulesetSheetSection(
     ...(ruleset.rests.length > 0
       ? [`- [sheet: who="Name" op="rest" rest="Rest"] - rests: ${names(ruleset.rests)}.`]
       : []),
-    // Only a ruleset with catalogs has entries to use: without them nothing on a sheet carries a
-    // price the Engine could pay, and the line would describe a command that always refuses.
-    ...(ruleset.catalogs?.length
+    // Only a ruleset with catalogs of ROWS has entries to use: a bestiary writes nothing onto a
+    // sheet, so without one of those nothing on a sheet carries a price the Engine could pay, and
+    // the line would describe a command that always refuses.
+    ...(ruleset.catalogs?.some((catalog) => catalog.holds !== "creatures")
       ? [
           `- [sheet: who="Name" op="use" name="Name on the sheet"] - pays what that ability costs. Add pool="Pool" to pay from a higher pool of the same group.`,
         ]

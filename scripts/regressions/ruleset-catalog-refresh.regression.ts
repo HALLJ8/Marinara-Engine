@@ -82,7 +82,7 @@ const plan = (entries: readonly RulesetCatalogEntry[], lists: Lists) =>
       columnId: "notes",
       label: "What it does",
       current: "Older wording.",
-      next: roadSense.rows[0]!.values.notes,
+      next: roadSense.rows![0]!.values.notes,
     },
   ]);
   // The row is named by what the SHEET shows it as, so it can be found in the editor.
@@ -309,7 +309,7 @@ const fivePlan = (lists: Lists, entries: readonly RulesetCatalogEntry[] = fiveEn
   assert.deepEqual(Object.keys(first), ["knacks"], "only the lists a refresh touches come back");
   assert.deepEqual(first.knacks![0], {
     name: "Road Sense",
-    notes: roadSense.rows[0]!.values.notes,
+    notes: roadSense.rows![0]!.values.notes,
     extra: 7,
     [RULESET_CATALOG_ROW_KEY]: "knacks/road-sense",
   });
@@ -318,8 +318,11 @@ const fivePlan = (lists: Lists, entries: readonly RulesetCatalogEntry[] = fiveEn
 
   // Both rows, in one change.
   const all = applyCatalogRefresh(lists, rows);
-  assert.equal(all.knacks![0]!.notes, roadSense.rows[0]!.values.notes);
-  assert.equal(all.knacks![1]!.notes, emberEntries.find((entry) => entry.id === "iron-stomach")!.rows[0]!.values.notes);
+  assert.equal(all.knacks![0]!.notes, roadSense.rows![0]!.values.notes);
+  assert.equal(
+    all.knacks![1]!.notes,
+    emberEntries.find((entry) => entry.id === "iron-stomach")!.rows![0]!.values.notes,
+  );
 
   // Nothing chosen changes nothing.
   assert.deepEqual(applyCatalogRefresh(lists, []), {});

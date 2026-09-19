@@ -294,7 +294,11 @@ function firstOf<T extends RulesetCombatEvent["type"]>(events: RulesetCombatEven
   // A ruleset with no action economy has no budget to check a `budget` against, so it carries it
   // and reads nothing, exactly as `reaction` is carried today.
   const noCombat = parsedOrThrow(
-    variant(fiveEText, (doc) => delete doc.combat),
+    variant(fiveEText, (doc) => {
+      delete doc.combat;
+      // The bestiary is written in the numbers that block declares, so it goes with it.
+      delete doc.catalogs;
+    }),
     "a ruleset without a combat block",
   );
   assert.equal(rulesetCatalogEntryIssues(noCombat, header(["spells"]), [entry({ budget: "anything" })]).length, 0);
@@ -1484,6 +1488,12 @@ const labels = (definition: RulesetDefinition, state: RulesetEncounterState, id:
       contributions: { assets: { paths: ["ruleset.json", "catalogs/knacks.json"] } },
     }) as any;
 
+  /** The bestiary is a declaration of its own, one release later, so the cases about this seam drop
+   *  it and leave that gate to the slice that added it. */
+  const withoutBestiary = (doc: Record<string, any>) => {
+    doc.catalogs = (doc.catalogs ?? []).filter((catalog: Record<string, any>) => catalog.holds !== "creatures");
+    if (doc.catalogs.length === 0) delete doc.catalogs;
+  };
   const combatOnly = variant(emberText, (doc) => delete doc.catalogs);
   assert.match(
     getCapabilityPackageInstallIssue(manifest(25), combatOnly) ?? "",
@@ -1491,16 +1501,20 @@ const labels = (definition: RulesetDefinition, state: RulesetEncounterState, id:
     "the block lives inside the ruleset file, so the gate reads the file",
   );
   assert.equal(getCapabilityPackageInstallIssue(manifest(26), combatOnly), null);
-  assert.equal(getCapabilityPackageInstallIssue(manifest(26), variant(emberText)), null);
+  assert.equal(getCapabilityPackageInstallIssue(manifest(26), variant(emberText, withoutBestiary)), null);
 
   // The mechanics a fight reads are new keys in the same strict file, inline in the ruleset or in a
   // catalog asset beside it, so both are read the same way.
-  const inlineOnly = variant(emberText, (doc) => delete doc.combat);
+  const inlineOnly = variant(emberText, (doc) => {
+    withoutBestiary(doc);
+    delete doc.combat;
+  });
   assert.match(
     getCapabilityPackageInstallIssue(manifest(25), inlineOnly) ?? "",
     /catalog mechanics reach a fight requires schemaVersion 2 and capabilityApi 1\.26 or newer/,
   );
   const assetOnly = variant(emberText, (doc) => {
+    withoutBestiary(doc);
     delete doc.combat;
     delete doc.catalogs[0].entries;
     doc.catalogs[0].asset = "catalogs/knacks.json";

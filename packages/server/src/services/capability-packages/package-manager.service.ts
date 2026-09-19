@@ -523,6 +523,15 @@ function entriesCarryCombatMechanics(entries: unknown): boolean {
   });
 }
 
+/** An opponent in place of rows: another new key in the same strict file, read structurally for the
+ *  same reason the two above are. */
+function entriesCarryCreatures(entries: unknown): boolean {
+  if (!Array.isArray(entries)) return false;
+  return entries.some(
+    (entry) => !!entry && typeof entry === "object" && (entry as { creature?: unknown }).creature !== undefined,
+  );
+}
+
 /** `rulesetDocument` is the package's own `ruleset.json`, parsed, when the install already has its
  *  verified bytes. Catalogs live INSIDE that file, so the manifest alone cannot show them, and the
  *  gate that keeps a package off an Engine too old to serve them has to read it. `catalogDocuments`
@@ -587,10 +596,19 @@ export function getCapabilityPackageInstallIssue(
     const scaledIssue = "A ruleset with scaled catalog rows requires schemaVersion 2 and capabilityApi 1.23 or newer";
     const mechanicsIssue =
       "A ruleset whose catalog mechanics reach a fight requires schemaVersion 2 and capabilityApi 1.26 or newer";
+    // A bestiary is the catalog's own `holds` plus the `creature` on every entry of it, and the
+    // entries may sit in the ruleset file or in the catalog file, so both are read.
+    const creatureIssue =
+      "A ruleset with a catalog of creatures requires schemaVersion 2 and capabilityApi 1.27 or newer";
     for (const catalog of catalogs) {
-      const header = catalog && typeof catalog === "object" ? (catalog as { asset?: unknown; entries?: unknown }) : {};
+      const header =
+        catalog && typeof catalog === "object"
+          ? (catalog as { asset?: unknown; entries?: unknown; holds?: unknown })
+          : {};
+      if (header.holds === "creatures" && !declaresApi(27)) return creatureIssue;
       if (entriesCarryScaledRows(header.entries) && !declaresApi(23)) return scaledIssue;
       if (entriesCarryCombatMechanics(header.entries) && !declaresApi(26)) return mechanicsIssue;
+      if (entriesCarryCreatures(header.entries) && !declaresApi(27)) return creatureIssue;
       const asset = header.asset;
       if (typeof asset !== "string") continue;
       // A path that does not normalize is never a declared one, whatever else failed to normalize.
@@ -602,6 +620,7 @@ export function getCapabilityPackageInstallIssue(
       const fileEntries = document && typeof document === "object" ? (document as { entries?: unknown }).entries : null;
       if (entriesCarryScaledRows(fileEntries) && !declaresApi(23)) return scaledIssue;
       if (entriesCarryCombatMechanics(fileEntries) && !declaresApi(26)) return mechanicsIssue;
+      if (entriesCarryCreatures(fileEntries) && !declaresApi(27)) return creatureIssue;
     }
   }
   // The battle block lives inside the ruleset file too, so it is read the same way and for the same

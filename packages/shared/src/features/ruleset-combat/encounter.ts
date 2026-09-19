@@ -32,7 +32,8 @@ import {
   rulesetCheckModifier,
   type EvaluatedRulesetSheet,
 } from "../rulesets/sheet-math.js";
-import { deriveSubSeed, mulberry32 } from "../tactical-combat/rng.js";
+import { findRulesetCreatureEntry, rulesetCreatureBlock } from "./creatures.js";
+import { parseRulesetCombatDice, rollRulesetDice, rulesetCombatRoller, sumOf } from "./dice.js";
 import type {
   RulesetCombatAction,
   RulesetCombatAmount,
@@ -42,59 +43,6 @@ import type {
   RulesetCombatRoller,
   RulesetEncounterState,
 } from "./types.js";
-
-/** The seeded roller a server uses: the tactical engine's own stream, one die per tick, so a fight
- *  replays from its seed and the choices that were made. A caller that has its own dice (a test
- *  with a written sequence) passes those instead. */
-export function rulesetCombatRoller(seed: number, cursor: number): RulesetCombatRoller {
-  let tick = cursor;
-  return (sides) => Math.floor(mulberry32(deriveSubSeed(seed, tick++))() * sides) + 1;
-}
-
-/** A face this die actually has. A roller that hands back something else is a caller's bug, and it
- *  costs that one die rather than the fight. */
-function face(value: number, sides: number): number {
-  if (!Number.isFinite(value)) return 1;
-  return Math.min(sides, Math.max(1, Math.floor(value)));
-}
-
-/** Throw `count` dice, in order. */
-export function rollRulesetDice(roll: RulesetCombatRoller, count: number, sides: number): number[] {
-  const rolls: number[] = [];
-  for (let i = 0; i < Math.max(0, Math.min(100, Math.floor(count))); i++) rolls.push(face(roll(sides), sides));
-  return rolls;
-}
-
-export function sumOf(values: readonly number[]): number {
-  return values.reduce((total, value) => total + value, 0);
-}
-
-/** `2d6`, `1d8+3` or a plain number, as a sheet's dice column happens to hold it. A dice column is
- *  free text, so anything else reads as no dice at all rather than failing a turn. */
-export function parseRulesetCombatDice(text: unknown): RulesetCombatAmount | null {
-  // A dice column is short by its own schema; anything longer is not dice, and saying so first
-  // keeps every pattern below on a string of bounded length.
-  if (typeof text !== "string" || text.length > 40) return null;
-  // Spaces are allowed around the parts ("2d6 + 3") and nowhere inside a number ("1 2d6" is not
-  // twelve dice), so the parts are split on the letter and the sign rather than matched with a
-  // pattern full of optional whitespace.
-  const trimmed = text.trim();
-  const split = /^([^dD]*)[dD]([^+-]*)([+-].*)?$/.exec(trimmed);
-  const whole = (part: string | undefined, max: number) => {
-    const digits = (part ?? "").trim();
-    return /^\d+$/.test(digits) && digits.length <= max ? Number(digits) : null;
-  };
-  const count = split ? whole(split[1], 3) : null;
-  const sides = split ? whole(split[2], 4) : null;
-  const bonus = split?.[3] ? whole(split[3].slice(1), 4) : 0;
-  if (!split || count === null || sides === null || bonus === null) {
-    const flat = Number(trimmed);
-    return trimmed !== "" && Number.isFinite(flat) && flat !== 0
-      ? { count: 0, sides: 0, flat: Math.trunc(flat) }
-      : null;
-  }
-  return { count, sides, flat: split[3]?.startsWith("-") ? -bonus : bonus };
-}
 
 /** The dice of a catalog entry's `amount`, which the schema already holds to `<count>d<sides>`. */
 function amountOf(amount: RulesetCatalogMechanics["amount"]): RulesetCombatAmount | null {
@@ -409,19 +357,51 @@ function narrowCatalogs(build: RulesetSheetBuild, catalogs: RulesetCatalogEntrie
 }
 
 function blockActions(block: RulesetStatBlockLike): RulesetCombatAction[] {
+  const idOf = (index: number) => block.actions[index]?.id ?? `block:${index}`;
+  const indexById = new Map(block.actions.map((action, index) => [action.id ?? `block:${index}`, index]));
   return block.actions.map((action, index) => ({
-    id: action.id ?? `block:${index}`,
+    id: idOf(index),
     kind: "block" as const,
     label: action.name,
     budget: action.budget,
-    targets: { side: "enemy" as const, count: Math.max(1, action.targetCount ?? 1) },
+    // A sequence may be pointed at as many targets as all of its parts together, so a caller can
+    // send each strike somewhere else. Fewer is legal too: every part takes the ones it was given.
+    targets: {
+      side: "enemy" as const,
+      count: action.sequence
+        ? Math.max(
+            1,
+            action.sequence.reduce((total, step) => {
+              const named = block.actions[indexById.get(step.action) ?? -1];
+              return total + (named ? Math.max(1, named.targetCount ?? 1) * step.times : 0);
+            }, 0),
+          )
+        : Math.max(1, action.targetCount ?? 1),
+    },
     ...(action.toHit !== undefined ? { toHit: action.toHit } : {}),
     ...(action.autoHit ? { autoHit: true } : {}),
     ...(action.damage ? { damage: { ...action.damage } } : {}),
     ...(action.save ? { save: { ...action.save } } : {}),
     ...(action.saveDifficulty !== undefined ? { saveDifficulty: action.saveDifficulty } : {}),
     ...(action.applies?.length ? { applies: action.applies.map((entry) => ({ ...entry })) } : {}),
+    ...(action.uses ? { uses: { ...action.uses } } : {}),
+    ...(action.recharge ? { recharge: { dice: { ...action.recharge.dice }, from: action.recharge.from } } : {}),
+    ...(action.sequence
+      ? {
+          sequence: action.sequence.flatMap((step) =>
+            indexById.has(step.action) ? [{ actionId: step.action, times: step.times }] : [],
+          ),
+        }
+      : {}),
+    ...(action.signature ? { signature: { cost: action.signature.cost } } : {}),
   }));
+}
+
+/** What an action still has left of itself, before anything is spent on it. */
+function startingUses(actions: readonly RulesetCombatAction[]): Record<string, number> {
+  const uses: Record<string, number> = {};
+  for (const action of actions) if (action.uses) uses[action.id] = action.uses.count;
+  return uses;
 }
 
 type RulesetStatBlockLike = NonNullable<RulesetCombatant["block"]>;
@@ -445,6 +425,9 @@ export interface RulesetEncounterInput {
   definition: RulesetDefinition;
   seed: number;
   combatants: RulesetCombatantInput[];
+  /** The bestiary catalogs an opponent given as `{ creature: ... }` is looked up in. Fetching them
+   *  is the caller's job, exactly as it is for a party member's own catalogs. */
+  bestiary?: RulesetCatalogEntriesById;
   /** A caller with its own dice. The seeded roller is used when none is given. */
   roller?: RulesetCombatRoller;
 }
@@ -481,10 +464,26 @@ export function createRulesetEncounter(input: RulesetEncounterInput): RulesetEnc
     return roller(sides);
   };
 
+  const refused: RulesetCombatEvent[] = [];
   for (const entry of input.combatants) {
-    const initiativeRoll = rollRulesetDice(roll, combat.initiative.dice.count, combat.initiative.dice.sides);
     if (entry.side === "enemy") {
-      const block = entry.block;
+      // A bestiary reference that names nothing is left out of the fight rather than walked in with
+      // no numbers, and the opening says so.
+      const block =
+        "block" in entry
+          ? entry.block
+          : rulesetCreatureBlock(definition, findRulesetCreatureEntry(input.bestiary ?? {}, entry.creature));
+      if (!block) {
+        refused.push({ type: "refused", actorId: entry.id, reason: "unknown-creature" });
+        continue;
+      }
+      const initiativeRoll = rollRulesetDice(roll, combat.initiative.dice.count, combat.initiative.dice.sides);
+      // Dice health is thrown once, here, so the same seed always builds the same opponent.
+      const health = block.healthDice
+        ? sumOf(rollRulesetDice(roll, block.healthDice.count, block.healthDice.sides)) + block.healthDice.flat
+        : block.health;
+      const max = Math.max(1, health);
+      const actions = blockActions(block);
       state.combatants.push({
         id: entry.id,
         name: entry.name,
@@ -493,7 +492,12 @@ export function createRulesetEncounter(input: RulesetEncounterInput): RulesetEnc
         initiativeModifier: block.initiativeModifier,
         initiative: sumOf(initiativeRoll) + block.initiativeModifier,
         budgets: fullBudgets(combat),
-        actions: blockActions(block),
+        actions,
+        uses: startingUses(actions),
+        spent: [],
+        ...(block.signaturePoints !== undefined
+          ? { signature: { points: block.signaturePoints, max: block.signaturePoints } }
+          : {}),
         tracked: [],
         concentrating: null,
         flags: {},
@@ -505,10 +509,11 @@ export function createRulesetEncounter(input: RulesetEncounterInput): RulesetEnc
         saves: { ...(block.saves ?? {}) },
         speed: block.speed ?? 0,
         block,
-        health: { value: block.health, max: block.health, temp: 0 },
+        health: { value: max, max, temp: 0 },
       });
       continue;
     }
+    const initiativeRoll = rollRulesetDice(roll, combat.initiative.dice.count, combat.initiative.dice.sides);
     const build = entry.build;
     const evaluated = evaluateRulesetSheet(definition, build);
     const catalogs = narrowCatalogs(build, entry.catalogs ?? {});
@@ -539,6 +544,8 @@ export function createRulesetEncounter(input: RulesetEncounterInput): RulesetEnc
       initiative: sumOf(initiativeRoll) + modifier,
       budgets: fullBudgets(combat),
       actions,
+      uses: startingUses(actions),
+      spent: [],
       tracked: [],
       concentrating: null,
       flags: {},
@@ -576,6 +583,7 @@ export function createRulesetEncounter(input: RulesetEncounterInput): RulesetEnc
     .map((combatant) => combatant.id);
   state.cursor = rolls;
   state.opening = [
+    ...refused,
     {
       type: "initiative",
       entries: state.order.flatMap((id) => {

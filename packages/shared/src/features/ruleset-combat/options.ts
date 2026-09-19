@@ -9,6 +9,7 @@ import {
   type RulesetLiveState,
   type RulesetSheetOp,
 } from "../rulesets/live-state.js";
+import { rulesetAverageAmount } from "./dice.js";
 import { currentRulesetActor, rulesetCombatant, rulesetCombatEffects, rulesetCombatStanding } from "./encounter.js";
 import type {
   RulesetCombatAction,
@@ -130,11 +131,6 @@ export function rulesetHitChance(
   return single;
 }
 
-/** The average of a damage or healing roll. Never a future die: the expected amount, as it stands. */
-export function rulesetAverageAmount(amount: { count: number; sides: number; flat: number }): number {
-  return amount.count * ((amount.sides + 1) / 2) + amount.flat;
-}
-
 // ── The menu ──
 
 /** Whether the actor's own conditions stop them doing anything at all. */
@@ -152,35 +148,70 @@ function firstTarget(state: RulesetEncounterState, actor: RulesetCombatant, acti
   });
 }
 
-function optionFrom(
+/** Whether the actor's own bookkeeping still allows this action: a use it has not run out of, and
+ *  a recharge that has come back. Both belong to a stat block; a sheet-backed ability is priced by
+ *  the sheet instead. */
+export function rulesetActionAvailable(actor: RulesetCombatant, action: RulesetCombatAction): boolean {
+  if (action.uses && (actor.uses[action.id] ?? 0) < 1) return false;
+  return !actor.spent.includes(action.id);
+}
+
+/** Whether a part of a sequence can happen at all: a real action of this block, not a sequence
+ *  itself, not one that is bought with points, and not one that is used up or waiting for its dice.
+ *  The menu, the forecast and the resolution all ask this one question. */
+export function rulesetSequencePartAvailable(
+  actor: RulesetCombatant,
+  part: RulesetCombatAction | undefined,
+): part is RulesetCombatAction {
+  return !!part && !part.sequence && !part.signature && rulesetActionAvailable(actor, part);
+}
+
+/** A sequence with no part left that can happen would be paid for and do nothing. */
+export function rulesetSequenceCanHappen(actor: RulesetCombatant, action: RulesetCombatAction): boolean {
+  if (!action.sequence) return true;
+  return action.sequence.some((step) =>
+    rulesetSequencePartAvailable(
+      actor,
+      actor.actions.find((entry) => entry.id === step.actionId),
+    ),
+  );
+}
+
+/** What an action is expected to do. A sequence forecasts the SUM of its parts and no single chance
+ *  to hit, because each part rolls its own against whoever it was pointed at. */
+function forecastFor(
   definition: RulesetDefinition,
   combat: RulesetCombat,
   state: RulesetEncounterState,
   actor: RulesetCombatant,
   action: RulesetCombatAction,
-): RulesetCombatOption | null {
-  if ((actor.budgets[action.budget] ?? 0) < 1) return null;
-  const paid = planRulesetCombatCost(definition, actor, action);
-  if (!paid) return null;
-  const option: RulesetCombatOption = {
-    id: action.id,
-    kind: action.kind,
-    label: action.label,
-    budget: action.budget,
-    targets: action.targets,
-  };
-  if (paid.cost.length > 0) option.cost = paid.cost;
-  // Which higher pools of the same family could pay instead, so the menu offers the upcast rather
-  // than a player discovering it.
-  const family = rulesetPoolFamily(definition, action.use?.group);
-  const from = family.indexOf(action.use?.pool ?? "");
-  if (from >= 0) {
-    const payWith = family
-      .slice(from + 1)
-      .filter((pool) => planRulesetCombatCost(definition, actor, action, pool) !== null);
-    if (payWith.length > 0) option.payWith = payWith;
-  }
+): RulesetCombatOption["forecast"] | undefined {
   const forecast: NonNullable<RulesetCombatOption["forecast"]> = {};
+  if (action.sequence) {
+    const byId = new Map(actor.actions.map((entry) => [entry.id, entry]));
+    // A part that has no use left, or is waiting for its dice, will not happen, so it is not
+    // promised either. Counted strike by strike, the way the sequence will resolve: a part with one
+    // use left that is named twice lands once, and a part that recharges lands once and is spent.
+    const usesLeft = new Map<string, number>();
+    const spent = new Set<string>();
+    const total = action.sequence.reduce((sum, step) => {
+      const part = byId.get(step.actionId);
+      if (!rulesetSequencePartAvailable(actor, part) || spent.has(part.id)) return sum;
+      let strikes = step.times;
+      if (part.uses) {
+        const uses = usesLeft.get(part.id) ?? actor.uses[part.id] ?? 0;
+        strikes = Math.min(strikes, uses);
+        usesLeft.set(part.id, uses - strikes);
+      }
+      if (part.recharge && strikes > 0) {
+        strikes = 1;
+        spent.add(part.id);
+      }
+      return sum + (part.damage ? strikes * rulesetAverageAmount(part.damage) : 0);
+    }, 0);
+    if (total > 0) forecast.averageDamage = Math.round(total * 100) / 100;
+    return forecast.averageDamage === undefined ? undefined : forecast;
+  }
   const target = firstTarget(state, actor, action);
   if (action.toHit !== undefined && target) {
     const chance = rulesetHitChance(
@@ -193,7 +224,46 @@ function optionFrom(
   }
   const amount = action.damage ?? action.heal;
   if (amount) forecast.averageDamage = Math.round(rulesetAverageAmount(amount) * 100) / 100;
-  if (forecast.hitChance !== undefined || forecast.averageDamage !== undefined) option.forecast = forecast;
+  return forecast.hitChance !== undefined || forecast.averageDamage !== undefined ? forecast : undefined;
+}
+
+function optionFrom(
+  definition: RulesetDefinition,
+  combat: RulesetCombat,
+  state: RulesetEncounterState,
+  actor: RulesetCombatant,
+  action: RulesetCombatAction,
+): RulesetCombatOption | null {
+  // A signature action is bought with points at the end of somebody else's turn, so it is never on
+  // the actor's own menu. `rulesetSignatureOptions` is where it is offered.
+  if (action.signature) return null;
+  // A sequence whose parts are all gone, or all spent, would spend a budget and do nothing.
+  if (!rulesetSequenceCanHappen(actor, action)) return null;
+  if ((actor.budgets[action.budget] ?? 0) < 1) return null;
+  if (!rulesetActionAvailable(actor, action)) return null;
+  const paid = planRulesetCombatCost(definition, actor, action);
+  if (!paid) return null;
+  const option: RulesetCombatOption = {
+    id: action.id,
+    kind: action.kind,
+    label: action.label,
+    budget: action.budget,
+    targets: action.targets,
+  };
+  if (paid.cost.length > 0) option.cost = paid.cost;
+  if (action.uses) option.left = actor.uses[action.id] ?? 0;
+  // Which higher pools of the same family could pay instead, so the menu offers the upcast rather
+  // than a player discovering it.
+  const family = rulesetPoolFamily(definition, action.use?.group);
+  const from = family.indexOf(action.use?.pool ?? "");
+  if (from >= 0) {
+    const payWith = family
+      .slice(from + 1)
+      .filter((pool) => planRulesetCombatCost(definition, actor, action, pool) !== null);
+    if (payWith.length > 0) option.payWith = payWith;
+  }
+  const forecast = forecastFor(definition, combat, state, actor, action);
+  if (forecast) option.forecast = forecast;
   return option;
 }
 
@@ -255,5 +325,44 @@ export function rulesetCombatOptions(
     });
   }
   options.push(endTurn);
+  return options;
+}
+
+/**
+ * What this combatant could buy with its own points RIGHT NOW. A signature action is spent at the
+ * end of somebody else's turn, so the actor whose turn it is has none to offer, and the points are
+ * given back at the start of its own turn.
+ *
+ * This slice stores the points, prices the options and spends them when one is chosen. The WINDOW
+ * that asks a creature to pick one, between one turn and the next, is a later slice; until then a
+ * caller with its own reason to open one already has everything it needs here.
+ */
+export function rulesetSignatureOptions(
+  definition: RulesetDefinition,
+  state: RulesetEncounterState,
+  actorId: string,
+): RulesetCombatOption[] {
+  const combat = definition.combat;
+  const actor = rulesetCombatant(state, actorId);
+  const points = actor?.signature?.points;
+  if (!combat || !actor || points === undefined) return [];
+  if (currentRulesetActor(state)?.id === actorId) return [];
+  if (!rulesetCombatStanding(actor) || blocked(definition, combat, actor)) return [];
+  const options: RulesetCombatOption[] = [];
+  for (const action of actor.actions) {
+    if (!action.signature || action.signature.cost > points) continue;
+    if (!rulesetActionAvailable(actor, action) || !rulesetSequenceCanHappen(actor, action)) continue;
+    const option: RulesetCombatOption = {
+      id: action.id,
+      kind: action.kind,
+      label: action.label,
+      targets: action.targets,
+      signature: { cost: action.signature.cost, points },
+    };
+    if (action.uses) option.left = actor.uses[action.id] ?? 0;
+    const forecast = forecastFor(definition, combat, state, actor, action);
+    if (forecast) option.forecast = forecast;
+    options.push(option);
+  }
   return options;
 }

@@ -70,7 +70,7 @@ export function rulesetBattleCatalogIds(definition: RulesetDefinition): string[]
   const lists = new Set((definition.battle?.skills ?? []).map((source) => source.list));
   if (lists.size === 0) return [];
   return (definition.catalogs ?? [])
-    .filter((catalog) => catalog.feeds.some((list) => lists.has(list)))
+    .filter((catalog) => catalog.feeds?.some((list) => lists.has(list)))
     .map((catalog) => catalog.id);
 }
 

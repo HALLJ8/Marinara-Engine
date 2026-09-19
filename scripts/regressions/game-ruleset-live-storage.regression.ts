@@ -248,9 +248,14 @@ try {
     assert.match(withSheets, /Tracks: .*Exhaustion \(0 to 6\)/);
     assert.match(withSheets, /3rd-level slots 0\/2/);
     assert.match(withSheets, /<character_sheets>\nMira\n[\s\S]*<\/character_sheets>/, "sheets are delimited as data");
-    // The `use` line is only for a ruleset that ships catalogs: nothing else on a sheet carries a
-    // price the Engine could pay, so the line would describe a command that always refuses.
-    assert.doesNotMatch(withSheets, /op="use"/, "this example declares no catalogs");
+    // The `use` line is only for a ruleset that ships catalogs of ROWS: a bestiary writes nothing
+    // onto a sheet, so nothing there carries a price the Engine could pay and the line would
+    // describe a command that always refuses. This example's one catalog is a bestiary.
+    assert.deepEqual(
+      fiveE.catalogs?.map((catalog) => catalog.holds),
+      ["creatures"],
+    );
+    assert.doesNotMatch(withSheets, /op="use"/, "a bestiary is not something a sheet can use");
     const emberParsed = parseRulesetDefinition(
       JSON.parse(
         readFileSync(fileURLToPath(new URL("../../docs/examples/rulesets/ember-roads.json", import.meta.url)), "utf8"),

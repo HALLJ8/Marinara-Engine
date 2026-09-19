@@ -52,6 +52,10 @@ function ruleset(edit: (doc: Record<string, any>) => void = () => {}): string {
 function withoutLaterGates(doc: Record<string, any>): void {
   delete doc.layers;
   delete doc.combat;
+  // The bestiary is a 1.27 declaration of its own, and a catalog of creatures needs the combat
+  // block that just went, so it leaves with it.
+  doc.catalogs = (doc.catalogs ?? []).filter((catalog: Record<string, any>) => catalog.holds !== "creatures");
+  if (doc.catalogs.length === 0) delete doc.catalogs;
   for (const entry of doc.catalogs?.[0]?.entries ?? []) {
     for (const key of ["targetCount", "autoHit", "applies", "temporary", "budget"]) delete entry.mechanics?.[key];
   }
@@ -140,7 +144,7 @@ const catalogFile = (entries: unknown[], catalog = "knacks") =>
   );
   refuses(
     (doc) => doc.catalogs.push({ ...doc.catalogs[0] }),
-    /catalogs\.1\.id: Duplicate catalog id "knacks"/,
+    /catalogs\.\d+\.id: Duplicate catalog id "knacks"/,
     "two catalogs cannot share an id",
   );
 
@@ -435,9 +439,9 @@ const installedPackages = packages.map((fixture) => {
   ];
   const manifest = {
     schemaVersion: 2,
-    // 1.26, because the example ruleset carries the combat bridge's battle block, a scaled catalog
-    // row, a layer, a combat block and catalog mechanics a fight reads.
-    capabilityApi: { major: 1, minor: 26 },
+    // 1.27, because the example ruleset carries the combat bridge's battle block, a scaled catalog
+    // row, a layer, a combat block, catalog mechanics a fight reads and a catalog of creatures.
+    capabilityApi: { major: 1, minor: 27 },
     builtAgainst: { engineVersion: "2.4.6", engineCommit: "0".repeat(40) },
     id: packageId,
     name: fixture.id,

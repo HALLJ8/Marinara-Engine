@@ -1106,6 +1106,222 @@
       ]
     }
   },
+  "catalogs": [
+    {
+      "$comment": "A bestiary: a catalog that holds creatures instead of rows, so it feeds no sheet list and the picker never offers it. These four are written for this example and are nobody else's creatures: the package that ships the real SRD monsters carries its own catalog, in this same shape. Every number sits inside the threat tier the entry names.",
+      "id": "creatures",
+      "label": "Creatures",
+      "holds": "creatures",
+      "filters": [
+        { "id": "challenge", "label": "Challenge", "type": "text" },
+        { "id": "kind", "label": "Kind", "type": "text" },
+        { "id": "places", "label": "Found in", "type": "tags" }
+      ],
+      "entries": [
+        {
+          "$comment": "A sequence: one action that resolves two of the block's own actions, each pointed wherever the lurker likes. The vine's save-ends carries its own difficulty, because the action has no save of its own to take one from.",
+          "id": "thorn-lurker",
+          "label": "Thorn Lurker",
+          "summary": "A briar that waits at the edge of a path and closes when something walks past it.",
+          "filters": { "challenge": "CR 1/2", "kind": "Plant", "places": ["Forest", "Swamp"] },
+          "creature": {
+            "health": { "dice": "3d8", "flat": 3 },
+            "defense": 13,
+            "initiativeModifier": 2,
+            "speed": 20,
+            "abilities": { "str": 12, "dex": 15, "con": 12, "int": 4, "wis": 11, "cha": 5 },
+            "saves": { "dex_save": 4 },
+            "conditionImmunities": ["blinded", "deafened"],
+            "tier": "cr_1_2",
+            "traits": [
+              { "name": "Thicket-born", "text": "It moves through briars as easily as anything else walks a road." }
+            ],
+            "actions": [
+              {
+                "id": "barbed_claw",
+                "name": "Barbed claw",
+                "budget": "action",
+                "toHit": 4,
+                "damage": { "dice": "1d4", "flat": 1, "type": "piercing" },
+                "reach": 5
+              },
+              {
+                "id": "snare_vine",
+                "name": "Snare vine",
+                "budget": "action",
+                "toHit": 4,
+                "damage": { "dice": "1d4", "flat": 1, "type": "slashing" },
+                "applies": [
+                  {
+                    "condition": "restrained",
+                    "duration": "until-save",
+                    "saveEnds": { "save": "str_save", "at": "turn-end" }
+                  }
+                ],
+                "saveDifficulty": 12,
+                "reach": 10
+              },
+              {
+                "id": "claw_and_snare",
+                "name": "Claw and snare",
+                "budget": "action",
+                "sequence": [
+                  { "action": "barbed_claw", "times": 1 },
+                  { "action": "snare_vine", "times": 1 }
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "$comment": "A recharge: the hound's breath is spent when it is used and rolled for at the start of its own turn, and comes back on a 5 or a 6.",
+          "id": "cinder-hound",
+          "label": "Cinder Hound",
+          "summary": "A lean hunting dog that runs hot enough to scorch the ground it sleeps on.",
+          "filters": { "challenge": "CR 1", "kind": "Beast", "places": ["Hills", "Ruins"] },
+          "creature": {
+            "health": { "dice": "5d8" },
+            "defense": 12,
+            "initiativeModifier": 1,
+            "speed": 40,
+            "abilities": { "str": 14, "dex": 13, "con": 14, "int": 3, "wis": 12, "cha": 6 },
+            "saves": { "con_save": 4 },
+            "resist": ["fire"],
+            "immune": ["poison"],
+            "conditionImmunities": ["poisoned"],
+            "tier": "cr_1",
+            "actions": [
+              {
+                "id": "sear_bite",
+                "name": "Searing bite",
+                "budget": "action",
+                "toHit": 4,
+                "damage": { "dice": "1d6", "flat": 2, "type": "piercing" },
+                "reach": 5
+              },
+              {
+                "id": "ember_breath",
+                "name": "Ember breath",
+                "budget": "action",
+                "damage": { "dice": "2d6", "type": "fire" },
+                "save": { "save": "dex_save", "difficulty": 12, "onSuccess": "half" },
+                "targetCount": 2,
+                "range": 15,
+                "recharge": { "dice": { "count": 1, "sides": 6 }, "from": 5 }
+              }
+            ]
+          }
+        },
+        {
+          "$comment": "A save rider with a condition: the note is saved against once to take it at all, and again at the end of each turn to shake it off. Its difficulty is the action's own, so nothing else has to supply one. It can also only be played three times a day.",
+          "id": "grave-piper",
+          "label": "Grave Piper",
+          "summary": "A thin figure that plays one note over and over in a place people are buried.",
+          "filters": { "challenge": "CR 2", "kind": "Undead", "places": ["Barrows", "Ruins"] },
+          "creature": {
+            "health": { "dice": "6d8", "flat": 6 },
+            "defense": 13,
+            "initiativeModifier": 2,
+            "speed": 30,
+            "abilities": { "str": 10, "dex": 14, "con": 12, "int": 11, "wis": 13, "cha": 15 },
+            "saves": { "wis_save": 3, "cha_save": 4 },
+            "resist": ["necrotic"],
+            "immune": ["poison"],
+            "conditionImmunities": ["charmed", "frightened", "poisoned"],
+            "tier": "cr_2",
+            "traits": [{ "name": "One note", "text": "It plays the same note whatever else is happening to it." }],
+            "actions": [
+              {
+                "id": "bone_rap",
+                "name": "Bone rap",
+                "budget": "action",
+                "toHit": 4,
+                "damage": { "dice": "1d8", "flat": 2, "type": "bludgeoning" },
+                "reach": 5
+              },
+              {
+                "id": "wailing_note",
+                "name": "Wailing note",
+                "budget": "action",
+                "damage": { "dice": "2d4", "type": "psychic" },
+                "save": { "save": "wis_save", "difficulty": 12, "onSuccess": "negates" },
+                "applies": [
+                  {
+                    "condition": "frightened",
+                    "duration": { "rounds": 3 },
+                    "saveEnds": { "save": "wis_save", "at": "turn-end" }
+                  }
+                ],
+                "targetCount": 3,
+                "range": 30,
+                "uses": { "per": "day", "count": 3 }
+              }
+            ]
+          }
+        },
+        {
+          "$comment": "Resistances and immunities, a sequence of one action done twice, and points of its own: the sentinel can strike while somebody else is acting, which costs a point rather than its action. The window that offers it is a later release; the points and the price are here.",
+          "id": "hollow-sentinel",
+          "label": "Hollow Sentinel",
+          "summary": "An empty suit of plate that stands at a door for as long as the door is there.",
+          "filters": { "challenge": "CR 3", "kind": "Construct", "places": ["Ruins", "Vaults"] },
+          "creature": {
+            "health": { "dice": "9d10", "flat": 9 },
+            "defense": 15,
+            "initiativeModifier": -1,
+            "speed": 20,
+            "abilities": { "str": 18, "dex": 9, "con": 16, "int": 1, "wis": 10, "cha": 1 },
+            "saves": { "str_save": 6, "con_save": 5 },
+            "resist": ["bludgeoning", "piercing", "slashing"],
+            "immune": ["poison", "psychic"],
+            "conditionImmunities": ["charmed", "frightened", "paralyzed", "petrified", "poisoned"],
+            "tier": "cr_3",
+            "signaturePoints": 2,
+            "traits": [
+              {
+                "name": "Standing orders",
+                "text": "It does not leave the doorway it was left in, whatever walks away."
+              }
+            ],
+            "actions": [
+              {
+                "id": "slam",
+                "name": "Slam",
+                "budget": "action",
+                "toHit": 5,
+                "damage": { "dice": "1d8", "flat": 2, "type": "bludgeoning" },
+                "reach": 5
+              },
+              {
+                "id": "crushing_step",
+                "name": "Crushing step",
+                "budget": "action",
+                "toHit": 5,
+                "damage": { "dice": "1d10", "flat": 2, "type": "bludgeoning" },
+                "applies": [{ "condition": "prone", "duration": "instant" }],
+                "reach": 5
+              },
+              {
+                "id": "double_slam",
+                "name": "Double slam",
+                "budget": "action",
+                "sequence": [{ "action": "slam", "times": 2 }]
+              },
+              {
+                "id": "watchful_strike",
+                "name": "Watchful strike",
+                "budget": "action",
+                "toHit": 5,
+                "damage": { "dice": "1d8", "flat": 2, "type": "bludgeoning" },
+                "reach": 5,
+                "signature": { "cost": 1 }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ],
   "battle": {
     "$comment": "What a battle may read from this sheet. It is not a 5e combat adapter: there are no attack rolls, no saving throws and no concentration in a fight, and the damage arithmetic stays Marinara's. Hit points, slots and the spells and attacks a player picked from a catalog are simply lent to Marinara's own combat. Pact Magic slots are left out, because their level follows the character's own level and a fixed list of levels cannot say that.",
     "health": { "pool": "hp" },
