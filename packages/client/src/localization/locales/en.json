@@ -859,7 +859,7 @@
   "game.ruleset.catalog.mechanics.saveNegates": "{{save}} save to avoid",
   "game.ruleset.catalog.mechanics.saveNone": "{{save}} save, a success changes nothing",
   "game.ruleset.catalog.mechanics.selfOrTouch": "self or touch",
-  "game.ruleset.catalog.mechanicsNote": "These numbers are here to read. Battles do not use them yet.",
+  "game.ruleset.catalog.mechanicsNote": "These numbers are for reference. Battles do not use them yet.",
   "game.ruleset.catalog.noMatches": "Nothing here matches the search and the filters.",
   "game.ruleset.catalog.overflow": "Too many rows for {{lists}}. Pick fewer, or remove rows from the sheet first.",
   "game.ruleset.catalog.retry": "Try again",

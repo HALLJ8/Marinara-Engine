@@ -1377,7 +1377,7 @@ export const capabilityPackageManager = {
   async rulesetCatalogAsset(
     packageId: string,
     catalogId: string,
-  ): Promise<{ data: Buffer } | { issue: string } | null> {
+  ): Promise<{ sha256: string; read: () => Promise<{ data: Buffer } | { issue: string }> } | { issue: string } | null> {
     const assetPath = rulesetCatalogAssetPath(catalogId);
     const installed = (await readRegistry()).packages.find((item) => item.id === packageId);
     if (!installed) return null;
@@ -1418,17 +1418,24 @@ export const capabilityPackageManager = {
         issue: `${assetPath} is ${declaration.bytes} bytes, over the ${RULESET_CATALOG_MAX_BYTES}-byte limit`,
       };
     }
-    try {
-      return { data: (await readVerifiedInstalledPackageFile(installed, assetPath)).data };
-    } catch (error) {
-      logger.error(
-        error,
-        "[capability/rulesets] Catalog %s for %s failed integrity verification",
-        assetPath,
-        packageId,
-      );
-      return { issue: `${assetPath} is not the file that was installed` };
-    }
+    // The pinned hash comes back before the bytes are read, so a caller that already holds this
+    // exact file (a conditional request) never makes the Engine read and validate it again.
+    return {
+      sha256: declaration.sha256,
+      read: async () => {
+        try {
+          return { data: (await readVerifiedInstalledPackageFile(installed, assetPath)).data };
+        } catch (error) {
+          logger.error(
+            error,
+            "[capability/rulesets] Catalog %s for %s failed integrity verification",
+            assetPath,
+            packageId,
+          );
+          return { issue: `${assetPath} is not the file that was installed` };
+        }
+      },
+    };
   },
 
   async markRuntimeStatus(

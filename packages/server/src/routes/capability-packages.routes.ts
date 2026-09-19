@@ -192,9 +192,17 @@ export async function capabilityPackagesRoutes(app: FastifyInstance) {
       return reply.status(404).send({ error: "That ruleset has no such catalog", code: "ruleset_catalog_missing" });
     }
     if ("issue" in source) return unusable([source.issue]);
+    // A catalog can be a megabyte of JSON that is parsed and checked entry by entry. The pinned hash
+    // names the file and the ruleset version names what it was checked against, so a browser that
+    // already holds this answer is told so before any of that work. `no-cache` still makes it ask.
+    const etag = `"${source.sha256}.${definition.version}"`;
+    reply.header("ETag", etag).header("Cache-Control", "no-cache");
+    if (request.headers["if-none-match"] === etag) return reply.status(304).send();
+    const file = await source.read();
+    if ("issue" in file) return unusable([file.issue]);
     let document: unknown;
     try {
-      document = JSON.parse(source.data.toString("utf8"));
+      document = JSON.parse(file.data.toString("utf8"));
     } catch {
       return unusable(["(root): the catalog file is not valid JSON"]);
     }

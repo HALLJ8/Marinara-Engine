@@ -585,6 +585,19 @@ try {
       "the asset's entries are the ones the file holds",
     );
     assert.equal(payload.entries[3].rows.length, 2, "an asset entry may fill two lists too");
+
+    // A packaged catalog is named by its pinned hash, so a browser that already holds it is told so
+    // without the file being read and checked again.
+    const etag = served.headers.etag;
+    assert.match(String(etag), /^"[a-f0-9]{64}\.1"$/u, "the hash of the file plus the ruleset version");
+    assert.equal(served.headers["cache-control"], "no-cache");
+    const unchanged = await app.inject({
+      method: "GET",
+      url: "/api/capability-packages/rulesets/catalog?rulesetId=ember-roads&catalogId=knacks",
+      headers: { "if-none-match": String(etag) },
+    });
+    assert.equal(unchanged.statusCode, 304, unchanged.body);
+    assert.equal(unchanged.body, "");
   }
 
   // ── What the route refuses ──
