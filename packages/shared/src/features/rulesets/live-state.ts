@@ -13,14 +13,13 @@
 
 import { z } from "zod";
 import {
-  catalogRowRef,
   RULESET_CATALOG_ROW_KEY,
   type RulesetCatalogEntriesById,
-  type RulesetCatalogEntry,
   type RulesetDefinition,
   type RulesetList,
   type RulesetSheetBuild,
 } from "../../schemas/ruleset.schema.js";
+import { rulesetCatalogEntriesByRef } from "./scaled-rows.js";
 import { evaluateRulesetSheet, isRulesetItemHidden, resolveRulesetValueRef, roundRulesetNumber } from "./sheet-math.js";
 
 export interface RulesetLivePoolValue {
@@ -586,10 +585,7 @@ export function planRulesetUse(
   const wanted = op.name.trim();
   if (!wanted) return { ok: false, reason: "unknown-entry" };
 
-  const byRef = new Map<string, RulesetCatalogEntry>();
-  for (const [catalogId, entries] of Object.entries(catalogs)) {
-    for (const entry of entries) byRef.set(catalogRowRef(catalogId, entry.id), entry);
-  }
+  const byRef = rulesetCatalogEntriesByRef(catalogs);
 
   // Which entry was meant. A row answers to the name the sheet shows it under and to the label of
   // the entry it came from, so the Game Master's own wording and the ruleset's both work.
