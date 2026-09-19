@@ -196,47 +196,61 @@ export function RulesetCombatMenu({ view, budgetLabel, busy, onChoose, onFlee }:
   }
 
   // ── The menu itself ──
+  // The shell's bottom panel takes whatever height its content asks for, so a menu stacked group
+  // under group would take the stage's room and leave the two sides drawn over each other (or, on
+  // a phone, leave no stage at all). The groups sit side by side, and a long list (a caster's)
+  // scrolls inside its own bound.
   return (
-    <div className="flex flex-col gap-2 p-3">
-      <p className="text-[0.65rem] uppercase tracking-wide text-white/45">
+    <div className="flex max-h-[24svh] flex-col gap-2 overflow-y-auto px-3 py-2 sm:max-h-[34svh] sm:p-3">
+      {/* A phone's shell already says whose turn it is right above this, and has no height to say
+          it twice; the group names go the same way there and the buttons wrap as one run. */}
+      <p className="hidden text-[0.65rem] uppercase tracking-wide text-white/45 sm:block">
         {t("game.combat.ruleset.menu.title", { name: actorName })}
       </p>
-      {groups.map((group) => (
-        <section key={group.kind} className="flex flex-col gap-1.5">
-          <h4 className="text-[0.6rem] font-semibold uppercase tracking-wide text-white/40">{t(group.labelKey)}</h4>
-          <div className="flex flex-wrap gap-2">
-            {group.options.map((option) => {
-              const cost = rulesetOptionCostText(option, budgetLabel, t);
-              const forecast = rulesetOptionForecastText(option, t);
-              return (
-                <button
-                  key={option.id}
-                  type="button"
-                  disabled={busy}
-                  onClick={() => take(option)}
-                  className={cn(
-                    buttonClass,
-                    "border-white/10 bg-white/5 text-white/80 hover:border-white/25 hover:bg-white/10 hover:text-white",
-                  )}
-                >
-                  <span className="block font-semibold text-white/90">{rulesetOptionLabel(option, t)}</span>
-                  {cost && <span className="mt-0.5 block text-[0.65rem] text-white/45">{cost}</span>}
-                  {forecast && <span className="block text-[0.65rem] text-white/45">{forecast}</span>}
-                </button>
-              );
-            })}
-          </div>
-        </section>
-      ))}
-      <div>
-        <button
-          type="button"
-          disabled={busy}
-          onClick={onFlee}
-          className={cn(buttonClass, "border-white/10 bg-white/5 text-white/60 hover:bg-white/10 hover:text-white")}
-        >
-          {t("game.combat.ruleset.menu.flee")}
-        </button>
+      <div className="flex flex-row flex-wrap items-start gap-2 sm:gap-x-6 sm:gap-y-3">
+        {groups.map((group) => (
+          <section
+            key={group.kind}
+            aria-label={t(group.labelKey)}
+            className="contents sm:flex sm:min-w-0 sm:flex-col sm:gap-1.5"
+          >
+            <h4 className="hidden text-[0.6rem] font-semibold uppercase tracking-wide text-white/40 sm:block">
+              {t(group.labelKey)}
+            </h4>
+            <div className="contents sm:flex sm:flex-wrap sm:gap-2">
+              {group.options.map((option) => {
+                const cost = rulesetOptionCostText(option, budgetLabel, t);
+                const forecast = rulesetOptionForecastText(option, t);
+                return (
+                  <button
+                    key={option.id}
+                    type="button"
+                    disabled={busy}
+                    onClick={() => take(option)}
+                    className={cn(
+                      buttonClass,
+                      "border-white/10 bg-white/5 text-white/80 hover:border-white/25 hover:bg-white/10 hover:text-white",
+                    )}
+                  >
+                    <span className="block font-semibold text-white/90">{rulesetOptionLabel(option, t)}</span>
+                    {cost && <span className="mt-0.5 block text-[0.65rem] text-white/45">{cost}</span>}
+                    {forecast && <span className="block text-[0.65rem] text-white/45">{forecast}</span>}
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+        ))}
+        <div className="self-end">
+          <button
+            type="button"
+            disabled={busy}
+            onClick={onFlee}
+            className={cn(buttonClass, "border-white/10 bg-white/5 text-white/60 hover:bg-white/10 hover:text-white")}
+          >
+            {t("game.combat.ruleset.menu.flee")}
+          </button>
+        </div>
       </div>
     </div>
   );

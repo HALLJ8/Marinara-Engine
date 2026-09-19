@@ -297,14 +297,19 @@ const line = (definition: RulesetDefinition, state: RulesetEncounterState, event
     `the damage line is not what it should be: ${JSON.stringify(printed)}`,
   );
   assert.ok(
-    printed.includes("Brenna has 0 Action left."),
-    `the budget line is not in the ruleset's own words: ${JSON.stringify(printed)}`,
+    !printed.some((line) => line.includes("Action left")),
+    `what is left of a budget belongs to the status panel, not the log: ${JSON.stringify(printed)}`,
   );
 
   // Only the lines that are new are handed back, so a screen prints a fight once.
   const all = swing.events.map((event, index) => ({ seq: index + 1, event: event as DirectedRulesetEvent }));
   assert.deepEqual(rulesetCombatLogLines(all, names, t, all.length), []);
-  assert.equal(rulesetCombatLogLines(all, names, t, 1).length, rulesetCombatLogLines(all, names, t).length - 1);
+  const everyLine = rulesetCombatLogLines(all, names, t);
+  assert.equal(
+    rulesetCombatLogLines(all, names, t, everyLine[0]!.seq).length,
+    everyLine.length - 1,
+    "asking for what came after the first printed line leaves exactly that one out",
+  );
 }
 
 // ── The same code on Ember Roads: 2d6 against a Guard, and Grit for health ──
@@ -363,9 +368,15 @@ const line = (definition: RulesetDefinition, state: RulesetEncounterState, event
   );
   assert.ok(printed.includes("Ash-hound is out of the fight."), JSON.stringify(printed));
   assert.ok(printed.includes("The fight is won."), JSON.stringify(printed));
-  // Ember Roads has one budget and calls it Action, and one Grit pool: the ruleset's words, not
-  // this Engine's.
+  // Ember Roads has one budget and calls it Action: the ruleset's word, not this Engine's. The line
+  // exists for a caller that wants it; the screen's own log leaves it to the status panel.
   assert.ok(printed.includes("Juno has 0 Action left."), JSON.stringify(printed));
+  const onScreen = rulesetCombatLogLines(
+    swing.events.map((event, index) => ({ seq: index + 1, event: event as DirectedRulesetEvent })),
+    names,
+    t,
+  ).map((line) => line.text);
+  assert.ok(!onScreen.some((line) => line.includes("Action left")), JSON.stringify(onScreen));
 
   // ── The recap a finished fight hands the Game Master ──
   const summary = rulesetEncounterSummary(ember, swing.state);

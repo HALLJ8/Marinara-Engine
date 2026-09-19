@@ -297,6 +297,9 @@ export function rulesetCombatLogLines(
   const lines: Array<{ seq: number; text: string }> = [];
   for (const entry of events) {
     if (entry.seq <= afterSeq) continue;
+    // What is left of a budget is a number the status panel already shows, and the resolver reports
+    // it BEFORE the action it paid for, so in a log it read as "0 Action left" and then the blow.
+    if (entry.event.type === "budget") continue;
     const text = rulesetCombatEventLine(entry.event, names, t);
     if (text) lines.push({ seq: entry.seq, text });
   }
