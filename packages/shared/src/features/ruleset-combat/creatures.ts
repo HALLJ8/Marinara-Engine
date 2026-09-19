@@ -172,25 +172,48 @@ function actionId(action: RulesetStatBlockAction, index: number): string {
   return action.id ?? `block:${index}`;
 }
 
-/** The best a block can do in one round: its heaviest sequence, or its heaviest single action.
- *  Measured against ONE target, because a tier's band is what a creature does to somebody, not the
- *  sum of everyone it can reach. */
-function bestRound(actions: readonly RulesetStatBlockAction[]): { average: number; parts: string[] } {
+/** The best a block can do in one round: its heaviest sequence, or its heaviest single action, and
+ *  the action that round belongs to. Measured against ONE target, because a tier's band is what a
+ *  creature does to somebody, not the sum of everyone it can reach. */
+interface RulesetBestRound {
+  average: number;
+  action: RulesetStatBlockAction | null;
+  parts: string[];
+}
+
+function bestRound(actions: readonly RulesetStatBlockAction[]): RulesetBestRound {
   const byId = new Map(actions.map((action, index) => [actionId(action, index), action]));
-  let best = { average: 0, parts: [] as string[] };
+  let best: RulesetBestRound = { average: 0, action: null, parts: [] };
   actions.forEach((action, index) => {
-    const round = action.sequence
+    const round: RulesetBestRound = action.sequence
       ? {
           average: action.sequence.reduce(
             (total, step) => total + step.times * damageAverage(byId.get(step.action)),
             0,
           ),
+          action,
           parts: action.sequence.map((step) => step.action),
         }
-      : { average: damageAverage(action), parts: [actionId(action, index)] };
+      : { average: damageAverage(action), action, parts: [actionId(action, index)] };
     if (round.average > best.average) best = round;
   });
   return best;
+}
+
+/** One strike out of a sequence: the last step that happens more than once gives one up, and then
+ *  the last step goes entirely. A sequence is never left with nothing. */
+function dropOneStrike(sequence: NonNullable<RulesetStatBlockAction["sequence"]>): boolean {
+  for (let index = sequence.length - 1; index >= 0; index--) {
+    if (sequence[index]!.times > 1) {
+      sequence[index]!.times -= 1;
+      return true;
+    }
+  }
+  if (sequence.length > 1) {
+    sequence.pop();
+    return true;
+  }
+  return false;
 }
 
 function knownTypes(definition: RulesetDefinition): ReadonlySet<string> | null {
@@ -367,11 +390,15 @@ export function clampRulesetStatBlock(
     return [action];
   });
 
-  // Damage last, because dropping a save or an action changes what the best round is.
+  // Damage last, because dropping a save or an action changes what the best round is. Four things
+  // come off, in order, from the one that says least about the creature to the one that says most:
+  // how many dice it throws, the flat part beside them, how many times a sequence strikes, and only
+  // then the size of the die itself. Nothing is ever taken all the way to nothing.
   const cap = tier.damagePerRound[1];
   const byId = new Map(block.actions.map((action, index) => [actionId(action, index), action]));
   let guard = 0;
   let scaled = false;
+  let fewer = false;
   while (guard++ < 500) {
     const round = bestRound(block.actions);
     if (round.average <= cap) break;
@@ -381,21 +408,21 @@ export function clampRulesetStatBlock(
       .filter((action): action is RulesetStatBlockAction => !!action?.damage)
       .sort((left, right) => damageAverage(right) - damageAverage(left))[0];
     const damage = part?.damage;
-    if (!damage) break;
-    // Dice first, then the flat part, and never all the way to nothing: an action that deals zero
-    // is not a scaled-down action, it is a missing one.
-    const rolls = damage.count > 0 && damage.sides > 0;
-    if (damage.count > 1 && damage.sides > 0) damage.count -= 1;
-    else if (damage.flat > (rolls ? 0 : 1)) damage.flat -= 1;
+    const rolls = !!damage && damage.count > 0 && damage.sides > 0;
+    if (damage && damage.count > 1 && damage.sides > 0) damage.count -= 1;
+    else if (damage && damage.flat > (rolls ? 0 : 1)) damage.flat -= 1;
+    else if (round.action?.sequence && dropOneStrike(round.action.sequence)) fewer = true;
+    else if (damage && rolls && damage.sides > 2) damage.sides -= 1;
     else break;
     scaled = true;
   }
+  if (fewer) adjusted.push("A creature of this tier does not strike that often, so the sequence lost a strike.");
   if (scaled) {
     const left = Math.round(bestRound(block.actions).average * 100) / 100;
     adjusted.push(
       left <= cap
         ? `The damage was scaled down until the best round averages ${left}, inside the ${tier.damagePerRound[0]} to ${cap} of ${tier.label}.`
-        : `The damage was scaled down to the smallest dice this block can have, and the best round still averages ${left} against the ${cap} of ${tier.label}.`,
+        : `The damage was scaled down as far as this block goes, and the best round still averages ${left} against the ${cap} of ${tier.label}.`,
     );
   }
   return { block, adjusted };
