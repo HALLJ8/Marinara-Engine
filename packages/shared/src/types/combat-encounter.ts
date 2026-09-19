@@ -128,7 +128,18 @@ export interface CombatPartyMember {
 }
 
 /** An enemy in the encounter. */
-export interface CombatEnemy {
+/** An opponent in the ruleset's own terms, for a fight the game's ruleset resolves: a bestiary
+ *  reference, the rung of the threat scale it belongs on, and a stat block written for it. The
+ *  encounter blueprint carries them to the fight, where the SERVER reads them; `proposed` stays
+ *  `unknown` on purpose, because it is a model's text until the server has validated and clamped
+ *  it. Every other fight ignores all three. */
+export interface RulesetEncounterBlueprint {
+  creature?: string;
+  tier?: string;
+  proposed?: unknown;
+}
+
+export interface CombatEnemy extends RulesetEncounterBlueprint {
   projectile?: boolean;
   requiresSight?: boolean;
   boss?: import("../features/combat-director.js").CombatBoss;
@@ -143,12 +154,6 @@ export interface CombatEnemy {
   statuses: CombatStatus[];
   description: string;
   sprite: string;
-  /** What a ruleset that resolves its own fights should build this opponent from: a bestiary
-   *  reference, the rung of the threat scale it belongs on, and a stat block written for it. The
-   *  blueprint only carries them for such a ruleset, and every other fight ignores all three. */
-  creature?: string;
-  tier?: string;
-  proposed?: unknown;
   /** Tactical-combat class hint (fighter/knight/rogue/archer/mage/healer). Classic combat ignores this. */
   class?: string;
   /** Tactical traversal rule. Classic combat ignores this; missing means walk. */

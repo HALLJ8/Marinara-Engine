@@ -154,7 +154,7 @@ export function RulesetCombatStatus({
                       })}
                     </span>
                   )}
-                  {(combatant.tier || combatant.traits?.length) && (
+                  {(!!combatant.tier || (combatant.traits?.length ?? 0) > 0) && (
                     <details className="mt-0.5">
                       <summary className="cursor-pointer text-[0.65rem] text-[var(--muted-foreground)]">
                         {t("game.combat.ruleset.status.details")}

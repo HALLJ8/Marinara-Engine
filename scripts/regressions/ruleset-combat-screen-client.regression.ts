@@ -539,7 +539,12 @@ const line = (definition: RulesetDefinition, state: RulesetEncounterState, event
   // union is read out of the shared types file, so a new variant fails this lane rather than
   // printing nothing on screen.
   const unionText = readSource("packages/shared/src/features/ruleset-combat/types.ts");
-  const union = unionText.slice(unionText.indexOf("export type RulesetCombatEvent"));
+  // Only the union itself: from its declaration to the next exported declaration after it, so a
+  // `type: "..."` literal further down the file is never mistaken for an event.
+  const unionStart = unionText.indexOf("export type RulesetCombatEvent");
+  const unionEnd = unionText.indexOf("\nexport ", unionStart + 1);
+  assert.ok(unionStart >= 0 && unionEnd > unionStart, "the event union was not found where it used to be");
+  const union = unionText.slice(unionStart, unionEnd);
   const declared = new Set([...union.matchAll(/type:\s*"([a-z-]+)"/gu)].map((match) => match[1]!));
   assert.ok(declared.size > 15, "the event union was not found where it used to be");
   for (const type of declared) {

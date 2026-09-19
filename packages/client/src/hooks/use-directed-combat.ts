@@ -48,6 +48,8 @@ export function useDirectedCombat(input: {
     staleTime: 0,
     retry: false,
   });
+  /** The revision a ruleset refusal was answered at, until the fight moves past it. */
+  const refusedRevision = useRef<number | null>(null);
   const mutate = useMutation({
     mutationFn: async (command: DirectedCommand) => {
       const current = qc.getQueryData<DirectedCombatView>(key);
@@ -94,6 +96,10 @@ export function useDirectedCombat(input: {
       const code = typeof payload?.code === "string" ? payload.code : undefined;
       if (!code?.startsWith("ruleset_combat_")) return;
       toast.warning(rulesetRefusalText(code, error.message, t));
+      // Remember WHICH state was refused before the error is cleared: a refusal changes nothing, so
+      // the revision stays where it was, and autoplay must not send the same thing at it again
+      // every pause (a toast a second, for ever). It picks up once the fight has moved.
+      refusedRevision.current = qc.getQueryData<DirectedCombatView>(key)?.revision ?? null;
       mutate.reset();
     },
   });
@@ -111,6 +117,8 @@ export function useDirectedCombat(input: {
   const autoplay = !!ruleset && !query.data?.window && !query.data?.outcome && ruleset.controller !== "manual";
   useEffect(() => {
     if (!autoplay || mutate.isPending || mutate.isError) return;
+    if (refusedRevision.current !== null && refusedRevision.current === query.data?.revision) return;
+    refusedRevision.current = null;
     const timer = setTimeout(() => send({ type: "continue" }), RULESET_TURN_PAUSE_MS);
     return () => clearTimeout(timer);
   }, [autoplay, query.data?.revision, mutate.isPending, mutate.isError, send]);

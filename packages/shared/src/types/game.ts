@@ -4,7 +4,13 @@ import type { CombatAiHints, CombatController, CombatTactics } from "../features
 // Game Mode Types
 // ──────────────────────────────────────────────
 import type { GenerationParameters } from "./prompt.js";
-import type { CombatItemEffect, CombatMechanic, CombatDialogueCue, CombatStyleNotes } from "./combat-encounter.js";
+import type {
+  CombatItemEffect,
+  CombatMechanic,
+  CombatDialogueCue,
+  CombatStyleNotes,
+  RulesetEncounterBlueprint,
+} from "./combat-encounter.js";
 import type { SpotifySourceType } from "./spotify.js";
 import type { SpatialMapDraftSize, SpatialMapGroundingMode } from "./spatial-context.js";
 import type {
@@ -517,7 +523,9 @@ export interface GameDicePoolSlotName {
 // ── Combat ──
 
 /** A combatant (player or enemy) in the battle system. */
-export interface Combatant extends CombatAttackTraits {
+/** The ruleset terms (`creature`, `tier`, `proposed`) ride along for a fight the game's ruleset
+ *  resolves; the numbers below stay the Engine's. */
+export interface Combatant extends CombatAttackTraits, RulesetEncounterBlueprint {
   boss?: import("../features/combat-director.js").CombatBoss;
   spellSlots?: Record<string, number>;
   combatRound?: number;
@@ -550,12 +558,6 @@ export interface Combatant extends CombatAttackTraits {
   combatClass?: string;
   /** Tactical traversal rule. Classic combat ignores this; missing means walk. */
   movementMode?: TacticalMovementMode;
-  /** An opponent in the ruleset's own terms, carried from the encounter blueprint to the fight that
-   *  is resolved by the ruleset: a bestiary reference, the rung of the threat scale, a stat block
-   *  written for it. The numbers above stay the Engine's, and every other style ignores these. */
-  creature?: string;
-  tier?: string;
-  proposed?: unknown;
 }
 
 export interface CombatStatusEffect {
