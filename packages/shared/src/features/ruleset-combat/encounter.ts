@@ -285,6 +285,7 @@ function abilityAction(
   const heals = mechanics.kind === "heal";
   const cost = mechanics.cost?.length === 1 ? mechanics.cost[0]! : undefined;
   const pool = cost ? definition.sheet.live.pools.find((entry2) => entry2.id === cost.pool) : undefined;
+  const family = cost ? (pool ? pool.group : cost.pool) : undefined;
   const action: RulesetCombatAction = {
     id: `ability:${sourceIndex}:${rowIndex}`,
     kind: "ability",
@@ -294,8 +295,10 @@ function abilityAction(
     use: {
       name,
       ...(cost ? { pool: cost.pool } : {}),
-      // A cost may name a pool or the family it belongs to; both are a family here.
-      ...(cost ? { group: pool?.group ?? (pool ? undefined : cost.pool) } : {}),
+      // A cost names a live pool, and then the family is that pool's, or it names the family
+      // itself. Left out entirely when there is no family: the state is written as JSON, and a key
+      // holding nothing would not survive the trip.
+      ...(family ? { group: family } : {}),
       ...(mechanics.perCostStep
         ? { perCostStep: amountOf(mechanics.perCostStep) ?? { count: 0, sides: 0, flat: 0 } }
         : {}),
