@@ -101,6 +101,14 @@ export interface DirectedRulesetCombatant {
   tier?: string;
   traits?: Array<{ name: string; text: string }>;
 }
+/**
+ * What a ruleset fight's log holds: everything the resolver did, plus the few things the DIRECTOR
+ * has to say that no step ever produces. One stream, so a screen prints it in one pass.
+ */
+export type DirectedRulesetEvent =
+  | RulesetCombatEvent
+  /** The fight could not go on: its ruleset is gone, or the game is on another version of it. */
+  | { type: "director"; reason: "ruleset-unavailable"; text: string };
 /** One option of the legal menu, with the combatants it may be pointed at right now. */
 export interface DirectedRulesetOption extends RulesetCombatOption {
   targetIds: string[];
@@ -117,7 +125,7 @@ export interface DirectedRulesetView {
   /** The legal menu, present only while a human controls the actor whose turn it is. */
   options?: DirectedRulesetOption[];
   /** The last 200 events, each with a running number so a client prints only what is new. */
-  events: Array<{ seq: number; event: RulesetCombatEvent }>;
+  events: Array<{ seq: number; event: DirectedRulesetEvent }>;
   summary?: RulesetEncounterSummary;
   /** Every clamp and every fallback the opponents were built with, in plain words. */
   adjustments: string[];
