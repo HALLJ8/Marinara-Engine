@@ -472,11 +472,13 @@ The optional `combat` block is the other thing: it says how a fight is RESOLVED 
 parameterises a combat kind the Engine owns, exactly as `resolution` parameterises a check kind, and
 every name in it is yours. There is one kind today.
 
-**Nothing plays on it yet.** This release is the format and the resolver behind it, with no screen,
-no menu and no saved battle. A ruleset that declares `combat` still fights the way it did before
-until a later release wires it up. Write it now if you want it ready; nothing changes for your
-players today. The same goes for the bestiary below: the creatures are read, checked and resolved,
-but nobody fights them yet.
+**The fight runs on the server; the screen is the next release.** A game whose ruleset declares
+`combat` can now have a whole fight resolved by your block: the party's numbers are read off their
+own sheets, the opponents come out of your bestiary or off your threat scale, every turn is
+resolved by your dice, and everything a character spends or loses is written back to their sheet as
+it happens, so closing the tab mid-fight loses nothing. What is not here yet is the screen that
+shows it, so your players still see Marinara's own battle until the next release. Write your block
+now if you want it ready.
 
 ```json
 "combat": {
@@ -504,8 +506,8 @@ but nobody fights them yet.
 }
 ```
 
-That is the whole Ember Roads block. The resolver can run a whole fight on it, which is what the
-regression does, and no player sees one yet. The 5e draft uses the same keys for a d20 system:
+That is the whole Ember Roads block. A fight runs on it end to end, and no player sees one yet. The
+5e draft uses the same keys for a d20 system:
 
 ```json
 "combat": {
@@ -724,11 +726,37 @@ comes back as a plain sentence, so a log can say what it did.
 
 Your own bestiary is never clamped. It is data you wrote, so the Engine takes it as written.
 
+### What a fight does with your block on the server
+
+A game whose ruleset declares `combat` gets a fight resolved by it, on the same saved battle the
+Engine has always used:
+
+- **Who is in it.** The Game Master says who is fighting; the Engine reads each party member's
+  numbers off their own sheet. A member with no sheet for your ruleset is refused by name rather
+  than given numbers you did not write.
+- **Where an opponent's numbers come from**, in this order: the creature the Game Master named in
+  your bestiary, then one whose label matches the opponent's own name, then a stat block the Game
+  Master proposed for this fight, pulled onto your threat scale by the clamp, and last a plain
+  creature built from the rung's own numbers. Every fallback and every clamp is recorded in plain
+  words so the fight can say what it did. A ruleset with no bestiary entry, no proposal and no
+  threat scale refuses the fight instead of inventing one.
+- **Your sheets are the record.** Health, pools, conditions, concentration and the counts of your
+  dying rule are written through the sheet's own rules after every accepted action, so a reload
+  mid-fight shows exactly what the fight left, and there is no end-of-battle tally that could
+  disagree with it.
+- **Your menu is the only legality.** Everything that acts, a player or an opponent, picks an id off
+  the same menu your block produces. An opponent the Engine plays chooses from it with the Engine's
+  own tactics, and an opponent the Game Master plays is asked to pick one id from that same menu,
+  shown your numbers and never told what the dice will do.
+- **Your dice.** A fight carries its own seed and a cursor, so a fight read back off disk carries on
+  with the dice it would have thrown.
+
 ### Not yet
 
 Said plainly, because a ruleset should not claim what the Engine does not do:
 
-- **Nothing is playable.** No screen, no saved battle, no opponent that picks its own actions.
+- **No screen.** The fight is resolved and saved, but there is no battle screen on your numbers yet,
+  so your players still see Marinara's own. That is the next release.
 - **No positions**: no distance, reach, ranges, areas on a map, cover, movement or opportunity
   attacks. `range`, `area` and `economy.movement` are carried and not read.
 - **No reactions**, so nothing interrupts a turn, and `cannot-react` changes nothing yet.

@@ -9,8 +9,10 @@
 > document stands: the Traditional ruleset and its accepted speed behaviour, the product contract,
 > the rule that difficulty belongs to the ruleset and never becomes a damage multiplier, the
 > director's single server-owned ledger, the reaction and legendary windows, and the save, UI and
-> rollout contract. The data-driven kind is held to those invariants, and the first slice is shared,
-> pure and unwired: no routes, no session and no user interface.
+> rollout contract. As of slice C3a the kind is WIRED: a fight
+> is resolved on the director's existing ledger as a third `style` beside `classic` and `tactical`,
+> with the same revision, idempotency, mutex and single "pick a candidate id" model call. There is
+> still no screen on it, so a game shows Marinara's own battle until slice C3b.
 
 Status: implementation proposal, September 17, 2026. The AI overhaul does not implement these rulesets. Traditional's speed-follow-up requirement is accepted product direction; thresholds and other defaults below are proposals for tuning. Implement against current `staging`, after checking related work.
 

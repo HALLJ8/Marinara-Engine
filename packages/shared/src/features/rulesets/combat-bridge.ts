@@ -14,12 +14,14 @@ import type { CombatSkill } from "../../types/game.js";
 import {
   catalogRowRef,
   RULESET_CATALOG_ROW_KEY,
+  rulesetSheetEnvelopeSchema,
   type RulesetCatalogEntriesById,
   type RulesetCatalogEntry,
   type RulesetCatalogMechanics,
   type RulesetDefinition,
   type RulesetSheetBuild,
 } from "../../schemas/ruleset.schema.js";
+import { normalizeCharacterLookupName } from "../../utils/character-lookup-name.js";
 import {
   applyRulesetSheetOp,
   readRulesetLive,
@@ -58,6 +60,31 @@ export interface RulesetCombatWriteBack {
   /** The new stored blob, or null when no operation applied and the caller should write nothing. */
   live: RulesetLiveState | null;
   refused: Array<{ op: RulesetSheetOp; reason: RulesetSheetRefusal }>;
+}
+
+/**
+ * Every game card that holds a sheet this version can read, keyed the way live state is keyed.
+ *
+ * One rule, shared: the bridge matches a battle's combatants to sheets with it, and a fight the
+ * ruleset resolves itself matches its party with the same one, so a member is never read by one
+ * and missed by the other. A card with no sheet, or one holding a sheet this version cannot read,
+ * is absent: there is nothing to read from it and nothing to write back to it.
+ */
+export function rulesetSheetBuildsByName(cards: unknown, playerName?: string | null): Map<string, RulesetSheetBuild> {
+  const player = typeof playerName === "string" ? playerName.trim() : "";
+  const builds = new Map<string, RulesetSheetBuild>();
+  for (const card of Array.isArray(cards) ? (cards as Array<Record<string, unknown>>) : []) {
+    const name = typeof card?.name === "string" ? card.name.trim() : "";
+    const key = name ? normalizeCharacterLookupName(name) : "";
+    if (!key) continue;
+    const envelope = rulesetSheetEnvelopeSchema.safeParse(card.rulesetSheet);
+    if (!envelope.success) continue;
+    // Setup keeps ONE sheet per normalized name and lets the persona's win a name it shares with a
+    // party member, because the persona is the player. The same order holds here.
+    if (builds.has(key) && name !== player) continue;
+    builds.set(key, envelope.data.build);
+  }
+  return builds;
 }
 
 function own(row: Record<string, unknown>, key: string): unknown {

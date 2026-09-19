@@ -28,6 +28,7 @@ import {
   rulesetAttackMode,
   rulesetCombatOptions,
   rulesetCostSteps,
+  rulesetOptionTargets,
   rulesetStandardBudget,
 } from "./options.js";
 import type {
@@ -550,31 +551,23 @@ function refusal(
   return { state, events: [{ type: "refused", actorId, ...(optionId ? { optionId } : {}), reason }] };
 }
 
-/** Who a choice may be pointed at, checked against the side and the count the option declared.
- *  `null` is a refusal: one target too many, one of the wrong side, or one the fight is over for. */
+/** Who a choice may be pointed at, checked against the very list `rulesetOptionTargets` offers, so
+ *  the menu and the resolution can never disagree. `null` is a refusal: one target too many, one of
+ *  the wrong side, or one the fight is over for. */
 function pickTargets(
   state: RulesetEncounterState,
   actor: RulesetCombatant,
-  wanted: RulesetCombatAction["targets"],
+  option: { id: string; targets: RulesetCombatAction["targets"] },
   targetIds: readonly string[],
-  optionId: string,
 ): RulesetCombatant[] | null {
-  if (wanted.count <= 0) return [];
+  if (option.targets.count <= 0) return [];
   const ids = [...new Set(targetIds)];
-  if (ids.length < 1 || ids.length > wanted.count) return null;
+  if (ids.length < 1 || ids.length > option.targets.count) return null;
+  const legal = new Set(rulesetOptionTargets(state, actor.id, option));
   const targets: RulesetCombatant[] = [];
   for (const id of ids) {
-    const target = rulesetCombatant(state, id);
-    // A combatant who is down can still be healed, and can still be hit while they are down. Only
-    // one the fight is over for is off the table.
-    if (!target || target.defeated) return null;
-    const sameSide = target.side === actor.side;
-    if (wanted.side === "self" && target.id !== actor.id) return null;
-    if (wanted.side === "ally" && !sameSide) return null;
-    if (wanted.side === "enemy" && sameSide) return null;
-    // Helping yourself is not help.
-    if (optionId === "standard:help" && target.id === actor.id) return null;
-    targets.push(target);
+    if (!legal.has(id)) return null;
+    targets.push(rulesetCombatant(state, id)!);
   }
   return targets;
 }
@@ -652,7 +645,7 @@ export function applyRulesetCombatChoice(
   }
 
   // Targets, checked against the side and the count the option itself declared.
-  const targets = pickTargets(state, actor, option.targets, choice.targetIds, option.id);
+  const targets = pickTargets(state, actor, option, choice.targetIds);
   if (!targets) return refusal(state, choice.actorId, "bad-target", option.id);
   if (choice.payWith !== undefined && !(option.payWith ?? []).includes(choice.payWith)) {
     return refusal(state, choice.actorId, "bad-pool", option.id);
@@ -724,7 +717,7 @@ function applySignature(
   ) {
     return refusal(state, choice.actorId, "insufficient", action.id);
   }
-  const targets = pickTargets(state, actor, action.targets, choice.targetIds, action.id);
+  const targets = pickTargets(state, actor, action, choice.targetIds);
   if (!targets) return refusal(state, choice.actorId, "bad-target", action.id);
 
   const { ctx, finish } = begin(definition, combat, state, roller);

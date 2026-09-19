@@ -30,6 +30,7 @@ import {
 } from "@marinara-engine/shared";
 import { chooseClassicAction, estimateClassicAttack } from "./combat-ai.service.js";
 import { resolveCombatRound, rollInitiative, canCombatantAct } from "./combat.service.js";
+import type { RulesetFightState } from "./ruleset-combat-director.service.js";
 
 type Unit = Combatant | TacticalUnit;
 type Action = { unitId: string; classic?: CombatPlayerAction; tactical?: Extract<TacticalAction, { unitId: string }> };
@@ -76,6 +77,9 @@ export interface CombatDirectorState extends DirectedCombatView {
   itemSpends: Record<string, number>;
   requests: string[];
   gmCalls: number;
+  /** The `ruleset` style's whole fight. Present exactly when the style is `ruleset`; everything
+   *  that reads or changes it lives in `ruleset-combat-director.service.ts`. */
+  rulesetFight?: RulesetFightState;
 }
 const side = (unit: Unit) => (unit.side === "enemy" ? "enemy" : "party");
 export const directorUnits = (s: CombatDirectorState): Unit[] => s.tactical?.units ?? [...s.party, ...s.enemies];
@@ -188,7 +192,7 @@ export function createCombatDirector(input: {
   anchor: string;
   party: Combatant[];
   enemies: Combatant[];
-  style: "classic" | "tactical";
+  style: "classic" | "tactical" | "ruleset";
   gm: boolean;
   difficulty: string;
   weather?: CombatWeather;
@@ -869,6 +873,9 @@ function effect(s: CombatDirectorState, p: Pending) {
   sync(s);
 }
 export function advanceCombatDirector(s: CombatDirectorState) {
+  // A ruleset fight has no task queue of its own: one command resolves one step through the shared
+  // resolver, and the whole of it lives in `ruleset-combat-director.service.ts`.
+  if (s.style === "ruleset") return;
   for (let guard = 0; guard < 20000 && !s.outcome; guard++) {
     sync(s);
     if (s.outcome || s.window) return;
@@ -1050,6 +1057,9 @@ export function advanceCombatDirector(s: CombatDirectorState) {
   if (!s.outcome) throw new Error("Combat transition budget exceeded.");
 }
 export function commandCombatDirector(s: CombatDirectorState, command: DirectedCommand, source: Source = "manual") {
+  // The third style is commanded through its own service, which needs the ruleset this fight is
+  // resolved by. Nothing here could answer for it.
+  if (s.style === "ruleset") throw new Error("A ruleset fight is commanded through its own service.");
   if (s.outcome) throw new Error("Battle already finished.");
   if ((command.type === "classic" || command.type === "tactical") && command.type !== s.style)
     throw new Error("Action does not match this combat mode.");

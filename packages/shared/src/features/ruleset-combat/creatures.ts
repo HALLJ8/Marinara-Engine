@@ -117,9 +117,60 @@ export function rulesetCreatureBlock(
   entry: RulesetCatalogEntry | null | undefined,
 ): RulesetStatBlock | null {
   const creature = entry?.creature;
+  if (!creature) return null;
+  return rulesetStatBlockFromCreature(definition, creature);
+}
+
+/** The same reading, for a creature that came from somewhere other than a catalog: an opponent the
+ *  Game Master proposed for this one fight, in the shared creature form and clamped afterwards. */
+export function rulesetStatBlockFromCreature(
+  definition: RulesetDefinition,
+  creature: RulesetCreature,
+): RulesetStatBlock | null {
   const combat = definition.combat;
-  if (!creature || !combat) return null;
+  if (!combat) return null;
   return blockFromCreature(creature, new Set(combat.economy.budgets.map((budget) => budget.id)));
+}
+
+/**
+ * An opponent nobody wrote: the rung of the scale it was asked for, read as a stat block. Health is
+ * the middle of the tier's band, defense and to-hit are the tier's own, and its one action deals the
+ * middle of the tier's damage band flat and untyped, because a tier says how hard a creature hits
+ * and nothing at all about what dice it hits with.
+ *
+ * Null when the ruleset declares no threat scale: then there is nothing to build a block out of, and
+ * the caller has to say so rather than invent numbers.
+ */
+export function rulesetTierStatBlock(
+  definition: RulesetDefinition,
+  tierId: string | undefined,
+  name: string,
+): { block: RulesetStatBlock; tier: RulesetCombatThreatTier } | null {
+  const combat = definition.combat;
+  const tiers = combat?.threat?.tiers ?? [];
+  if (!combat || tiers.length === 0) return null;
+  // The first tier declared is the bottom of the scale, which is where an opponent nobody can place
+  // belongs: too weak is a disappointing fight, too strong is a dead party.
+  const tier = tiers.find((entry) => entry.id === tierId) ?? tiers[0]!;
+  const middle = (band: readonly [number, number]) => Math.floor((band[0] + band[1]) / 2);
+  return {
+    tier,
+    block: {
+      health: Math.max(1, middle(tier.health)),
+      defense: tier.defense,
+      initiativeModifier: 0,
+      tier: tier.id,
+      actions: [
+        {
+          id: "strike",
+          name: `${name}: attack`,
+          budget: combat.economy.budgets[0]!.id,
+          toHit: tier.toHit,
+          damage: { count: 0, sides: 0, flat: Math.max(1, middle(tier.damagePerRound)) },
+        },
+      ],
+    },
+  };
 }
 
 function blockFromCreature(creature: RulesetCreature, budgets: ReadonlySet<string>): RulesetStatBlock {
