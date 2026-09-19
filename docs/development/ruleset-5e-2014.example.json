@@ -1256,88 +1256,88 @@
       "thunder"
     ],
     "threat": {
-      "$comment": "The scale an opponent is picked from, in plain numbers, following the published monster statistics by challenge rating. It is read when creatures arrive, so nothing a Game Master proposes lands off the scale.",
+      "$comment": "The scale an opponent is picked from, so nothing a Game Master proposes lands off it. The numbers are MEASURED from the SRD 5.1 creatures of each challenge rating (Open5e srd-2014 data, CC-BY-4.0): health is the 10th to the 90th percentile, defense and toHit are the median Armor Class and the median best attack bonus, damagePerRound is the usual range of one creature's best single attack (a creature with several attacks deals more), and saveDifficulty is the median difficulty its actions name. Defense and the low end of damage are kept from going down as the rating goes up.",
       "tiers": [
         {
           "id": "cr_0",
           "label": "CR 0",
-          "health": [1, 6],
-          "defense": 13,
-          "toHit": 3,
-          "damagePerRound": [0, 1],
-          "saveDifficulty": 13
+          "health": [1, 13],
+          "defense": 12,
+          "toHit": 2,
+          "damagePerRound": [1, 4],
+          "saveDifficulty": 10
         },
         {
           "id": "cr_1_8",
           "label": "CR 1/8",
-          "health": [7, 35],
-          "defense": 13,
-          "toHit": 3,
-          "damagePerRound": [2, 3],
-          "saveDifficulty": 13
+          "health": [2, 13],
+          "defense": 12,
+          "toHit": 4,
+          "damagePerRound": [1, 5],
+          "saveDifficulty": 11
         },
         {
           "id": "cr_1_4",
           "label": "CR 1/4",
-          "health": [36, 49],
-          "defense": 13,
-          "toHit": 3,
-          "damagePerRound": [4, 5],
-          "saveDifficulty": 13
+          "health": [7, 22],
+          "defense": 12,
+          "toHit": 4,
+          "damagePerRound": [1, 5],
+          "saveDifficulty": 11
         },
         {
           "id": "cr_1_2",
           "label": "CR 1/2",
-          "health": [50, 70],
-          "defense": 13,
-          "toHit": 3,
-          "damagePerRound": [6, 8],
-          "saveDifficulty": 13
+          "health": [15, 27],
+          "defense": 12,
+          "toHit": 4,
+          "damagePerRound": [2, 7],
+          "saveDifficulty": 11
         },
         {
           "id": "cr_1",
           "label": "CR 1",
-          "health": [71, 85],
-          "defense": 13,
-          "toHit": 3,
-          "damagePerRound": [9, 14],
-          "saveDifficulty": 13
+          "health": [16, 39],
+          "defense": 12,
+          "toHit": 4,
+          "damagePerRound": [4, 7],
+          "saveDifficulty": 11
         },
         {
           "id": "cr_2",
           "label": "CR 2",
-          "health": [86, 100],
+          "health": [27, 67],
           "defense": 13,
-          "toHit": 3,
-          "damagePerRound": [15, 20],
-          "saveDifficulty": 13
+          "toHit": 5,
+          "damagePerRound": [5, 9],
+          "saveDifficulty": 12
         },
         {
           "id": "cr_3",
           "label": "CR 3",
-          "health": [101, 115],
-          "defense": 13,
-          "toHit": 4,
-          "damagePerRound": [21, 26],
-          "saveDifficulty": 13
+          "health": [45, 82],
+          "defense": 14,
+          "toHit": 5,
+          "damagePerRound": [5, 13],
+          "saveDifficulty": 12
         },
         {
           "id": "cr_4",
           "label": "CR 4",
-          "health": [116, 130],
+          "health": [66, 97],
           "defense": 14,
           "toHit": 5,
-          "damagePerRound": [27, 32],
-          "saveDifficulty": 14
+          "damagePerRound": [5, 14],
+          "saveDifficulty": 13
         },
         {
           "id": "cr_5",
           "label": "CR 5",
-          "health": [131, 145],
+          "health": [67, 126],
           "defense": 15,
-          "toHit": 6,
-          "damagePerRound": [33, 38],
-          "saveDifficulty": 15
+          "toHit": 7,
+          "damagePerRound": [9, 18],
+          "saveDifficulty": 14
         }
       ]
     }
