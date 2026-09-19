@@ -525,10 +525,13 @@ export function rulesetCatalogAssetPath(catalogId: string): string {
   return `catalogs/${catalogId}.json`;
 }
 
-/** Whether a declared package asset path belongs to the catalog family (Capability API 1.21). The
- *  file name is the catalog's own id, so the shape mirrors `sheetId`. */
+/** The catalog asset family (Capability API 1.21). The file name is the catalog's own id, so the
+ *  shape mirrors `sheetId`. One pattern, so the path check and the editor schema cannot drift. */
+const RULESET_CATALOG_ASSET_PATTERN = /^catalogs\/[a-z][a-z0-9_]{0,39}\.json$/;
+
+/** Whether a declared package asset path belongs to the catalog family. */
 export function isRulesetCatalogAssetPath(path: string): boolean {
-  return /^catalogs\/[a-z][a-z0-9_]{0,39}\.json$/.test(path);
+  return RULESET_CATALOG_ASSET_PATTERN.test(path);
 }
 
 /** One plain line for the picker. Catalog text never reaches the model, so this does not carry the
@@ -632,7 +635,13 @@ const catalogSchema = z
       .optional(),
     entries: z.array(catalogEntrySchema).max(RULESET_CATALOG_MAX_ENTRIES).optional(),
     /** A package asset instead, for a list too long to sit inside the 256 KB ruleset file. */
-    asset: z.string().max(240).optional(),
+    // The shape is checked here so an author's editor flags a wrong path; that it names THIS
+    // catalog's id is the refinement below.
+    asset: z
+      .string()
+      .max(240)
+      .regex(RULESET_CATALOG_ASSET_PATTERN, "A catalog asset is catalogs/<catalog id>.json")
+      .optional(),
   })
   .strict()
   .superRefine((catalog, ctx) => {

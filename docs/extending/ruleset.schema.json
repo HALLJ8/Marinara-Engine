@@ -2755,7 +2755,8 @@
           },
           "asset": {
             "type": "string",
-            "maxLength": 240
+            "maxLength": 240,
+            "pattern": "^catalogs\\/[a-z][a-z0-9_]{0,39}\\.json$"
           },
           "$comment": {}
         },
