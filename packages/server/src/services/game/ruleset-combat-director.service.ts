@@ -538,15 +538,20 @@ function rulesetCandidates(
   /** The Game Master's window is shown everything; the Engine's own picker is not (see the end). */
   everything = false,
 ): Array<CombatAiCandidate<RulesetCandidate>> {
-  const here = rulesetCandidatesFrom(definition, encounter, actorId, null, everything);
-  const moved = rulesetCandidatesAfterMoving(definition, encounter, actorId, everything);
-  if (moved.length === 0) return here;
+  const worth = (candidate: CombatAiCandidate<RulesetCandidate>) => (candidate.damage ?? 0) + (candidate.healing ?? 0);
+  const here = rulesetCandidatesFrom(definition, encounter, actorId, null);
+  const moved = rulesetCandidatesAfterMoving(definition, encounter, actorId);
   // Standing still is preferred when it can already do its best from where it is: a candidate that
   // walks first has to be strictly better than every one that does not, not merely as good.
-  const best = (list: ReadonlyArray<CombatAiCandidate<RulesetCandidate>>) =>
-    list.reduce((most, candidate) => Math.max(most, (candidate.damage ?? 0) + (candidate.healing ?? 0)), 0);
-  const staying = best(here);
-  return [...here, ...moved.filter((candidate) => (candidate.damage ?? 0) + (candidate.healing ?? 0) > staying)];
+  const staying = here.reduce((most, candidate) => Math.max(most, worth(candidate)), 0);
+  const candidates = [...here, ...moved.filter((candidate) => worth(candidate) > staying)];
+  // Somebody who can hurt an opponent or help a friend does that. The scoring weighs a blow by the
+  // share of the target's health it takes, so against a sturdy target a careful creature would score
+  // a standard action (dodging, say) above every attack it has and stand there all fight. A standard
+  // action or an empty turn is what is left when there is nothing better, never a rival. Judged over
+  // the WHOLE list, walks included, so a creature that has to take a step first still takes it.
+  if (everything || !candidates.some((candidate) => worth(candidate) > 0)) return candidates;
+  return candidates.filter((candidate) => !candidate.hold && candidate.action.option.kind !== "standard");
 }
 
 /**
@@ -559,25 +564,28 @@ function rulesetCandidatesAfterMoving(
   definition: RulesetDefinition,
   encounter: RulesetEncounterState,
   actorId: string,
-  everything: boolean,
 ): Array<CombatAiCandidate<RulesetCandidate>> {
   const actor = rulesetCombatant(encounter, actorId);
   if (!encounter.board?.grid || !actor || typeof actor.x !== "number" || typeof actor.y !== "number") return [];
   const cells = rulesetReachableCells(definition, encounter, actorId).slice(0, RULESET_MOVE_CANDIDATE_CELLS);
   if (cells.length === 0) return [];
-  const home = { x: actor.x, y: actor.y };
+  const home = { x: actor.x, y: actor.y, movementLeft: actor.movementLeft };
   const candidates: Array<CombatAiCandidate<RulesetCandidate>> = [];
   for (const cell of cells) {
     // Standing the actor in the cell for exactly as long as the menu is read from it. Nothing else
-    // is touched, and the position is put straight back, so the fight is the one it was.
+    // is touched, and everything is put straight back, so the fight is the one it was. The
+    // allowance is emptied for the pass because a candidate that walks here has spent it getting
+    // here, and the picker never chains a second walk onto one.
     actor.x = cell.x;
     actor.y = cell.y;
+    actor.movementLeft = 0;
     let from: Array<CombatAiCandidate<RulesetCandidate>> = [];
     try {
-      from = rulesetCandidatesFrom(definition, encounter, actorId, cell, everything);
+      from = rulesetCandidatesFrom(definition, encounter, actorId, cell);
     } finally {
       actor.x = home.x;
       actor.y = home.y;
+      actor.movementLeft = home.movementLeft;
     }
     const penalty = cell.provokes.length * RULESET_PROVOKE_PENALTY;
     for (const candidate of from) {
@@ -595,7 +603,6 @@ function rulesetCandidatesFrom(
   actorId: string,
   /** The cell the actor is standing in for this pass, or null for the one they are really in. */
   standing: { x: number; y: number } | null,
-  everything: boolean,
 ): Array<CombatAiCandidate<RulesetCandidate>> {
   const combat = definition.combat;
   const actor = rulesetCombatant(encounter, actorId);
@@ -676,15 +683,6 @@ function rulesetCandidatesFrom(
     }
   }
   if (standing) for (const candidate of candidates) candidate.action.to = { ...standing };
-  // Somebody who can hurt an opponent or help a friend does that. The scoring weighs a blow by the
-  // share of the target's health it takes, so against a sturdy target a careful creature would score
-  // a standard action (dodging, say) above every attack it has and stand there all fight. A
-  // standard action or an empty turn is what is left when there is nothing better, never a rival.
-  // Walking is priced the same way: a step that opens nothing up is not a rival to a blow either.
-  const useful = candidates.filter((candidate) => (candidate.damage ?? 0) > 0 || (candidate.healing ?? 0) > 0);
-  if (useful.length > 0 && !everything) {
-    return candidates.filter((candidate) => !candidate.hold && candidate.action.option.kind !== "standard");
-  }
   return candidates;
 }
 
