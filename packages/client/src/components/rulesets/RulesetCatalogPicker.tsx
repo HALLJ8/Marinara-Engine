@@ -104,6 +104,7 @@ export function RulesetCatalogPicker({
   const visible = matches.slice(0, CATALOG_VISIBLE_LIMIT);
 
   const labels = useMemo(() => catalogMechanicsLabels(definition, catalog), [catalog, definition]);
+  const battleCatalogIds = useMemo(() => rulesetBattleCatalogIds(definition), [definition]);
   const showsMechanics = useMemo(() => entries.some((entry) => entry.mechanics), [entries]);
 
   // A list `hideWhen` hides on this sheet is not drawn by the editor, so nothing is added to it.
@@ -262,7 +263,7 @@ export function RulesetCatalogPicker({
             {/* A ruleset whose battle block reads one of the lists this catalog fills does lend these
                 numbers to battles, so the note must not say otherwise. */}
             {t(
-              rulesetBattleCatalogIds(definition).includes(catalog.id)
+              battleCatalogIds.includes(catalog.id)
                 ? "game.ruleset.catalog.mechanicsNoteBattle"
                 : "game.ruleset.catalog.mechanicsNote",
             )}

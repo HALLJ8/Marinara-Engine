@@ -721,6 +721,27 @@ type RulesetDefinitionBase = z.infer<typeof rulesetDefinitionBaseSchema>;
 
 // ── Cross-reference checks: everything a name points at must exist ──
 
+/** Why `equals` is not a value this field or list column could hold, or null when it is. Shared by
+ *  `hideWhen` and `battle.skills[].alwaysWhen`: a comparison that can never match is a typo. */
+function equalsIssue(
+  item: RulesetField | RulesetListColumn,
+  equals: string | number | boolean,
+  noun: "field" | "column",
+): string | null {
+  if (item.type === "enum") {
+    return typeof equals === "string" && item.values.includes(equals)
+      ? null
+      : `${JSON.stringify(equals)} is not one of the values of "${item.id}"`;
+  }
+  if (item.type === "number") {
+    return typeof equals === "number" ? null : `"${item.id}" is a number ${noun}, so equals must be a number`;
+  }
+  if (item.type === "boolean") {
+    return typeof equals === "boolean" ? null : `"${item.id}" is a boolean ${noun}, so equals must be true or false`;
+  }
+  return typeof equals === "string" ? null : `"${item.id}" is a text ${noun}, so equals must be a string`;
+}
+
 function refineRulesetDefinition(def: RulesetDefinitionBase, ctx: z.RefinementCtx): void {
   const issue = (path: (string | number)[], message: string) =>
     ctx.addIssue({ code: z.ZodIssueCode.custom, path, message });
@@ -817,20 +838,8 @@ function refineRulesetDefinition(def: RulesetDefinitionBase, ctx: z.RefinementCt
     const field = fieldById.get(hideWhen.field);
     if (!field) return issue([...path, "hideWhen", "field"], `Unknown field "${hideWhen.field}"`);
     // `equals` must be a value the field can actually hold, or the item could never hide.
-    const equalsPath = [...path, "hideWhen", "equals"];
-    const { equals } = hideWhen;
-    if (field.type === "enum") {
-      if (typeof equals !== "string" || !field.values.includes(equals)) {
-        issue(equalsPath, `${JSON.stringify(equals)} is not one of the values of "${field.id}"`);
-      }
-    } else if (field.type === "number") {
-      if (typeof equals !== "number") issue(equalsPath, `"${field.id}" is a number field, so equals must be a number`);
-    } else if (field.type === "boolean") {
-      if (typeof equals !== "boolean")
-        issue(equalsPath, `"${field.id}" is a boolean field, so equals must be true or false`);
-    } else if (typeof equals !== "string") {
-      issue(equalsPath, `"${field.id}" is a text field, so equals must be a string`);
-    }
+    const message = equalsIssue(field, hideWhen.equals, "field");
+    if (message) issue([...path, "hideWhen", "equals"], message);
   };
   sheet.fields.forEach((field, index) => {
     const path = ["sheet", "fields", index];
@@ -1088,23 +1097,8 @@ function refineRulesetDefinition(def: RulesetDefinitionBase, ctx: z.RefinementCt
         } else {
           // `equals` must be a value the column can hold, or the rule could never match a row. The
           // same standard `hideWhen` is held to.
-          const equalsPath = [...path, "alwaysWhen", "equals"];
-          const { equals } = source.alwaysWhen;
-          if (column.type === "enum") {
-            if (typeof equals !== "string" || !column.values.includes(equals)) {
-              issue(equalsPath, `${JSON.stringify(equals)} is not one of the values of "${column.id}"`);
-            }
-          } else if (column.type === "number") {
-            if (typeof equals !== "number") {
-              issue(equalsPath, `"${column.id}" is a number column, so equals must be a number`);
-            }
-          } else if (column.type === "boolean") {
-            if (typeof equals !== "boolean") {
-              issue(equalsPath, `"${column.id}" is a boolean column, so equals must be true or false`);
-            }
-          } else if (typeof equals !== "string") {
-            issue(equalsPath, `"${column.id}" is a text column, so equals must be a string`);
-          }
+          const message = equalsIssue(column, source.alwaysWhen.equals, "column");
+          if (message) issue([...path, "alwaysWhen", "equals"], message);
         }
       }
     });
