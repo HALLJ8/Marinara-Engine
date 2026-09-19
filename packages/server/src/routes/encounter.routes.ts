@@ -340,10 +340,7 @@ export const encounterBlueprintSchema = z
             .optional(),
         })
         .passthrough()
-        .refine(
-          ({ mp, maxMp }) => mp === undefined || maxMp === undefined || mp <= maxMp,
-          "Invalid resource pool.",
-        ),
+        .refine(({ mp, maxMp }) => mp === undefined || maxMp === undefined || mp <= maxMp, "Invalid resource pool."),
     ),
   })
   .passthrough();
@@ -773,7 +770,8 @@ export async function encounterRoutes(app: FastifyInstance) {
       let rulesetBrief: EncounterRulesetBrief | null = null;
       if (chatMeta?.gameRuleset != null) {
         const resolved = resolveGameRuleset(chatMeta, await loadRulesetRegistry());
-        if (resolved.status === "ok") rulesetBrief = await encounterRulesetBrief(resolved.definition, resolved.packageId);
+        if (resolved.status === "ok")
+          rulesetBrief = await encounterRulesetBrief(resolved.definition, resolved.packageId);
       }
       const prompt = buildInitPrompt(
         personaName,

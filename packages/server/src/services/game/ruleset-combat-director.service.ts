@@ -265,8 +265,7 @@ export function rulesetController(
 }
 
 /** The dice this fight throws next: the session's own seed, from the cursor the last step left. */
-const rollerFor = (fight: RulesetFightState) =>
-  rulesetCombatRoller(fight.encounter.seed, fight.encounter.cursor);
+const rollerFor = (fight: RulesetFightState) => rulesetCombatRoller(fight.encounter.seed, fight.encounter.cursor);
 
 /** The party's live sheet state, keyed the way the game stores it, so the caller can write it back
  *  where the sheet reads it. */
@@ -425,8 +424,7 @@ function rulesetCandidates(
   if (!combat || !actor) return [];
   const candidates: Array<CombatAiCandidate<RulesetCandidate>> = [];
   for (const option of rulesetCombatOptions(definition, encounter, actorId)) {
-    const price =
-      (option.cost ?? []).reduce((total, entry) => total + entry.amount, 0) + (option.signature?.cost ?? 0);
+    const price = (option.cost ?? []).reduce((total, entry) => total + entry.amount, 0) + (option.signature?.cost ?? 0);
     if (option.kind === "end-turn") {
       candidates.push({ action: { choice: { actorId, optionId: option.id, targetIds: [] }, option }, hold: true });
       continue;
@@ -616,7 +614,8 @@ export function commandRulesetCombatDirector(
 ): RulesetCommandResult {
   const fight = fightOf(state);
   if (!fight) return refuse("This battle is not resolved by a ruleset.", "ruleset_combat_not_a_ruleset_fight");
-  if (!definition.combat) return refuse("This game's ruleset no longer resolves its own fights.", "ruleset_combat_no_block");
+  if (!definition.combat)
+    return refuse("This game's ruleset no longer resolves its own fights.", "ruleset_combat_no_block");
   if (state.outcome) return refuse("Battle already finished.", "ruleset_combat_encounter-over");
 
   if (command.type === "begin" || command.type === "classic" || command.type === "tactical") {

@@ -38,7 +38,8 @@ const { default: Fastify } = await import("../../packages/server/node_modules/fa
 const { getDB, closeDB } = await import("../../packages/server/src/db/connection.js");
 const { createChatsStorage } = await import("../../packages/server/src/services/storage/chats.storage.js");
 const { createGameStateStorage } = await import("../../packages/server/src/services/storage/game-state.storage.js");
-const { createGameRulesetsStorage } = await import("../../packages/server/src/services/storage/game-rulesets.storage.js");
+const { createGameRulesetsStorage } =
+  await import("../../packages/server/src/services/storage/game-rulesets.storage.js");
 const { combatDirectorRoutes } = await import("../../packages/server/src/routes/combat-director.routes.js");
 const { buildInitPrompt, encounterBlueprintSchema, encounterRulesetBrief } =
   await import("../../packages/server/src/routes/encounter.routes.js");
@@ -82,7 +83,9 @@ const fighterBuild = build({
   // Deliberately easy to hit: this lane has to see a blow land on a sheet, not roll for it.
   fields: { level: 7, ac: 1, speed: 30, hp_max: 60 },
   lists: {
-    attacks: [{ name: "Longsword", ability: "str", proficient: true, bonus: 0, damage: "1d8", damage_type: "slashing" }],
+    attacks: [
+      { name: "Longsword", ability: "str", proficient: true, bonus: 0, damage: "1d8", damage_type: "slashing" },
+    ],
   },
 });
 const wizardBuild = build({
@@ -222,7 +225,11 @@ try {
   // A stale revision changes nothing and hands back the current session.
   const staleRevision = s.revision;
   await accept({ type: "control", unitId: "corwin", controller: "ai" });
-  const stale = await cmd({ type: "control", unitId: "corwin", controller: "manual" }, crypto.randomUUID(), staleRevision);
+  const stale = await cmd(
+    { type: "control", unitId: "corwin", controller: "manual" },
+    crypto.randomUUID(),
+    staleRevision,
+  );
   assert.equal(stale.statusCode, 200);
   assert.equal(stale.json().session.revision, s.revision, "a stale revision is answered, not applied");
   assert.equal(stale.json().session.ruleset.combatants.length, 5);
@@ -291,9 +298,7 @@ try {
   for (let guard = 0; guard < 160 && !s.outcome; guard++) {
     await accept({ type: "continue" });
     // Whoever the opponents went for: the picker aims at the party member it expects to hurt most.
-    const wounded = s.ruleset!.combatants.find(
-      (c) => c.side === "party" && c.health.value < c.health.max,
-    );
+    const wounded = s.ruleset!.combatants.find((c) => c.side === "party" && c.health.value < c.health.max);
     if (!hurt && wounded) {
       hurt = true;
       const live = await storedLive(game.chat.id);
@@ -414,8 +419,7 @@ try {
           boss.window.options.every((option) => typeof option.optionId === "string"),
           "every window option carries the ruleset's own option id",
         );
-        bossAnswer =
-          answer === "good" ? boss.window.options[0]!.id : answer === "bad" ? "not-a-candidate" : null;
+        bossAnswer = answer === "good" ? boss.window.options[0]!.id : answer === "bad" ? "not-a-candidate" : null;
       }
       await send({ type: "continue" });
     }
@@ -501,9 +505,14 @@ try {
     // A ruleset without a combat block is asked for exactly today's blueprint.
     const noCombat = JSON.parse(fixtureText) as Record<string, any>;
     delete noCombat.combat;
-    noCombat.catalogs = (noCombat.catalogs ?? []).filter((catalog: Record<string, any>) => catalog.holds !== "creatures");
+    noCombat.catalogs = (noCombat.catalogs ?? []).filter(
+      (catalog: Record<string, any>) => catalog.holds !== "creatures",
+    );
     const plainRuleset = parseRulesetDefinition(noCombat);
-    assert.ok(plainRuleset.ok, `the fixture without combat must import: ${plainRuleset.ok ? "" : plainRuleset.issues.join("; ")}`);
+    assert.ok(
+      plainRuleset.ok,
+      `the fixture without combat must import: ${plainRuleset.ok ? "" : plainRuleset.issues.join("; ")}`,
+    );
     assert.equal(await encounterRulesetBrief(plainRuleset.definition, null), null);
   }
 

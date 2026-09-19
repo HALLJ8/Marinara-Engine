@@ -82,7 +82,12 @@ const spellEntries = [
     id: "mending-light",
     label: "Mending Light",
     rows: [{ list: "spells", values: { name: "Mending Light", level: 1, prepared: true } }],
-    mechanics: { kind: "heal", targets: "ally", amount: { dice: "1d8", flat: 4 }, cost: [{ pool: "slots_1", amount: 1 }] },
+    mechanics: {
+      kind: "heal",
+      targets: "ally",
+      amount: { dice: "1d8", flat: 4 },
+      cost: [{ pool: "slots_1", amount: 1 }],
+    },
   },
 ] as unknown as RulesetCatalogEntry[];
 const spellRows = spellEntries.flatMap((entry) => rowsFromCatalogEntry("spells", entry).map((row) => row.row));
@@ -94,7 +99,9 @@ const fighterBuild = () =>
     saves: { str_save: "proficient", con_save: "proficient" },
     fields: { level: 7, ac: 18, speed: 30, hp_max: 60 },
     lists: {
-      attacks: [{ name: "Longsword", ability: "str", proficient: true, bonus: 0, damage: "1d8", damage_type: "slashing" }],
+      attacks: [
+        { name: "Longsword", ability: "str", proficient: true, bonus: 0, damage: "1d8", damage_type: "slashing" },
+      ],
     },
   });
 const wizardBuild = () =>
@@ -305,7 +312,13 @@ const emberParty = [
           tier: "cr_1_4",
           resist: ["fire", "narrative"],
           actions: [
-            { id: "rend", name: "Rend", budget: "action", toHit: 40, damage: { dice: "20d12", flat: 30, type: "slashing" } },
+            {
+              id: "rend",
+              name: "Rend",
+              budget: "action",
+              toHit: 40,
+              damage: { dice: "20d12", flat: 30, type: "slashing" },
+            },
           ],
         },
       },
@@ -458,7 +471,7 @@ for (const setup of [
 
   // The projection is a projection.
   const printed = JSON.stringify(after);
-  for (const leak of ["\"build\"", "\"catalogs\"", "\"live\"", "\"seed\"", "\"cursor\"", "\"sheet\""]) {
+  for (const leak of ['"build"', '"catalogs"', '"live"', '"seed"', '"cursor"', '"sheet"']) {
     assert.ok(!printed.includes(leak), `${what}: the view leaks ${leak}`);
   }
 }
@@ -470,7 +483,14 @@ for (const setup of [
     { id: "hound", name: "Cinder Hound" },
   ];
   const opening = (seed: number) =>
-    started({ definition: fiveE, cards: fiveECards, partyCatalogs: spellCatalogs, party: fiveEParty, enemies: opponents, seed });
+    started({
+      definition: fiveE,
+      cards: fiveECards,
+      partyCatalogs: spellCatalogs,
+      party: fiveEParty,
+      enemies: opponents,
+      seed,
+    });
   // A seed whose initiative puts an opponent first, found by trying a few.
   let state = opening(1);
   for (let seed = 2; seed < 60 && view(fiveE, state).controller === "manual"; seed++) state = opening(seed);
@@ -523,8 +543,22 @@ for (const setup of [
 
 // ── The picker never double spends, never stalls and always ends the turn ──
 for (const setup of [
-  { what: "5e", definition: fiveE, cards: fiveECards, catalogs: spellCatalogs, party: fiveEParty, enemy: "Thorn Lurker" },
-  { what: "Ember Roads", definition: ember, cards: emberCards, catalogs: emberCatalogs, party: emberParty, enemy: "Cinder Moth" },
+  {
+    what: "5e",
+    definition: fiveE,
+    cards: fiveECards,
+    catalogs: spellCatalogs,
+    party: fiveEParty,
+    enemy: "Thorn Lurker",
+  },
+  {
+    what: "Ember Roads",
+    definition: ember,
+    cards: emberCards,
+    catalogs: emberCatalogs,
+    party: emberParty,
+    enemy: "Cinder Moth",
+  },
 ]) {
   let resolved = 0;
   for (let seed = 1; seed <= 25; seed++) {
@@ -559,10 +593,7 @@ for (const setup of [
         assert.ok(now <= left || now === left, `${setup.what}: a budget went up mid-turn`);
       }
       const now = state.rulesetFight!.encounter;
-      assert.ok(
-        !!state.outcome || now.order[now.turn] !== actor,
-        `${setup.what} seed ${seed}: the turn never ended`,
-      );
+      assert.ok(!!state.outcome || now.order[now.turn] !== actor, `${setup.what} seed ${seed}: the turn never ended`);
     }
   }
   assert.ok(resolved >= 100, `${setup.what}: ${resolved} seeded turns were resolved`);

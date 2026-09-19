@@ -67,44 +67,43 @@ const skill = z.object({
   statusEffect: z.string().max(200).optional(),
   ...combatInterruptFields,
 });
-const directedCombatantFields = z
-  .object({
-    id: key,
-    name: z.string().min(1).max(200),
-    side: z.enum(["player", "enemy"]),
-    hp: num,
-    maxHp: num.min(1),
-    mp: num.optional(),
-    maxMp: num.optional(),
-    attack: num,
-    defense: num,
-    speed: num,
-    level: num.min(1),
-    boss: combatBossSchema.optional(),
-    spellSlots: slots.optional(),
-    skills: z.array(skill).max(64).optional(),
-    tactics: combatTacticsSchema.optional(),
-    aiHints: combatAiHintsSchema.optional(),
-    controller: z.enum(["manual", "ai"]).optional(),
-    skillCooldowns: z.record(z.number().int().min(0).max(100)).optional(),
-    statusEffects: z
-      .array(
-        z.object({
-          name: z.string().max(200),
-          modifier: z.number().finite().min(-100000).max(100000),
-          stat: z.enum(["hp", "attack", "defense", "speed"]),
-          turnsLeft: z.number().int().min(0).max(100),
-        }),
-      )
-      .max(64)
-      .optional(),
-    projectile: z.boolean().optional(),
-    requiresSight: z.boolean().optional(),
-    combatClass: z.string().max(100).optional(),
-    movementMode: z.enum(["walk", "fly", "teleport"]).optional(),
-    element: z.string().max(100).optional(),
-    sprite: z.string().max(3000).optional(),
-  });
+const directedCombatantFields = z.object({
+  id: key,
+  name: z.string().min(1).max(200),
+  side: z.enum(["player", "enemy"]),
+  hp: num,
+  maxHp: num.min(1),
+  mp: num.optional(),
+  maxMp: num.optional(),
+  attack: num,
+  defense: num,
+  speed: num,
+  level: num.min(1),
+  boss: combatBossSchema.optional(),
+  spellSlots: slots.optional(),
+  skills: z.array(skill).max(64).optional(),
+  tactics: combatTacticsSchema.optional(),
+  aiHints: combatAiHintsSchema.optional(),
+  controller: z.enum(["manual", "ai"]).optional(),
+  skillCooldowns: z.record(z.number().int().min(0).max(100)).optional(),
+  statusEffects: z
+    .array(
+      z.object({
+        name: z.string().max(200),
+        modifier: z.number().finite().min(-100000).max(100000),
+        stat: z.enum(["hp", "attack", "defense", "speed"]),
+        turnsLeft: z.number().int().min(0).max(100),
+      }),
+    )
+    .max(64)
+    .optional(),
+  projectile: z.boolean().optional(),
+  requiresSight: z.boolean().optional(),
+  combatClass: z.string().max(100).optional(),
+  movementMode: z.enum(["walk", "fly", "teleport"]).optional(),
+  element: z.string().max(100).optional(),
+  sprite: z.string().max(3000).optional(),
+});
 const resourcePools = (v: { hp: number; maxHp: number; mp?: number; maxMp?: number }) =>
   v.hp <= v.maxHp && (v.mp ?? 0) <= (v.maxMp ?? v.mp ?? 0);
 export const directedCombatantSchema = directedCombatantFields.refine(resourcePools, "Invalid resource pool.");
@@ -500,7 +499,8 @@ export async function combatDirectorRoutes(
         if (!anchor || anchor.chatId !== input.chatId)
           return reply.code(400).send({ error: "Battle anchor is not in this chat." });
         const existing = await load(input.chatId, input.anchor);
-        if (existing) return { session: sessionView(existing.state, await rulesetSessionFor(input.chatId, existing.state)) };
+        if (existing)
+          return { session: sessionView(existing.state, await rulesetSessionFor(input.chatId, existing.state)) };
         const meta = JSON.parse(chat.metadata || "{}"),
           setup = meta.gameSetupConfig ?? {};
         if (setup.combatDirector !== true)
@@ -673,8 +673,7 @@ export async function combatDirectorRoutes(
           throw new Error("Only GM decisions use the fallback controller.");
         if (input.command.type === "choose" && w?.controller !== "manual")
           throw new Error("This decision belongs to the boss controller.");
-        if (input.command.type === "ruleset" && !ruleset)
-          throw new Error("Action does not match this combat mode.");
+        if (input.command.type === "ruleset" && !ruleset) throw new Error("Action does not match this combat mode.");
         const refused = step(input.command as DirectedCommand);
         // A refusal changed nothing, so nothing is saved and no request id is spent on it.
         if (refused) return { refusal: refused };
