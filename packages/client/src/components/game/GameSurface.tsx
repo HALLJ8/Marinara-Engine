@@ -5138,6 +5138,14 @@ function GameSurfaceComponent({
                     disadvantage: sc.disadvantage,
                     preRolledD20: sc.preRolledD20,
                     who: sc.who,
+                    withAbility: sc.withAbility,
+                    // Only a whole number in the endpoint's range is worth sending: anything else
+                    // means "use the ruleset's own", which is what leaving it out says.
+                    threshold:
+                      Number.isInteger(sc.threshold) && sc.threshold! >= 1 && sc.threshold! <= 1000
+                        ? sc.threshold
+                        : undefined,
+                    bonusDice: sc.bonusDice !== undefined && Math.abs(sc.bonusDice) <= 20 ? sc.bonusDice : undefined,
                     messageId: msg.id,
                   })
                 ).result
