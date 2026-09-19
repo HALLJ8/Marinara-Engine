@@ -244,6 +244,16 @@ export function normalizeArchivePath(value: string): string {
   return parts.join("/");
 }
 
+/** `normalizeArchivePath` for a caller that treats an unusable path as "not this one" instead of as
+ *  an error: matching a declared asset path against a reserved name. */
+function tryNormalizeArchivePath(path: string): string | null {
+  try {
+    return normalizeArchivePath(path);
+  } catch {
+    return null;
+  }
+}
+
 function isSymlink(entry: AdmZip.IZipEntry): boolean {
   return ((entry.attr >>> 16) & 0o170000) === 0o120000;
 }
@@ -1177,23 +1187,18 @@ export const capabilityPackageManager = {
     // Every normalization below treats an unsafe path — requested OR declared —
     // as simply "not servable" (404). Declared paths are manifest-controlled,
     // and a single throwing declaration must not 500 the whole asset surface.
-    const tryNormalize = (path: string): string | null => {
-      try {
-        return normalizeArchivePath(path);
-      } catch {
-        return null;
-      }
-    };
-    const normalizedPath = tryNormalize(assetPath);
+    const normalizedPath = tryNormalizeArchivePath(assetPath);
     if (!normalizedPath) return null;
     // The in-package manifest is metadata about the artifact, never an asset —
     // it cannot be hash-pinned by itself, so refuse it outright.
     if (normalizedPath === "manifest.json") return null;
     const iconPaths = servable.manifest.contributions?.homeBrowserTab?.iconPaths ?? [];
     const declaredAssetPaths = servable.manifest.contributions?.assets?.paths ?? [];
-    const allowed = [...iconPaths, ...declaredAssetPaths].some((path) => tryNormalize(path) === normalizedPath);
+    const allowed = [...iconPaths, ...declaredAssetPaths].some(
+      (path) => tryNormalizeArchivePath(path) === normalizedPath,
+    );
     if (!allowed) return null;
-    const declaration = servable.manifest.files.find((item) => tryNormalize(item.path) === normalizedPath);
+    const declaration = servable.manifest.files.find((item) => tryNormalizeArchivePath(item.path) === normalizedPath);
     if (!declaration) return null;
     const contentType = PACKAGE_ASSET_CONTENT_TYPES.get(extname(normalizedPath).toLowerCase());
     if (!contentType) return null;
@@ -1253,15 +1258,8 @@ export const capabilityPackageManager = {
       );
       return null;
     }
-    const tryNormalize = (path: string): string | null => {
-      try {
-        return normalizeArchivePath(path);
-      } catch {
-        return null;
-      }
-    };
     const declaredAssetPaths = installed.manifest.contributions?.assets?.paths ?? [];
-    if (!declaredAssetPaths.some((path) => tryNormalize(path) === GM_VERB_TABLE_ASSET_PATH)) return null;
+    if (!declaredAssetPaths.some((path) => tryNormalizeArchivePath(path) === GM_VERB_TABLE_ASSET_PATH)) return null;
     if (!installed.manifest.permissions.includes("chat-write")) {
       logger.warn(
         "[capability/gm-verbs] Package %s declares %s without the chat-write permission; its verbs are refused",
@@ -1270,7 +1268,9 @@ export const capabilityPackageManager = {
       );
       return null;
     }
-    const declaration = installed.manifest.files.find((item) => tryNormalize(item.path) === GM_VERB_TABLE_ASSET_PATH);
+    const declaration = installed.manifest.files.find(
+      (item) => tryNormalizeArchivePath(item.path) === GM_VERB_TABLE_ASSET_PATH,
+    );
     if (!declaration) {
       // Declared as an asset but never hash-pinned. The manifest schema only checks the other
       // direction, so this is silent everywhere else in the pipeline.
@@ -1310,16 +1310,9 @@ export const capabilityPackageManager = {
    *  that needs no permission, so there is no permission gate here. Never throws. */
   async rulesetSources(): Promise<Array<{ packageId: string; data: Buffer }>> {
     const sources: Array<{ packageId: string; data: Buffer }> = [];
-    const tryNormalize = (path: string): string | null => {
-      try {
-        return normalizeArchivePath(path);
-      } catch {
-        return null;
-      }
-    };
     for (const installed of (await readRegistry()).packages) {
       const declared = installed.manifest.contributions?.assets?.paths ?? [];
-      if (!declared.some((path) => tryNormalize(path) === RULESET_ASSET_PATH)) continue;
+      if (!declared.some((path) => tryNormalizeArchivePath(path) === RULESET_ASSET_PATH)) continue;
       if (!installed.manifest.kind.includes("ruleset")) {
         logger.warn(
           "[capability/rulesets] Package %s lists %s without the ruleset kind; its ruleset is refused",
@@ -1336,7 +1329,9 @@ export const capabilityPackageManager = {
         );
         continue;
       }
-      const declaration = installed.manifest.files.find((item) => tryNormalize(item.path) === RULESET_ASSET_PATH);
+      const declaration = installed.manifest.files.find(
+        (item) => tryNormalizeArchivePath(item.path) === RULESET_ASSET_PATH,
+      );
       if (!declaration) {
         logger.warn(
           "[capability/rulesets] Package %s declares %s as an asset but does not list it in files[]",
@@ -1389,16 +1384,9 @@ export const capabilityPackageManager = {
       );
       return null;
     }
-    const tryNormalize = (path: string): string | null => {
-      try {
-        return normalizeArchivePath(path);
-      } catch {
-        return null;
-      }
-    };
     const declared = installed.manifest.contributions?.assets?.paths ?? [];
-    if (!declared.some((path) => tryNormalize(path) === assetPath)) return null;
-    const declaration = installed.manifest.files.find((item) => tryNormalize(item.path) === assetPath);
+    if (!declared.some((path) => tryNormalizeArchivePath(path) === assetPath)) return null;
+    const declaration = installed.manifest.files.find((item) => tryNormalizeArchivePath(item.path) === assetPath);
     if (!declaration) {
       logger.warn(
         "[capability/rulesets] Package %s declares %s as an asset but does not list it in files[]",

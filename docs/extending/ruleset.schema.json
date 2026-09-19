@@ -2523,7 +2523,7 @@
                 "summary": {
                   "type": "string",
                   "maxLength": 300,
-                  "pattern": "^[^\\p{Cc}\\p{Zl}\\p{Zp}]*$"
+                  "pattern": "^[^\\u0000-\\u001F\\u007F-\\u009F\\u2028\\u2029]*$"
                 },
                 "filters": {
                   "type": "object",

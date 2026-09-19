@@ -537,7 +537,9 @@ const catalogText = (max: number) =>
   z
     .string()
     .max(max)
-    .regex(/^[^\p{Cc}\p{Zl}\p{Zp}]*$/u, "Text cannot contain line breaks or control characters");
+    // Control characters (Cc) and the line and paragraph separators, written as ranges rather than
+    // as Unicode property escapes so the generated JSON Schema works in validators without them.
+    .regex(/^[^\u0000-\u001F\u007F-\u009F\u2028\u2029]*$/, "Text cannot contain line breaks or control characters");
 
 /** A count, a die and one optional flat adjustment (`2d6`, `8d6`, `1d8+3`). Deliberately narrow:
  *  the later combat bridge has to read this, not just print it. */
