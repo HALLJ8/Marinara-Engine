@@ -30,6 +30,7 @@ import {
   rowsFromCatalogEntry,
   rulesetCatalogAssetPath,
   rulesetListRowIssues,
+  rulesetSheetBuildSchema,
   supportedCapabilityApi,
   RULESET_CATALOG_MAX_BYTES,
   RULESET_CATALOG_ROW_KEY,
@@ -677,6 +678,48 @@ try {
     });
     assert.equal(unchanged.statusCode, 304, unchanged.body);
     assert.equal(unchanged.body, "");
+  }
+
+  // ── A turn reads the same asset, through the service both callers share ──
+  // Only when the reply actually asks to use something, and only the catalogs the party's own rows
+  // point at, because a catalog can be a megabyte and most turns need none of it.
+  {
+    const { loadTurnRulesetCatalogs } =
+      await import("../../packages/server/src/services/game/ruleset-sheet-turn.service.js");
+    const definition = parsedOrThrow(packages[0]!.ruleset);
+    const build = rulesetSheetBuildSchema.parse({
+      lists: { tricks: [rowsFromCatalogEntry("knacks", emberEntries[3]!).find((row) => row.list === "tricks")!.row] },
+    });
+    const context = {
+      definition,
+      packageId: "ruleset-ember-roads",
+      cards: [{ name: "Vex", build }],
+      playerName: "Vex",
+    };
+    assert.deepEqual(
+      await loadTurnRulesetCatalogs(context, 'She thinks about it. [sheet: op="spend" pool="grit" amount="1"]'),
+      {},
+      "a turn with no use command reads no catalog at all",
+    );
+    const loaded = await loadTurnRulesetCatalogs(context, '[sheet: op="cast" spell="Last Ember"]');
+    assert.deepEqual(Object.keys(loaded), ["knacks"]);
+    assert.deepEqual(
+      loaded.knacks!.map((entry) => entry.id),
+      emberEntries.map((entry) => entry.id),
+    );
+    // A sheet whose rows point at no catalog asks for none, even with a use command in the reply.
+    assert.deepEqual(
+      await loadTurnRulesetCatalogs(
+        { ...context, cards: [{ name: "Vex", build: rulesetSheetBuildSchema.parse({}) }] },
+        '[sheet: op="use" name="Last Ember"]',
+      ),
+      {},
+    );
+    // A package that no longer holds the file loses the command, not the turn.
+    assert.deepEqual(
+      await loadTurnRulesetCatalogs({ ...context, packageId: "gone" }, '[sheet: op="use" name="x"]'),
+      {},
+    );
   }
 
   // ── What the route refuses ──
