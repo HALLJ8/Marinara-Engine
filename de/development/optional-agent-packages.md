@@ -357,7 +357,7 @@ API 1.27 erlaubt `"holds": "creatures"`. Kreaturenwerte verwenden `combat`: fest
 }
 ```
 
-Kreaturenkataloge haben kein `feeds` und erscheinen nicht in der Bogenauswahl. Diese Versionen liefern Format und gemeinsame Auflösung. Der Server kann Regelsatzkämpfe bereits ausführen und speichern, einschließlich Bogenänderungen nach jeder Aktion. Der zugehörige Kampfbildschirm fehlt noch; Spieler verwenden weiterhin die bestehende Kampfoberfläche. Nach Hashprüfung von `ruleset.json` und deklarierten `catalogs/<id>.json` lehnt der Installer `combat` und neue `mechanics`-Schlüssel unter 1.26 sowie `holds` und `creature` unter 1.27 ab. Ältere strikte Schemas würden die Dateien ablehnen. Keine neuen Berechtigungen oder Änderungen für Regelsätze ohne diese Felder.
+Ein Kreaturenkatalog deklariert kein `feeds` und erscheint nicht in der Blattauswahl. Bei eingeschaltetem Kampfdirektor verwendet ein Spiel mit `combat` diese Regeln und das Bestiarium auf dem Kampfbildschirm; nach jeder Aktion werden die Blätter gespeichert. Das ist der Stil `ruleset`, ohne zusätzliche Capability-API-Stufe. Ohne `combat` gelten weiterhin der `battle`-Block oder die Wahl Classic/Tactical. Die Installation prüft die verifizierten Dateien `ruleset.json` und `catalogs/<id>.json`: `combat` und die neuen `mechanics`-Schlüssel erfordern 1.26, `holds` und `creature` 1.27. Ein älteres strenges Schema würde die Datei ablehnen. Keine neuen Berechtigungen; Regelwerke ohne diese Felder bleiben unverändert.
 
 ### Capability API 1.18: Experience-Einrichtung im Game-Assistenten
 

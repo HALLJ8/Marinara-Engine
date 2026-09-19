@@ -1,6 +1,6 @@
 {
   "language": "ja",
-  "sourceCommit": "b2d2e275342e58ef69f92575b52e27a3d8b56088",
+  "sourceCommit": "930d11d677ee7ff02a5913777ce4753a3d63d5d4",
   "files": [
     {
       "path": "CONFIGURATION.md",
@@ -354,8 +354,8 @@
     },
     {
       "path": "development/optional-agent-packages.md",
-      "sha256": "91c8ad10a39e50a9006e6d4cb1d2d973c73b394bb25e3edffd550daec26260ba",
-      "bytes": 51272
+      "sha256": "a9af0b37a399c2c9c29f2a4b8d54b6ed8d64fca77e68bc4463859a018b9249ad",
+      "bytes": 51444
     },
     {
       "path": "development/personal-extensions.md",
@@ -399,8 +399,8 @@
     },
     {
       "path": "game/getting-started.md",
-      "sha256": "0e80c3a8a334fbcc0c266280539989596e15d2fe192fe83a1f82cae111a76f23",
-      "bytes": 24654
+      "sha256": "dc1a1e229b49898d7debd8bae74ad90c933cbe4d3205e540370b905d84b7486e",
+      "bytes": 25480
     },
     {
       "path": "game/hud-widgets.md",

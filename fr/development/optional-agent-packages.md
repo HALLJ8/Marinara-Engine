@@ -356,7 +356,7 @@ API 1.27 permet `"holds": "creatures"`. Les blocs utilisent `combat` : santé fi
 }
 ```
 
-Ces catalogues n'ont pas de `feeds` et n'apparaissent pas dans le sélecteur de fiche. Les versions ajoutent format et résolution partagée. Le serveur peut désormais résoudre et enregistrer les combats de l'ensemble, avec mise à jour des fiches après chaque action. L'écran de bataille correspondant manque encore ; les joueurs utilisent toujours l'interface de combat existante. Après vérification de `ruleset.json` et des `catalogs/<id>.json` déclarés, l'installation refuse `combat` et les nouvelles clés `mechanics` sous 1.26, puis `holds` et `creature` sous 1.27. Un ancien schéma strict rejetterait ces fichiers. Aucune permission nouvelle ni changement pour les ensembles sans ces champs.
+Un catalogue de créatures ne déclare pas `feeds` et n'apparaît pas dans le sélecteur de fiches. Avec le directeur de combat activé, une partie dotée de `combat` utilise ces règles et son bestiaire sur l'écran de bataille, puis enregistre les fiches après chaque action. Il s'agit du style `ruleset`, sans niveau supplémentaire de Capability API. Sans `combat`, le bloc `battle` ou la préférence Classic/Tactical reste utilisé. L'installation contrôle les fichiers vérifiés `ruleset.json` et `catalogs/<id>.json` : `combat` et les nouvelles clés de `mechanics` exigent 1.26, `holds` et `creature` exigent 1.27. Un ancien schéma strict refuserait le fichier. Aucun nouveau droit ; les ensembles sans ces champs restent inchangés.
 
 ### Capability API 1.18 : conserver la configuration d'Experience dans l'assistant Game
 

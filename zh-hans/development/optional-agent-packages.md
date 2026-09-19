@@ -340,7 +340,7 @@ API 1.27 允许 `"holds": "creatures"`。生物数据使用 `combat` 的数值�
 }
 ```
 
-生物目录不声明 `feeds`，也不出现在角色表选择器中。这些版本提供格式及共享结算机制。服务器已经能结算和保存规则集战斗，并在每个动作后更新角色表；相应战斗界面尚未推出，玩家仍使用现有战斗界面。安装器验证 `ruleset.json` 和声明的 `catalogs/<id>.json` 后，会在低于 1.26 时拒绝 `combat` 及新增 `mechanics` 键，在低于 1.27 时拒绝 `holds` 和 `creature`。旧的严格模式会拒绝文件。不新增权限，也不影响没有这些字段的规则集。
+生物目录不声明 `feeds`，也不会出现在角色表选择器中。开启战斗导演后，含有 `combat` 的游戏会在战斗界面使用这些规则和生物图鉴，并在每个行动后保存角色表。这是 `ruleset` 风格，无须额外的 Capability API 级别。没有 `combat` 时，仍使用 `battle` 块或 Classic/Tactical 偏好。安装时会检查已验证的 `ruleset.json` 和 `catalogs/<id>.json`：`combat` 和新的 `mechanics` 键要求 1.26，`holds` 和 `creature` 要求 1.27。旧版严格架构会拒绝这些文件。没有新增权限，不含这些字段的规则集保持不变。
 
 ### Capability API 1.18：在 Game 向导中保留 Experience 设置
 

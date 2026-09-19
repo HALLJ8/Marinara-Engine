@@ -356,7 +356,7 @@ API 1.27 pozwala katalogowi deklarować `"holds": "creatures"`. Bloki stworzeń 
 }
 ```
 
-Katalog stworzeń nie deklaruje `feeds` i nie pojawia się w selektorze arkusza. Obie wersje wprowadzają format i wspólny mechanizm rozstrzygania. Serwer potrafi już rozstrzygać i zapisywać walki zestawu zasad, aktualizując arkusze po każdym działaniu. Nie ma jeszcze odpowiedniego ekranu bitwy, więc gracze nadal korzystają z dotychczasowego interfejsu walki. Instalacja sprawdza zweryfikowane `ruleset.json` i zadeklarowane `catalogs/<id>.json`, odrzucając `combat` i nowe klucze `mechanics` poniżej 1.26 oraz `holds` i `creature` poniżej 1.27. Starszy ścisły schemat odrzuciłby plik. Nie ma nowych uprawnień ani zmian dla zestawów bez tych pól.
+Katalog stworzeń nie deklaruje `feeds` i nie pojawia się w selektorze arkusza. Przy włączonym reżyserze walki gra z `combat` używa tych zasad i bestiariusza na ekranie bitwy oraz zapisuje arkusze po każdym działaniu. To styl `ruleset`, który nie wymaga osobnego poziomu Capability API. Bez `combat` nadal działa blok `battle` albo wybrane Classic/Tactical. Instalacja sprawdza zweryfikowane `ruleset.json` i `catalogs/<id>.json`: `combat` i nowe klucze `mechanics` wymagają 1.26, a `holds` i `creature` — 1.27. Starszy ścisły schemat odrzuciłby plik. Nie ma nowych uprawnień ani zmian dla zestawów bez tych pól.
 
 ### Capability API 1.18: konfiguracja Experience w kreatorze Game
 
