@@ -272,6 +272,10 @@ export const rulesetFieldSchema = z.discriminatedUnion("type", [
   z.object({ ...fieldBase, ...diceFieldShape }).strict(),
 ]);
 
+/** Anything a single field or one cell of a list row can hold. Shared by stored sheets and by the
+ *  rows a catalog entry carries, so the two can never disagree about what a sheet value is. */
+const sheetScalar = z.union([z.number().finite(), z.string().max(4000), z.boolean()]);
+
 const columnBase = { id: sheetId, label, required: z.boolean().default(false) };
 export const rulesetListColumnSchema = z.discriminatedUnion("type", [
   z.object({ ...columnBase, ...numberFieldShape }).strict(),
@@ -503,6 +507,158 @@ const coverageSchema = z
   })
   .strict();
 
+// ── Catalogs: ready-made entries an author ships with the ruleset ──
+
+/** The reserved key a picked row carries, recording `<catalogId>/<entryId>` so the picker can mark
+ *  what a sheet already has. A column id starts with a letter, so this can never be one. */
+export const RULESET_CATALOG_ROW_KEY = "_catalog";
+
+/** Byte ceiling for one `catalogs/<id>.json` asset, checked against the manifest's declared
+ *  `files[].bytes` BEFORE the asset is read. Larger than a ruleset because a spell list is long. */
+export const RULESET_CATALOG_MAX_BYTES = 1024 * 1024;
+
+/** How many entries one catalog may hold, inline or in its asset. */
+export const RULESET_CATALOG_MAX_ENTRIES = 2000;
+
+/** The reserved asset path a package ships one catalog under. */
+export function rulesetCatalogAssetPath(catalogId: string): string {
+  return `catalogs/${catalogId}.json`;
+}
+
+/** The catalog asset family (Capability API 1.21). The file name is the catalog's own id, so the
+ *  shape mirrors `sheetId`. One pattern, so the path check and the editor schema cannot drift. */
+const RULESET_CATALOG_ASSET_PATTERN = /^catalogs\/[a-z][a-z0-9_]{0,39}\.json$/;
+
+/** Whether a declared package asset path belongs to the catalog family. */
+export function isRulesetCatalogAssetPath(path: string): boolean {
+  return RULESET_CATALOG_ASSET_PATTERN.test(path);
+}
+
+/** One plain line for the picker. Catalog text never reaches the model, so this does not carry the
+ *  GM tag and macro-brace rules of `promptSafeText`; it only refuses what would break a line. */
+const catalogText = (max: number) =>
+  z
+    .string()
+    .max(max)
+    // Control characters (Cc) and the line and paragraph separators, written as ranges rather than
+    // as Unicode property escapes so the generated JSON Schema works in validators without them.
+    .regex(/^[^\u0000-\u001F\u007F-\u009F\u2028\u2029]*$/, "Text cannot contain line breaks or control characters");
+
+/** A count, a die and one optional flat adjustment (`2d6`, `8d6`, `1d8+3`). Deliberately narrow:
+ *  the later combat bridge has to read this, not just print it. */
+const catalogDice = z
+  .string()
+  .max(40)
+  .regex(/^\d{1,3}d\d{1,4}(?:[+-]\d{1,4})?$/, "Dice look like 2d6 or 1d8+3");
+
+const catalogAmountShape = { dice: catalogDice.optional(), flat: z.number().int().optional() };
+
+/** What an entry DOES. The Engine does not act on it in this slice: it validates it and the client
+ *  shows one compact line. A later combat bridge turns it into the Engine's own `CombatSkill`, so
+ *  the vocabulary is closed and strict, and a typo is refused now rather than ignored then. */
+const catalogMechanicsSchema = z
+  .object({
+    kind: z.enum(["attack", "heal", "buff", "debuff", "utility"]),
+    /** In the catalog's own distance unit. 0 is self or touch. */
+    range: z.number().finite().min(0).optional(),
+    area: z
+      .object({ shape: z.enum(["burst", "cone", "line"]), size: z.number().finite().gt(0) })
+      .strict()
+      .optional(),
+    targets: z.enum(["self", "ally", "enemy", "any"]).optional(),
+    friendlyFire: z.boolean().optional(),
+    amount: z.object(catalogAmountShape).strict().optional(),
+    damageType: promptSafeText(40).optional(),
+    attackRoll: z.boolean().optional(),
+    save: z
+      .object({ save: sheetId, onSuccess: z.enum(["none", "half", "negates"]) })
+      .strict()
+      .optional(),
+    /** What using the entry spends, named by a live pool or by a pool group. */
+    cost: z
+      .array(z.object({ pool: sheetId, amount: z.number().int().min(1) }).strict())
+      .max(4)
+      .optional(),
+    /** What one step of a higher cost adds, for systems that let a player pay more. */
+    perCostStep: z.object(catalogAmountShape).strict().optional(),
+    concentration: z.boolean().optional(),
+    reaction: z.boolean().optional(),
+  })
+  .strict();
+
+/** What the picker may filter on. `startFrom` names a sheet field the picker opens on, so a caster
+ *  sees their own school first. Nothing here knows the word "spell" or "class". */
+const catalogFilterSchema = z
+  .object({
+    id: sheetId,
+    label,
+    type: z.enum(["number", "text", "tags"]),
+    startFrom: z.object({ field: sheetId }).strict().optional(),
+  })
+  .strict();
+
+const catalogEntrySchema = z
+  .object({
+    id: z.string().max(80).regex(RULESET_ID_PATTERN, "An entry id is lowercase letters, digits and single hyphens"),
+    label: promptSafeText(120),
+    summary: catalogText(300).optional(),
+    /** Values for the catalog's declared filters: a number, one word, or a list of words. */
+    filters: z
+      .record(z.union([z.number().finite(), z.string().max(80), z.array(z.string().max(80)).max(24)]))
+      .optional(),
+    /** What picking the entry writes. One entry may fill several lists: a feature plus the counter
+     *  that tracks its uses is one pick, not two. */
+    rows: z
+      .array(z.object({ list: sheetId, values: z.record(sheetScalar) }).strict())
+      .min(1)
+      .max(6),
+    mechanics: catalogMechanicsSchema.optional(),
+  })
+  .strict();
+
+const catalogSchema = z
+  .object({
+    id: sheetId,
+    label,
+    /** The sheet lists this catalog's entries may write rows into. */
+    feeds: z.array(sheetId).min(1).max(8),
+    filters: z.array(catalogFilterSchema).max(8).optional(),
+    /** What a `mechanics.range` or `area.size` number means here, for the later combat bridge. */
+    units: z
+      .object({
+        distance: z
+          .object({ label: promptSafeText(12), perCell: z.number().finite().gt(0) })
+          .strict()
+          .optional(),
+      })
+      .strict()
+      .optional(),
+    entries: z.array(catalogEntrySchema).max(RULESET_CATALOG_MAX_ENTRIES).optional(),
+    /** A package asset instead, for a list too long to sit inside the 256 KB ruleset file. */
+    // The shape is checked here so an author's editor flags a wrong path; that it names THIS
+    // catalog's id is the refinement below.
+    asset: z
+      .string()
+      .max(240)
+      .regex(RULESET_CATALOG_ASSET_PATTERN, "A catalog asset is catalogs/<catalog id>.json")
+      .optional(),
+  })
+  .strict()
+  .superRefine((catalog, ctx) => {
+    if ((catalog.entries === undefined) === (catalog.asset === undefined)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'A catalog has exactly one of "entries" or "asset"' });
+    }
+    // The path is derived from the id rather than chosen, so the route can find the file from the
+    // catalog alone and two catalogs can never name each other's asset.
+    if (catalog.asset !== undefined && catalog.asset !== rulesetCatalogAssetPath(catalog.id)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["asset"],
+        message: `A catalog asset is "${rulesetCatalogAssetPath(catalog.id)}"`,
+      });
+    }
+  });
+
 const rulesetDefinitionBaseSchema = z
   .object({
     schemaVersion: z.literal(1),
@@ -519,6 +675,9 @@ const rulesetDefinitionBaseSchema = z
     sheet: rulesetSheetSchema,
     rests: z.array(restSchema).max(12).default([]),
     gm: gmSchema,
+    /** Optional, and absent rather than empty when the ruleset ships none, so a file that predates
+     *  catalogs still parses to exactly the bytes it did before. */
+    catalogs: z.array(catalogSchema).max(12).optional(),
   })
   .strict();
 
@@ -817,6 +976,26 @@ function refineRulesetDefinition(def: RulesetDefinitionBase, ctx: z.RefinementCt
     if (entry.onlyWhen && typeOf(entry.onlyWhen) !== "boolean")
       issue([...path, "onlyWhen"], "Must name a boolean column");
   });
+
+  const catalogs = def.catalogs ?? [];
+  unique(catalogs, ["catalogs"], "catalog");
+  catalogs.forEach((catalog, index) => {
+    const path = ["catalogs", index];
+    catalog.feeds.forEach((listId, feedIndex) => {
+      if (!listById.has(listId)) issue([...path, "feeds", feedIndex], `Unknown list "${listId}"`);
+    });
+    unique(catalog.filters ?? [], [...path, "filters"], "catalog filter");
+    catalog.filters?.forEach((filter, filterIndex) => {
+      if (filter.startFrom && !fieldById.has(filter.startFrom.field)) {
+        issue([...path, "filters", filterIndex, "startFrom", "field"], `Unknown field "${filter.startFrom.field}"`);
+      }
+    });
+    // Inline entries go through exactly the checks an asset file's entries go through at read time,
+    // so a catalog can never write a row the sheet could not hold whichever way it ships.
+    for (const entryIssue of rulesetCatalogEntryIssues(def, catalog, catalog.entries ?? [])) {
+      issue([...path, "entries", ...entryIssue.path], entryIssue.message);
+    }
+  });
   void lists;
 }
 
@@ -844,11 +1023,29 @@ export type CommunityRulesetSource = { kind: "repository" | "local"; url: string
  *  `rulesetDefinitionSchema` again: that schema describes the FILE and would refuse the slash. */
 export type InstalledRuleset = {
   packageId: string | null;
-  definition: RulesetDefinition;
+  definition: ListedRulesetDefinition;
   source?: CommunityRulesetSource;
   /** Community only, ascending: every stored version, so the UI can say what removing one costs.
    *  `definition` is the highest of them. */
   versions?: number[];
+};
+
+/** A catalog as the LIST reports it: the header, with how many entries an inline catalog holds in
+ *  place of the entries themselves. The list is read whenever a sheet editor opens, and a catalog
+ *  is the one part of a ruleset that can be large, so the entries come from the catalog route. */
+export type RulesetCatalogSummary = Omit<RulesetCatalogHeader, "entries"> & { entryCount?: number };
+
+/** A definition as the list carries it. Assignable to `RulesetDefinition`, so everything rendered
+ *  from a definition keeps working; only a catalog picker needs to know the difference. */
+export type ListedRulesetDefinition = Omit<RulesetDefinition, "catalogs"> & { catalogs?: RulesetCatalogSummary[] };
+
+/** One catalog's entries, as `GET /capability-packages/rulesets/catalog` answers. `catalog` is the
+ *  header without the two keys that say where the entries live, because they are right here. */
+export type RulesetCatalogPayload = {
+  rulesetId: string;
+  version: number;
+  catalog: Omit<RulesetCatalogHeader, "entries" | "asset">;
+  entries: RulesetCatalogEntry[];
 };
 
 /** Authors may annotate any object with `$comment`, and the document root with `$schema` for
@@ -878,9 +1075,174 @@ export function parseRulesetDefinition(input: unknown): RulesetParseResult {
   };
 }
 
-// ── Stored sheets ──
+// ── Catalog helpers ──
 
-const sheetScalar = z.union([z.number().finite(), z.string().max(4000), z.boolean()]);
+export type RulesetCatalogHeader = z.infer<typeof catalogSchema>;
+export type RulesetCatalogEntry = z.infer<typeof catalogEntrySchema>;
+export type RulesetCatalogFilter = z.infer<typeof catalogFilterSchema>;
+export type RulesetCatalogMechanics = z.infer<typeof catalogMechanicsSchema>;
+export type RulesetList = RulesetSheetSchema["lists"][number];
+
+/** Whether a row of values could be stored in a list, column by column. Shared on purpose: the
+ *  schema runs it over every catalog entry, and the client runs it again over the rows a player
+ *  picked, so the picker can never splice in something the editor would then refuse. */
+export function rulesetListRowIssues(list: RulesetList, values: Record<string, unknown>): string[] {
+  const issues: string[] = [];
+  const columns = new Map(list.columns.map((column) => [column.id, column]));
+  for (const [key, value] of Object.entries(values)) {
+    const column = columns.get(key);
+    if (!column) {
+      issues.push(`Unknown column "${key}"`);
+      continue;
+    }
+    if (column.type === "number") {
+      if (typeof value !== "number") issues.push(`Column "${key}" takes a number`);
+      else if (column.integer && !Number.isInteger(value)) issues.push(`Column "${key}" takes a whole number`);
+      else if (value < column.min || value > column.max) {
+        issues.push(`Column "${key}" is outside ${column.min} to ${column.max}`);
+      }
+    } else if (column.type === "boolean") {
+      if (typeof value !== "boolean") issues.push(`Column "${key}" takes true or false`);
+    } else if (column.type === "enum") {
+      if (typeof value !== "string" || !column.values.includes(value)) {
+        issues.push(`Column "${key}" takes one of its declared values`);
+      }
+    } else if (column.type === "dice") {
+      if (typeof value !== "string" || value.length > 40) issues.push(`Column "${key}" takes dice text`);
+    } else if (typeof value !== "string") {
+      issues.push(`Column "${key}" takes text`);
+    } else if (value.length > column.maxLength) {
+      issues.push(`Column "${key}" is longer than ${column.maxLength} characters`);
+    }
+  }
+  for (const column of list.columns) {
+    if (column.required && values[column.id] === undefined) issues.push(`Column "${column.id}" is required`);
+  }
+  return issues;
+}
+
+/** Where an issue sits inside the entries array, so the same check can be reported as a zod path
+ *  inside `ruleset.json` and as a `path: message` line for a catalog asset. */
+export type RulesetCatalogEntryIssue = { path: (string | number)[]; message: string };
+
+/** Everything an entry must satisfy against the ruleset that declares it. */
+export function rulesetCatalogEntryIssues(
+  definition: RulesetDefinition,
+  catalog: RulesetCatalogHeader,
+  entries: readonly RulesetCatalogEntry[],
+): RulesetCatalogEntryIssue[] {
+  const issues: RulesetCatalogEntryIssue[] = [];
+  const add = (path: (string | number)[], message: string) => issues.push({ path, message });
+  const listById = new Map(definition.sheet.lists.map((list) => [list.id, list]));
+  const feeds = new Set(catalog.feeds);
+  const filterById = new Map((catalog.filters ?? []).map((filter) => [filter.id, filter]));
+  const saves = new Set(definition.sheet.saves.map((save) => save.id));
+  // A cost names a live pool or a pool GROUP, because a system whose slots are one group per level
+  // should be able to say "one slot of this group" without naming every pool.
+  const costTargets = new Set(
+    definition.sheet.live.pools.flatMap((pool) => [pool.id, ...(pool.group ? [pool.group] : [])]),
+  );
+
+  const seen = new Set<string>();
+  entries.forEach((entry, index) => {
+    if (seen.has(entry.id)) add([index, "id"], `Duplicate entry id "${entry.id}"`);
+    seen.add(entry.id);
+
+    for (const [filterId, value] of Object.entries(entry.filters ?? {})) {
+      const filter = filterById.get(filterId);
+      if (!filter) {
+        add([index, "filters", filterId], `Unknown filter "${filterId}"`);
+        continue;
+      }
+      const matches =
+        filter.type === "number"
+          ? typeof value === "number"
+          : filter.type === "text"
+            ? typeof value === "string"
+            : Array.isArray(value);
+      if (!matches) {
+        const wanted = filter.type === "tags" ? "a list of words" : filter.type === "text" ? "one word" : "a number";
+        add([index, "filters", filterId], `Filter "${filterId}" takes ${wanted}`);
+      }
+    }
+
+    entry.rows.forEach((row, rowIndex) => {
+      const path = [index, "rows", rowIndex];
+      if (!feeds.has(row.list)) return add([...path, "list"], `"${row.list}" is not one of this catalog's feeds`);
+      const list = listById.get(row.list);
+      if (!list) return add([...path, "list"], `Unknown list "${row.list}"`);
+      for (const message of rulesetListRowIssues(list, row.values)) add([...path, "values"], message);
+    });
+
+    const mechanics = entry.mechanics;
+    if (mechanics?.save && !saves.has(mechanics.save.save)) {
+      add([index, "mechanics", "save", "save"], `Unknown save "${mechanics.save.save}"`);
+    }
+    mechanics?.cost?.forEach((cost, costIndex) => {
+      if (!costTargets.has(cost.pool)) {
+        add([index, "mechanics", "cost", costIndex, "pool"], `Unknown pool or pool group "${cost.pool}"`);
+      }
+    });
+  });
+  return issues;
+}
+
+/** What the reserved row key holds, so the picker can tell which entry a row came from. */
+export function catalogRowRef(catalogId: string, entryId: string): string {
+  return `${catalogId}/${entryId}`;
+}
+
+export type RulesetCatalogRow = { list: string; row: Record<string, string | number | boolean> };
+
+/** An entry as rows the sheet can hold. The rows are COPIES: the player may edit them afterwards,
+ *  the sheet stays self-contained while its ruleset is uninstalled, and an updated ruleset never
+ *  rewrites a character. The mark only says where the row came from. */
+export function rowsFromCatalogEntry(catalogId: string, entry: RulesetCatalogEntry): RulesetCatalogRow[] {
+  const ref = catalogRowRef(catalogId, entry.id);
+  return entry.rows.map((row) => ({ list: row.list, row: { ...row.values, [RULESET_CATALOG_ROW_KEY]: ref } }));
+}
+
+/** A `catalogs/<id>.json` asset. `$comment` is allowed anywhere, exactly as in `ruleset.json`. */
+const rulesetCatalogFileSchema = z
+  .object({
+    schemaVersion: z.literal(1),
+    catalog: sheetId,
+    entries: z.array(catalogEntrySchema).max(RULESET_CATALOG_MAX_ENTRIES),
+  })
+  .strict();
+
+export type RulesetCatalogParseResult = { ok: true; entries: RulesetCatalogEntry[] } | { ok: false; issues: string[] };
+
+/** Read a catalog asset against the ruleset that declares it. Never throws: an asset the Engine
+ *  cannot use comes back as plain `path: message` lines, the same way a ruleset file does. */
+export function parseRulesetCatalogFile(
+  definition: RulesetDefinition,
+  catalogId: string,
+  input: unknown,
+): RulesetCatalogParseResult {
+  const catalog = definition.catalogs?.find((entry) => entry.id === catalogId);
+  if (!catalog) return { ok: false, issues: [`(root): "${catalogId}" is not a catalog of this ruleset`] };
+  const parsed = rulesetCatalogFileSchema.safeParse(stripRulesetComments(input));
+  if (!parsed.success) {
+    return {
+      ok: false,
+      issues: parsed.error.issues.slice(0, 40).map((entry) => `${entry.path.join(".") || "(root)"}: ${entry.message}`),
+    };
+  }
+  if (parsed.data.catalog !== catalogId) {
+    return { ok: false, issues: [`catalog: this file is for "${parsed.data.catalog}", not "${catalogId}"`] };
+  }
+  const issues = rulesetCatalogEntryIssues(definition, catalog, parsed.data.entries);
+  if (issues.length > 0) {
+    return {
+      ok: false,
+      issues: issues.slice(0, 40).map((issue) => `entries.${issue.path.join(".")}: ${issue.message}`),
+    };
+  }
+  return { ok: true, entries: parsed.data.entries };
+}
+
+// ── Stored sheets ──
 
 /** A sheet as it is stored on a card, a persona or a game. Deliberately loose: it is read
  *  tolerantly against the ruleset's CURRENT schema (unknown keys kept, missing keys defaulted,

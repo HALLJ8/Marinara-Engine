@@ -135,6 +135,14 @@ function assertStorableRuleset(input: PutGameRulesetInput): void {
       `The ruleset file declares version ${parsed.definition.version}, not ${input.version}`,
     );
   }
+  // A catalog file beside `ruleset.json` is something only a package can ship. An imported ruleset
+  // is this one file, so its catalogs have to be inline or the picker would have nothing to read.
+  const assetCatalog = parsed.definition.catalogs?.find((catalog) => catalog.asset);
+  if (assetCatalog) {
+    throw new RulesetRefusedError(
+      `The catalog "${assetCatalog.id}" names a separate file (${assetCatalog.asset}). An imported ruleset carries its catalogs inline, as "entries"`,
+    );
+  }
 }
 
 export function createGameRulesetsStorage(db: DB) {

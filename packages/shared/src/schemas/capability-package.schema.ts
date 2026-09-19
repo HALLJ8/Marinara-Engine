@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { agentResultTypeSchema } from "./agent.schema.js";
-import { RULESET_ASSET_PATH } from "./ruleset.schema.js";
+import { isRulesetCatalogAssetPath, RULESET_ASSET_PATH } from "./ruleset.schema.js";
 
 /** Caps mirrored by the Marinara-Agents catalog build. Kept here so a hostile or
  *  broken notes document cannot push an unbounded string into a modal. */
@@ -234,7 +234,12 @@ const capabilityPackageManifestBaseSchema = z
 //        offers as a game's rules (resolution kind, character sheet, rests, GM guidance). Not a
 //        soft seam: a ruleset package is useless on an engine that cannot read it, so declaring
 //        the asset requires 1.20 and an older engine refuses the install cleanly. No permission.
-export const supportedCapabilityApi = Object.freeze({ major: 1, minor: 20 } as const);
+// 1.21: ruleset catalogs — a ruleset may ship collections of ready-made entries the sheet editor
+//        offers in a picker, inline in `ruleset.json` or as hash-pinned `catalogs/<id>.json`
+//        assets beside it. Not a soft seam either, for the same reason as 1.20: an engine that
+//        cannot read `catalogs` refuses the whole ruleset file, so a package that ships them
+//        declares 1.21 and an older engine refuses the install cleanly. No permission.
+export const supportedCapabilityApi = Object.freeze({ major: 1, minor: 21 } as const);
 
 const capabilityApiVersionSchema = z
   .object({
@@ -390,6 +395,26 @@ export const capabilityPackageManifestSchema = z
           code: z.ZodIssueCode.custom,
           path: ["contributions", "assets", "paths"],
           message: `${RULESET_ASSET_PATH} requires schemaVersion 2 and capabilityApi 1.20 or newer`,
+        });
+      }
+    }
+    // A catalog asset is part of a ruleset, so it follows the same hard requirement one minor
+    // later, and only ever ships beside the file that declares it: on its own it is a JSON document
+    // nothing would ever read.
+    if ((manifest.contributions?.assets?.paths ?? []).some(isRulesetCatalogAssetPath)) {
+      const api = manifest.schemaVersion === 2 ? manifest.capabilityApi : null;
+      if (!api || api.major < 1 || (api.major === 1 && api.minor < 21)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["contributions", "assets", "paths"],
+          message: "catalogs/<id>.json requires schemaVersion 2 and capabilityApi 1.21 or newer",
+        });
+      }
+      if (!manifest.contributions?.assets?.paths.includes(RULESET_ASSET_PATH)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["contributions", "assets", "paths"],
+          message: `A catalog asset must ship beside the ${RULESET_ASSET_PATH} that declares it`,
         });
       }
     }

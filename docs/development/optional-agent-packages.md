@@ -664,6 +664,45 @@ Desktop uses a browse list with an adjacent detail region. Mobile uses one pane 
 
 An extraction is complete only when the base production client and server bundles no longer contain the package implementation, a fresh install cannot activate it without downloading the package, an upgraded install retains it, and package install/update/uninstall passes on desktop, mobile, and Termux-compatible filesystems.
 
+### Capability API 1.21: ruleset catalogs
+
+A ruleset may ship **catalogs**: named collections of ready-made entries (spells, class features,
+gear) that the sheet editor offers in a picker, so a player does not type a list row by row. The
+header lives in `ruleset.json` under `catalogs`; the entries sit either inline in that header or in
+a reserved asset of their own, one file per catalog:
+
+```json
+{
+  "capabilityApi": { "major": 1, "minor": 21 },
+  "kind": ["ruleset"],
+  "contributions": { "assets": { "paths": ["ruleset.json", "catalogs/spells.json"] } },
+  "files": [
+    { "path": "ruleset.json", "sha256": "<sha256>", "bytes": 25767 },
+    { "path": "catalogs/spells.json", "sha256": "<sha256>", "bytes": 418204 }
+  ]
+}
+```
+
+`catalogs/<id>.json` is a reserved asset family: the file name is the catalog's own id, so the
+Engine finds the file from the ruleset alone and no catalog can name another one's file. A catalog
+asset is hash-pinned in `files[]` like every other declared asset, only ever ships beside the
+`ruleset.json` that declares it, and is refused on its declared size above 1 MB before it is read.
+Its contents go through the same checks the inline entries go through, against the same sheet, so a
+catalog can never write a row the sheet could not hold. Up to 12 catalogs per ruleset and 2000
+entries per catalog.
+
+The client fetches a catalog only when a picker opens, through
+`GET /api/capability-packages/rulesets/catalog?rulesetId=&catalogId=&version=`. The installed-ruleset
+list never carries inline entries, only a count, because it is read whenever a sheet editor opens.
+Catalog text never reaches a prompt: the Game Master still sees only what `gm.sheetSummary` names,
+so catalogs cost no tokens.
+
+Like 1.20 this is not a soft seam, and the gate has two halves because catalogs live inside the
+ruleset file rather than in the manifest. Declaring a `catalogs/<id>.json` asset requires 1.21, and
+a `ruleset.json` that carries a `catalogs` key is refused at install when the manifest declares
+less, because an older Engine's strict schema would refuse the whole ruleset file anyway. No
+permission, as before.
+
 ### Capability API 1.20: Game Mode rulesets
 
 A ruleset is a game's rules as validated data: a resolution kind the Engine already implements, a

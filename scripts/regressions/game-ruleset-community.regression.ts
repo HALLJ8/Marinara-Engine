@@ -157,6 +157,20 @@ try {
       "a refused import leaves the stored bytes exactly as they were",
     );
 
+    // A catalog kept in a separate file is something only a package can ship: an imported ruleset
+    // is one file, so the picker would have nothing to read. Refused when stored, not at pick time.
+    const withAssetCatalog = ruleset((doc) => {
+      doc.id = "asset-catalog";
+      doc.name = "Asset catalog";
+      doc.catalogs = [{ id: "gear", label: "Gear", feeds: [doc.sheet.lists[0].id], asset: "catalogs/gear.json" }];
+    });
+    await assert.rejects(
+      rulesets.put({ rulesetId: "local/asset-catalog", version: 1, sourceKind: "local", definition: withAssetCatalog }),
+      /carries its catalogs inline/,
+      "an imported ruleset cannot point at a catalog file",
+    );
+    assert.equal(await rulesets.get("local/asset-catalog", 1), null);
+
     const second = await rulesets.put({
       rulesetId: "local/my-5e",
       version: 2,

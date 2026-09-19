@@ -31,7 +31,19 @@ function allowAnnotations(node, isRoot = true) {
   }
 }
 
+// A catalog carries its entries inline or names a package asset, never both. The zod schema says
+// so in a refinement, which a JSON Schema generator cannot see, so the editor is told here.
+function requireOneCatalogSource(node) {
+  if (Array.isArray(node)) return node.forEach(requireOneCatalogSource);
+  if (!node || typeof node !== "object") return;
+  Object.values(node).forEach(requireOneCatalogSource);
+  if (node.type === "object" && node.properties?.feeds && node.properties.entries && node.properties.asset) {
+    node.oneOf = [{ required: ["entries"] }, { required: ["asset"] }];
+  }
+}
+
 const schema = zodToJsonSchema(rulesetDefinitionSchema, { $refStrategy: "none", target: "jsonSchema7" });
+requireOneCatalogSource(schema);
 allowAnnotations(schema);
 const text = `${JSON.stringify(
   {

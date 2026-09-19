@@ -39,7 +39,8 @@
     "version": 1,
     "sections": [
       { "id": "about", "label": "About" },
-      { "id": "gear", "label": "Gear" }
+      { "id": "gear", "label": "Gear" },
+      { "id": "knacks", "label": "Knacks" }
     ],
     "abilities": [
       { "id": "brawn", "label": "Brawn", "short": "BRN", "min": -1, "max": 3, "default": 0 },
@@ -83,6 +84,36 @@
           { "id": "name", "label": "Name", "type": "text", "maxLength": 60, "required": true },
           { "id": "notes", "label": "Notes", "type": "text", "maxLength": 200 }
         ]
+      },
+      {
+        "id": "knacks",
+        "label": "Knacks",
+        "section": "knacks",
+        "maxItems": 20,
+        "columns": [
+          { "id": "name", "label": "Name", "type": "text", "maxLength": 60, "required": true },
+          { "id": "notes", "label": "What it does", "type": "text", "maxLength": 200 }
+        ]
+      },
+      {
+        "$comment": "A list with pools: every row is a resource with its own maximum, and the camp rest gives back the ones that recharge there.",
+        "id": "tricks",
+        "label": "Limited tricks",
+        "section": "knacks",
+        "maxItems": 12,
+        "columns": [
+          { "id": "name", "label": "Name", "type": "text", "maxLength": 60, "required": true },
+          { "id": "uses", "label": "Uses", "type": "number", "min": 0, "max": 9, "default": 1 },
+          {
+            "id": "recharge",
+            "label": "Comes back",
+            "type": "enum",
+            "values": ["camp", "scene"],
+            "valueLabels": { "camp": "At camp", "scene": "Each scene" },
+            "default": "camp"
+          }
+        ],
+        "pools": { "nameColumn": "name", "maxColumn": "uses", "rechargeColumn": "recharge" }
       }
     ],
     "live": {
@@ -104,7 +135,8 @@
       "restore": [
         { "pool": "grit", "to": "max" },
         { "pool": "luck", "by": { "const": 1 } },
-        { "track": "heat", "by": { "const": -1 } }
+        { "track": "heat", "by": { "const": -1 } },
+        { "listPools": "tricks", "recharge": ["camp"], "to": "max" }
       ],
       "clear": { "conditions": ["shaken"] }
     }
@@ -117,5 +149,127 @@
       "derived": ["grit_max"],
       "lists": [{ "list": "gear", "nameColumn": "name" }]
     }
-  }
+  },
+  "catalogs": [
+    {
+      "$comment": "Ready-made knacks the sheet editor offers in a picker. Picked rows are copies the player can edit, and none of this text is ever sent to the model.",
+      "id": "knacks",
+      "label": "Knacks",
+      "feeds": ["knacks", "tricks"],
+      "filters": [
+        { "id": "grit", "label": "Grit cost", "type": "number" },
+        { "id": "road", "label": "Road", "type": "text" },
+        { "id": "callings", "label": "Calling", "type": "tags", "startFrom": { "field": "calling" } }
+      ],
+      "units": { "distance": { "label": "paces", "perCell": 2 } },
+      "entries": [
+        {
+          "id": "road-sense",
+          "label": "Road Sense",
+          "summary": "You read a road the way other people read a face.",
+          "filters": { "grit": 0, "road": "Ash Flats", "callings": ["Scout", "Courier"] },
+          "rows": [
+            {
+              "list": "knacks",
+              "values": {
+                "name": "Road Sense",
+                "notes": "Sneak to notice where a road turns bad before you are standing on it."
+              }
+            }
+          ]
+        },
+        {
+          "id": "scrap-whisper",
+          "label": "Scrap Whisper",
+          "summary": "Dead machines tell you what killed them.",
+          "filters": { "grit": 0, "road": "Rustways", "callings": ["Tinker"] },
+          "rows": [
+            {
+              "list": "knacks",
+              "values": { "name": "Scrap Whisper", "notes": "Tinker to learn what a broken thing was last used for." }
+            }
+          ]
+        },
+        {
+          "id": "iron-stomach",
+          "label": "Iron Stomach",
+          "summary": "You can eat what the road offers and keep walking.",
+          "filters": { "grit": 0, "road": "Every road", "callings": ["Hauler"] },
+          "rows": [
+            {
+              "list": "knacks",
+              "values": {
+                "name": "Iron Stomach",
+                "notes": "Ignore the first Shaken you take from bad food or foul water."
+              }
+            }
+          ]
+        },
+        {
+          "$comment": "One entry, two rows: the knack itself and the limited use that tracks it.",
+          "id": "last-ember",
+          "label": "Last Ember",
+          "summary": "Once between camps you can call a friend back from the edge.",
+          "filters": { "grit": 1, "road": "Every road", "callings": ["Ember-tender"] },
+          "rows": [
+            {
+              "list": "knacks",
+              "values": {
+                "name": "Last Ember",
+                "notes": "Spend 1 Grit to give a downed friend 3 Grit back. Once between camps."
+              }
+            },
+            { "list": "tricks", "values": { "name": "Last Ember", "uses": 1, "recharge": "camp" } }
+          ],
+          "mechanics": {
+            "kind": "heal",
+            "range": 0,
+            "targets": "ally",
+            "amount": { "flat": 3 },
+            "cost": [{ "pool": "grit", "amount": 1 }]
+          }
+        },
+        {
+          "id": "coldfire-toss",
+          "label": "Coldfire Toss",
+          "summary": "A jar of blue fire that burns cold and spreads.",
+          "filters": { "grit": 1, "road": "Glasslands", "callings": ["Ember-tender"] },
+          "rows": [
+            {
+              "list": "knacks",
+              "values": {
+                "name": "Coldfire Toss",
+                "notes": "Throw a sealed jar. Everyone near where it lands is burned, friends included."
+              }
+            }
+          ],
+          "mechanics": {
+            "kind": "attack",
+            "range": 12,
+            "area": { "shape": "burst", "size": 4 },
+            "targets": "any",
+            "friendlyFire": true,
+            "amount": { "dice": "2d6" },
+            "damageType": "coldfire"
+          }
+        },
+        {
+          "id": "hold-the-line",
+          "label": "Hold the Line",
+          "summary": "You make the people beside you braver than they are.",
+          "filters": { "grit": 0, "road": "Every road", "callings": ["Hauler", "Scout"] },
+          "rows": [
+            {
+              "list": "knacks",
+              "values": {
+                "name": "Hold the Line",
+                "notes": "Sway to steady the party. Clear Shaken from one ally who can hear you."
+              }
+            }
+          ],
+          "mechanics": { "kind": "buff", "range": 4, "targets": "ally" }
+        }
+      ]
+    }
+  ]
 }
