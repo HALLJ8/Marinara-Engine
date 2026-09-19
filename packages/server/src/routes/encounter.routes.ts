@@ -1,6 +1,14 @@
 import { z } from "zod";
 import { resolveGameConnection as resolveEncounterConnection } from "../services/game/connection.service.js";
-import { combatAiHintsSchema, combatBossSchema, combatInterruptFields } from "@marinara-engine/shared";
+import {
+  combatAiHintsSchema,
+  combatBossSchema,
+  combatInterruptFields,
+  rulesetCreatureSchema,
+  type RulesetDefinition,
+} from "@marinara-engine/shared";
+import { loadRulesetCatalogEntries } from "../services/game/ruleset-catalog.service.js";
+import { loadRulesetRegistry, resolveGameRuleset } from "../services/game/ruleset-registry.service.js";
 // ──────────────────────────────────────────────
 // Routes: Combat Encounter (non-streaming JSON)
 // ──────────────────────────────────────────────
@@ -277,7 +285,58 @@ async function buildGameStateContext(
 // Prompt Builders
 // ──────────────────────────────────────────────
 
-function buildInitPrompt(
+/** How many bestiary names one blueprint prompt lists. A Game Master reads the list and picks from
+ *  it, so it is a ceiling on the reading rather than on the bestiary.
+ *  ponytail: the first sixty in declaration order, with no filtering of any kind. A bestiary big
+ *  enough that the right creature falls off the end wants the list narrowed by the scene, and that
+ *  is the upgrade path. */
+export const ENCOUNTER_BESTIARY_INDEX_MAX = 60;
+
+/** What a ruleset that resolves its own fights lends the blueprint prompt: the rungs an opponent is
+ *  picked from, the names already written, and the ids a proposed stat block has to be written in. */
+export interface EncounterRulesetBrief {
+  tiers: Array<{ id: string; label: string }>;
+  bestiary: Array<{ label: string; tier: string }>;
+  budgets: string[];
+  saves: string[];
+  damageTypes: string[];
+}
+
+/** The brief for a game whose ruleset declares `combat`, or null for every other game, which gets
+ *  exactly the prompt it got before this existed. */
+export async function encounterRulesetBrief(
+  definition: RulesetDefinition,
+  packageId: string | null,
+): Promise<EncounterRulesetBrief | null> {
+  const combat = definition.combat;
+  if (!combat) return null;
+  const bestiary: EncounterRulesetBrief["bestiary"] = [];
+  for (const catalog of definition.catalogs ?? []) {
+    if (catalog.holds !== "creatures" || bestiary.length >= ENCOUNTER_BESTIARY_INDEX_MAX) continue;
+    try {
+      const read = await loadRulesetCatalogEntries(packageId, definition, catalog);
+      if (!read.ok) {
+        logger.warn("[game/combat:init] Bestiary %s of %s could not be read", catalog.id, definition.id);
+        continue;
+      }
+      for (const entry of read.entries) {
+        if (!entry.creature || bestiary.length >= ENCOUNTER_BESTIARY_INDEX_MAX) break;
+        bestiary.push({ label: entry.label, tier: entry.creature.tier });
+      }
+    } catch (error) {
+      logger.warn(error, "[game/combat:init] Could not read bestiary %s of %s", catalog.id, definition.id);
+    }
+  }
+  return {
+    tiers: (combat.threat?.tiers ?? []).map((tier) => ({ id: tier.id, label: tier.label })),
+    bestiary,
+    budgets: combat.economy.budgets.map((budget) => budget.id),
+    saves: definition.sheet.saves.map((save) => save.id),
+    damageTypes: [...(combat.damageTypes ?? [])],
+  };
+}
+
+export function buildInitPrompt(
   personaName: string,
   personaCtx: string,
   characterCtx: string,
@@ -286,6 +345,8 @@ function buildInitPrompt(
   spellbookCtx: string,
   tactical: boolean,
   tacticalBattlefield?: TacticalBattlefieldSetup,
+  /** Present only for a game whose ruleset resolves its own fights. */
+  ruleset?: EncounterRulesetBrief | null,
 ): ChatMessage[] {
   const msgs: ChatMessage[] = [];
 
@@ -349,6 +410,11 @@ function buildInitPrompt(
     inst += `      "class": "fighter|knight|rogue|archer|mage|healer",\n`;
     inst += `      "movementMode": "walk|fly|teleport",\n`;
   }
+  if (ruleset) {
+    inst += `      "creature": "a name from the bestiary list below, when one of them is this enemy",\n`;
+    inst += `      "tier": "one of the threat tier ids listed below",\n`;
+    inst += `      "proposed": {"health":12,"defense":13,"initiativeModifier":2,"tier":"tier id","speed":30,"saves":{"save id":2},"resist":["damage type"],"actions":[{"id":"strike","name":"Strike","budget":"budget id","toHit":4,"damage":{"dice":"1d6","flat":2,"type":"damage type"}}]},\n`;
+  }
   inst += `      "sprite": "emoji or brief visual description"\n`;
   inst += `    }\n`;
   inst += `  ],\n`;
@@ -409,6 +475,15 @@ function buildInitPrompt(
   inst += `- RPG attribute scaling: when the context lists Attributes for the player or an ally (STR/DEX/CON/INT/WIS/CHA, on a roughly 8-20 D&D-style scale), let those values shape the generated stats: high STR → stronger physical attack power; high DEX → higher speed and accuracy; high CON → larger HP pool when HP is not already defined; high INT/WIS/CHA → stronger magical/support attack power for casters. Treat 10 as average and scale proportionally. Do NOT override an explicitly configured Max HP using these attributes.\n`;
   inst += `- Use the player's stats/inventory from the context to populate their data. Return ONLY the JSON.\n`;
   inst += `- Write ALL text values (environment, descriptions, attack names, item names, etc.) in the same language the chat history is written in.\n`;
+  if (ruleset) {
+    inst += `\nTHIS GAME'S RULESET RESOLVES ITS OWN FIGHTS. Describe every enemy in the ruleset's own terms as well:\n`;
+    inst += `- Threat tiers, hardest rung last. Use an id exactly as written: ${ruleset.tiers.map((tier) => `${tier.id} (${tier.label})`).join(", ") || "this ruleset declares none"}.\n`;
+    inst += `- Bestiary this ruleset already ships: ${ruleset.bestiary.map((entry) => `${entry.label} [${entry.tier}]`).join(", ") || "it ships none"}.\n`;
+    inst += `- For each enemy, give "creature" with a bestiary name when one of them IS this enemy. Otherwise give "tier" with the rung this enemy belongs on, judged from the scene and the party, never from its hp.\n`;
+    inst += `- Add "proposed" only for an enemy that is in no bestiary and needs its own numbers. The Engine pulls a proposal onto the tier's scale, so write what the enemy IS and let it be adjusted.\n`;
+    inst += `- Inside "proposed", every id must come from this ruleset: budgets are ${ruleset.budgets.join(", ") || "none"}; saves are ${ruleset.saves.join(", ") || "none"}; damage types are ${ruleset.damageTypes.join(", ") || "untyped only"}. A name this ruleset does not have is dropped.\n`;
+    inst += `- Keep the hp, attack, defense, speed and level fields as well. They are the Engine's own numbers and are used outside the fight.\n`;
+  }
 
   msgs.push({ role: "user", content: inst });
   return msgs;
@@ -630,6 +705,13 @@ export async function encounterRoutes(app: FastifyInstance) {
         content: m.content as string,
       }));
 
+      // A game with no ruleset, or one whose ruleset does not resolve its own fights, is asked for
+      // exactly the blueprint it was asked for before any of this existed.
+      let rulesetBrief: EncounterRulesetBrief | null = null;
+      if (chatMeta?.gameRuleset != null) {
+        const resolved = resolveGameRuleset(chatMeta, await loadRulesetRegistry());
+        if (resolved.status === "ok") rulesetBrief = await encounterRulesetBrief(resolved.definition, resolved.packageId);
+      }
       const prompt = buildInitPrompt(
         personaName,
         personaCtx,
@@ -639,6 +721,7 @@ export async function encounterRoutes(app: FastifyInstance) {
         spellbookCtx,
         combatStyle === "tactical",
         tacticalBattlefieldResult?.success ? tacticalBattlefieldResult.data : undefined,
+        rulesetBrief,
       );
       debugLog(
         "[debug/game/combat:init] request chatId=%s model=%s historyMessages=%d settings=%s",
@@ -709,6 +792,12 @@ export async function encounterRoutes(app: FastifyInstance) {
                 boss: combatBossSchema.optional(),
                 mp: z.number().min(0).max(100000).optional(),
                 maxMp: z.number().min(0).max(100000).optional(),
+                // The ruleset's own terms for this opponent. A malformed stat block costs its
+                // opponent the proposal, never the whole blueprint: the Engine falls back to the
+                // bestiary and then to the tier.
+                creature: z.string().max(200).optional().catch(undefined),
+                tier: z.string().max(80).optional().catch(undefined),
+                proposed: rulesetCreatureSchema.optional().catch(undefined),
                 attacks: z
                   .array(
                     z
