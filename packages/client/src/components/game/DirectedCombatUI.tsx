@@ -146,7 +146,7 @@ export function DirectedCombatUI(props: Props) {
           "shrink-0 overflow-y-auto border-t border-[var(--border)] bg-[var(--background)] text-sm text-[var(--foreground)]",
           // A ruleset fight's log scrolls inside its own box, so this strip stays short and the
           // stage keeps the room its two rows need.
-          s.style === "ruleset" ? "max-h-[20svh] px-3 py-1.5 sm:max-h-[26svh] sm:p-3" : "max-h-[42svh] p-3",
+          fight ? "max-h-[20svh] px-3 py-1.5 sm:max-h-[26svh] sm:p-3" : "max-h-[42svh] p-3",
         )}
       >
         {error && (

@@ -684,8 +684,9 @@ creature's own signature points.
 ```
 
 A catalog of creatures declares no `feeds` and is never offered by the sheet editor's picker: it is
-read by a fight, not by a character sheet. Nothing plays on it yet, for the same reason as 1.26:
-this release is the shared resolver and the format, with no route, no session and no user interface.
+read by a fight, not by a character sheet. The fight that reads it is the combat director's
+`ruleset` style, which needs no Capability API level of its own: it plays whatever `combat` block
+and bestiary an installed ruleset already carries.
 
 Not a soft seam, for the same reason as 1.20 through 1.26: an Engine that cannot read `holds` or an
 entry's `creature` refuses the whole ruleset file, or the catalog file that holds it, so install
@@ -709,9 +710,9 @@ what temporary points it grants, how it grows with the sheet and which budget it
 }
 ```
 
-Nothing plays on it yet: this release is the shared resolver and the format, with no route, no
-session and no user interface behind them. A ruleset that declares `combat` still fights its
-battles the way it did before until a later release wires the fight up.
+A game on a ruleset that declares `combat`, with the combat director on, fights its battles by
+this block on the battle screen. A ruleset without it fights the way it did before, through its
+`battle` block or the player's Classic or Tactical preference.
 
 Not a soft seam, for the same reason as 1.20 through 1.25: an Engine that cannot read `combat` or
 the new `mechanics` keys refuses the whole ruleset file, or the catalog file that holds them, so
