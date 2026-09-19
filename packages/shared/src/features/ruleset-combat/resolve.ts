@@ -854,9 +854,15 @@ function resolveMove(ctx: RulesetCombatContext, actor: RulesetCombatant, destina
   let spent = 0;
   let stopped = false;
   let at = from;
+  // One strike each for the whole walk, however many times the path leaves the same reach: that is
+  // what the menu promised when it listed whom this walk provokes, and a budget of two is two
+  // walks, not two strikes at one passer-by.
+  const struck = new Set<string>();
   for (const cell of destination.path) {
     if (opportunity && !actor.flags.disengaged) {
       for (const enemy of threatsLeaving(ctx, actor, at, cell)) {
+        if (struck.has(enemy.id)) continue;
+        struck.add(enemy.id);
         opportunityStrike(ctx, enemy, actor, opportunity.budget);
         if (!rulesetCombatStanding(actor)) break;
       }

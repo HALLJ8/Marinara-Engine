@@ -143,6 +143,9 @@ export function rulesetAimCells(
   state: RulesetEncounterState,
   actorId: string,
   optionId: string,
+  /** Stop after this many aims. A forecast only needs to know that ONE exists and whom it catches,
+   *  and scanning the rest of the board for it on every menu read is work nobody sees. */
+  limit = Infinity,
 ): Array<{ x: number; y: number; targetIds: string[] }> {
   const grid = state.board?.grid;
   const from = rulesetPositionOf(rulesetCombatant(state, actorId));
@@ -163,6 +166,7 @@ export function rulesetAimCells(
       // A cell the shape would catch nobody from is still somewhere it may be aimed, but it is not
       // worth carrying to a screen or to a picker.
       if (targetIds.length > 0) aims.push({ x, y, targetIds });
+      if (aims.length >= limit) return aims;
     }
   }
   return aims;
@@ -371,7 +375,7 @@ function firstTarget(state: RulesetEncounterState, actor: RulesetCombatant, acti
  *  it a shape that only ever lands on cells would promise no chance to hit at all. */
 function firstAreaTarget(state: RulesetEncounterState, actor: RulesetCombatant, action: RulesetCombatAction) {
   if (!action.area || !positioned(state)) return undefined;
-  const id = rulesetAimCells(state, actor.id, action.id)[0]?.targetIds[0];
+  const id = rulesetAimCells(state, actor.id, action.id, 1)[0]?.targetIds[0];
   return id === undefined ? undefined : rulesetCombatant(state, id);
 }
 

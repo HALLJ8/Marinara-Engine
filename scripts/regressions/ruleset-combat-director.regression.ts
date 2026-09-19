@@ -991,7 +991,18 @@ for (const setup of [
     const seen: number[] = [];
     while (!state.outcome && turns < 400) {
       const round = state.rulesetFight!.encounter.round;
+      const before = state.rulesetFight!.eventSeq;
       commandRulesetCombatDirector(definition, state, { type: "continue" });
+      // One walk, one strike from anybody: the strikes a walk draws are logged before its `move`
+      // event, so nobody may appear twice between two of those.
+      const strikers = new Set<string>();
+      for (const { seq, event } of state.rulesetFight!.events) {
+        if (seq <= before) continue;
+        if (event.type === "move") strikers.clear();
+        if (event.type !== "opportunity") continue;
+        assert.ok(!strikers.has(event.actorId), `${what}: ${event.actorId} struck twice at one passer-by`);
+        strikers.add(event.actorId);
+      }
       seen.push(round);
       turns++;
     }

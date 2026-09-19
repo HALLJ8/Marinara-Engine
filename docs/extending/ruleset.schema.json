@@ -5209,7 +5209,50 @@
         "attackRoll",
         "economy"
       ],
-      "additionalProperties": false
+      "additionalProperties": false,
+      "dependencies": {
+        "ranged": [
+          "distance"
+        ],
+        "cover": [
+          "distance"
+        ],
+        "opportunity": [
+          "distance"
+        ]
+      },
+      "allOf": [
+        {
+          "if": {
+            "required": [
+              "attacks"
+            ],
+            "properties": {
+              "attacks": {
+                "contains": {
+                  "anyOf": [
+                    {
+                      "required": [
+                        "reach"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "range"
+                      ]
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "distance"
+            ]
+          }
+        }
+      ]
     },
     "layers": {
       "type": "array",
