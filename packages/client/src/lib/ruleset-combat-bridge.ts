@@ -12,7 +12,7 @@ import {
   applyCombatResultToLive,
   combatSkillsFromSheet,
   normalizeCharacterLookupName,
-  rulesetSheetEnvelopeSchema,
+  rulesetSheetBuildsByName,
   seedCombatantFromSheet,
   sheetOpsFromCombatResult,
   type Combatant,
@@ -22,7 +22,6 @@ import {
   type RulesetCombatSeed,
   type RulesetDefinition,
   type RulesetLiveStates,
-  type RulesetSheetBuild,
   type RulesetSheetOp,
   type RulesetSheetRefusal,
 } from "@marinara-engine/shared";
@@ -42,26 +41,6 @@ export interface RulesetBattleWriteBack {
   /** The members whose sheet the battle changed, in the order the summary lists them. */
   updated: string[];
   refused: Array<{ name: string; op: RulesetSheetOp; reason: RulesetSheetRefusal }>;
-}
-
-/** Every game card that holds a sheet this version can read, keyed the way live state is keyed. A
- *  card with no sheet, or one holding a sheet this version cannot read, is absent: a battle has
- *  nothing to read from it and nothing to write back to it, so its combatant is left alone. */
-function rulesetSheetBuildsByName(cards: unknown, playerName?: string | null): Map<string, RulesetSheetBuild> {
-  const player = typeof playerName === "string" ? playerName.trim() : "";
-  const builds = new Map<string, RulesetSheetBuild>();
-  for (const card of Array.isArray(cards) ? (cards as Array<Record<string, unknown>>) : []) {
-    const name = typeof card?.name === "string" ? card.name.trim() : "";
-    const key = name ? normalizeCharacterLookupName(name) : "";
-    if (!key) continue;
-    const envelope = rulesetSheetEnvelopeSchema.safeParse(card.rulesetSheet);
-    if (!envelope.success) continue;
-    // Setup keeps ONE sheet per normalized name and lets the persona's win a name it shares with a
-    // party member, because the persona is the player. The same order holds here.
-    if (builds.has(key) && name !== player) continue;
-    builds.set(key, envelope.data.build);
-  }
-  return builds;
 }
 
 /** The catalogs a battle has to fetch: the ones feeding a list `battle.skills` names. A ruleset

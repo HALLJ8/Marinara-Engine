@@ -138,14 +138,38 @@ function blocked(definition: RulesetDefinition, combat: RulesetCombat, actor: Ru
   return rulesetCombatEffects(definition, combat, actor).has("cannot-act");
 }
 
+/**
+ * Who this option may legally be pointed at RIGHT NOW, in the order the combatants were handed in.
+ *
+ * One place decides it: the resolver checks a choice against this list, and a caller that draws a
+ * menu sends the same list on, so a client never works out legality of its own.
+ *
+ * A combatant who is down can still be healed and can still be hit while they are down. Only one
+ * the fight is over for is off the table.
+ */
+export function rulesetOptionTargets(
+  state: RulesetEncounterState,
+  actorId: string,
+  option: { id: string; targets: RulesetCombatAction["targets"] },
+): string[] {
+  const actor = rulesetCombatant(state, actorId);
+  if (!actor || option.targets.count <= 0) return [];
+  return state.combatants
+    .filter((combatant) => {
+      if (combatant.defeated) return false;
+      // Helping yourself is not help.
+      if (option.id === "standard:help" && combatant.id === actor.id) return false;
+      if (option.targets.side === "self") return combatant.id === actor.id;
+      if (option.targets.side === "ally") return combatant.side === actor.side;
+      if (option.targets.side === "enemy") return combatant.side !== actor.side;
+      return true;
+    })
+    .map((combatant) => combatant.id);
+}
+
 function firstTarget(state: RulesetEncounterState, actor: RulesetCombatant, action: RulesetCombatAction) {
-  return state.combatants.find((combatant) => {
-    if (combatant.defeated) return false;
-    if (action.targets.side === "self") return combatant.id === actor.id;
-    if (action.targets.side === "ally") return combatant.side === actor.side;
-    if (action.targets.side === "enemy") return combatant.side !== actor.side;
-    return true;
-  });
+  const id = rulesetOptionTargets(state, actor.id, { id: action.id, targets: action.targets })[0];
+  return id === undefined ? undefined : rulesetCombatant(state, id);
 }
 
 /** Whether the actor's own bookkeeping still allows this action: a use it has not run out of, and
@@ -249,6 +273,7 @@ function optionFrom(
     label: action.label,
     budget: action.budget,
     targets: action.targets,
+    ...(action.heal ? { heals: true } : {}),
   };
   if (paid.cost.length > 0) option.cost = paid.cost;
   if (action.uses) option.left = actor.uses[action.id] ?? 0;
@@ -357,6 +382,7 @@ export function rulesetSignatureOptions(
       kind: action.kind,
       label: action.label,
       targets: action.targets,
+      ...(action.heal ? { heals: true } : {}),
       signature: { cost: action.signature.cost, points },
     };
     if (action.uses) option.left = actor.uses[action.id] ?? 0;

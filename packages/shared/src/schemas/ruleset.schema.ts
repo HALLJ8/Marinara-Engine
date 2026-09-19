@@ -919,7 +919,9 @@ const creatureActionSchema = z
     }
   });
 
-const creatureSchema = z
+/** Exported because an opponent may also arrive from outside a catalog: a Game Master's proposal
+ *  for one fight is checked against exactly this shape before it is clamped onto the scale. */
+export const rulesetCreatureSchema = z
   .object({
     health: creatureHealthSchema,
     defense: z.number().int().min(0).max(1000),
@@ -989,7 +991,7 @@ const catalogEntrySchema = z
     mechanics: catalogMechanicsSchema.optional(),
     /** An opponent instead of rows. An entry is one or the other, never both: rows are picked onto
      *  a character sheet and a creature is put on the other side of a fight. */
-    creature: creatureSchema.optional(),
+    creature: rulesetCreatureSchema.optional(),
   })
   .strict()
   .superRefine((entry, ctx) => {
@@ -2309,7 +2311,7 @@ export type RulesetCatalogMechanics = z.infer<typeof catalogMechanicsSchema>;
 /** What a catalog's entries are: rows for the sheet's lists, or a bestiary of creatures. */
 export type RulesetCatalogHolds = RulesetCatalogHeader["holds"];
 /** One opponent, exactly as a bestiary entry writes it. */
-export type RulesetCreature = z.infer<typeof creatureSchema>;
+export type RulesetCreature = z.infer<typeof rulesetCreatureSchema>;
 export type RulesetCreatureAction = RulesetCreature["actions"][number];
 export type RulesetCreatureDamage = NonNullable<RulesetCreatureAction["damage"]>;
 export type RulesetCreatureTrait = NonNullable<RulesetCreature["traits"]>[number];

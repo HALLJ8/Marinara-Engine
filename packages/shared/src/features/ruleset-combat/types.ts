@@ -388,7 +388,10 @@ export interface RulesetCombatOption {
   signature?: { cost: number; points: number };
   /** How many times this is left, for an action that counts its uses. */
   left?: number;
-  /** Expected values, never a future die: `averageDamage` is the average of the damage roll and
+  /** Whether the amount below is health GIVEN BACK rather than taken off. Without it a menu and an
+   *  opponent's own choices cannot tell a heal from a blow, because both are an amount. */
+  heals?: boolean;
+  /** Expected values, never a future die: `averageDamage` is the average of the amount rolled and
    *  `hitChance` the share of rolls that would land against the first legal target. A sequence
    *  forecasts the sum of its parts' damage and no single chance to hit, because its parts each
    *  roll their own. */

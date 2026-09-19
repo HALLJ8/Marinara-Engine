@@ -227,8 +227,8 @@ vocabulary plus the package's data, not from a file that can name one system's w
 
 **The slices.** C1 the schema and the resolver. C2 bestiary catalogs, stat-block actions, sequences
 and recharge, the threat clamp, and the 5e package's own creatures and enriched spells. C3
-the director's `ruleset` style: session, routes, persistence, enemy choices over the menu, the
-Classic shell on real numbers, `coverage.combat` true. C4 the Tactical shell: movement, reach and
+the director's `ruleset` style, split into C3a (session, routes, persistence, enemy choices over the
+menu) and C3b (the Classic shell on real numbers, `coverage.combat` true). C4 the Tactical shell: movement, reach and
 ranges, areas, cover, opportunity attacks. C5 reactions through the director's windows, legendary
 actions, contests and the remaining conditions.
 
@@ -339,6 +339,68 @@ actions, contests and the remaining conditions.
 - **Proven on both examples** in `scripts/regressions/game-ruleset-combat-creatures.regression.ts`:
   Ember Roads ships three original creatures and a three-rung threat scale, the 5e draft ships four,
   and neither file's format knows the other's words.
+
+### What C3a settled
+
+C3 is split in two: C3a is the server half, and C3b is the screen. No Capability API bump, because
+the format did not change.
+
+- **One ledger, a third `style`.** `DirectedCombatView.style` gains `"ruleset"`. The same storage
+  row, the same namespace, the same revision, instance and request-id idempotency, the same per-chat
+  queue and the same "the model only picks a candidate id from a menu the Engine enumerated" rule.
+  `GameCombatStyle`, which is the PLAYER'S preference, stays two values: the ruleset style is never
+  a preference, it is what a game on a ruleset with a `combat` block gets.
+- **The style's own logic lives in its own file.** `ruleset-combat-director.service.ts` is pure over
+  `(definition, state)`, so a regression drives a whole fight with no database. The existing
+  `combat-director.service.ts` gained three dispatch points and nothing else: the widened `style`,
+  a `rulesetFight` field on the persisted state, and an early return in `advanceCombatDirector` and
+  in `commandCombatDirector` so the task queue never runs for a fight it cannot resolve.
+- **The server decides what the fight is resolved by.** `/start` resolves the chat's pin itself and
+  refuses a game with no ruleset or no `combat` block. The party is read from the chat's own sheets
+  through `rulesetSheetBuildsByName`, which MOVED into the shared combat bridge so the `battle`
+  bridge and this style match a combatant to a sheet by the same rule. A client-sent sheet is never
+  read, and a member without one is refused by name.
+- **An opponent's numbers**, in order: `findRulesetCreature` on the reference the Game Master named,
+  then on the opponent's own name, then `clampRulesetStatBlock` over a proposal in the shared
+  creature form, then a plain block from the tier's own numbers (`rulesetTierStatBlock`: the middle
+  of the health band, the tier's defense and to-hit, one attack dealing the middle of
+  `damagePerRound` flat and untyped). Every fallback and every clamp line is kept on the session as
+  `adjustments` and logged once.
+- **The Engine's own `party` and `enemies` stay in step** after every step, because
+  `handleCombatEnd`, the recap and the journal read them, and `CombatSummary` is filled from them
+  when the fight ends. `rulesetEncounterOutcome` is what decides who won; the hit points agree
+  because they are the same numbers.
+- **Live sheet state is written when an action is ACCEPTED**, inside the ledger's own save, and the
+  new blob rides back on the response so the client's store needs no refetch. If the write fails the
+  step fails, so the ledger and the sheet can never disagree, and there is no end-of-battle
+  write-back for this style at all.
+- **The menu is sent, never computed.** `rulesetOptionTargets` is a new shared helper beside the
+  resolver, and `applyRulesetCombatChoice`'s own target check now goes through it, so the list a
+  client is offered and the list the rules accept are one list.
+- **`continue` resolves exactly one turn** of an actor no human plays: every action it takes, the
+  end of its turn, and the next actor. The picker turns the menu into `CombatAiCandidate`s and lets
+  the existing `chooseCombatCandidate` choose, so a ruleset fight is scored by the same tactics as
+  the other two styles. It is capped at twelve actions a turn, always ends the turn, and never
+  points a blast at its own side: whether a target is an ally is read off the TARGET, not off the
+  side the option was written for, which is what an author who allows friendly fire needs.
+- **A boss opens a window instead.** One `CombatDecisionOption` per candidate, extended additively
+  with `optionId`, `targetIds` and `label`, answered by the existing `continue` job through a
+  ruleset-aware prompt builder beside `buildCombatBossPrompt`: the same JSON-only `{"candidateId"}`
+  answer, the same debug lines, the same ten-second timeout, the same call cap, and the same
+  fallback to the local picker on garbage or on an id the menu does not hold.
+- **A refusal changes nothing**, bumps no revision, spends no request id, and answers 400 with the
+  resolver's own reason in a stable `code` field (`ruleset_combat_<refusal>`).
+- **A fight whose ruleset is gone** comes back finished with outcome `flee` and one director event
+  saying why, rather than a 500 or a fight resolved by other rules. Nothing about that is persisted,
+  so reinstalling the ruleset picks the same fight up where it was left.
+- **The blueprint speaks the ruleset's terms.** When the chat's ruleset declares `combat`,
+  `/encounter/init` lists the threat tiers and a bounded bestiary index (the first sixty names in
+  declaration order) and asks for each opponent's `creature`, `tier` or `proposed` block. A game
+  with no ruleset, or one without `combat`, gets today's prompt unchanged, and a malformed
+  `proposed` is dropped instead of failing the whole blueprint.
+- **Proven** in `scripts/regressions/ruleset-combat-director.regression.ts` (pure, both example
+  rulesets) and `ruleset-combat-director-route.regression.ts` (the real routes, the live write-back,
+  an unchanged classic fight, the boss window with the model faked, and the blueprint prompt).
 
 ## Architecture
 
