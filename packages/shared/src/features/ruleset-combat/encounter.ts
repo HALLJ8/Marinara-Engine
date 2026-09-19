@@ -72,17 +72,28 @@ export function sumOf(values: readonly number[]): number {
 /** `2d6`, `1d8+3` or a plain number, as a sheet's dice column happens to hold it. A dice column is
  *  free text, so anything else reads as no dice at all rather than failing a turn. */
 export function parseRulesetCombatDice(text: unknown): RulesetCombatAmount | null {
-  if (typeof text !== "string") return null;
-  const parts = /^\s*(\d{1,3})\s*d\s*(\d{1,4})\s*([+-]\s*\d{1,4})?\s*$/i.exec(text);
-  if (!parts) {
-    const flat = Number(String(text).trim());
-    return Number.isFinite(flat) && flat !== 0 ? { count: 0, sides: 0, flat: Math.trunc(flat) } : null;
-  }
-  return {
-    count: Number(parts[1]),
-    sides: Number(parts[2]),
-    flat: parts[3] ? Number(parts[3].replace(/\s+/g, "")) : 0,
+  // A dice column is short by its own schema; anything longer is not dice, and saying so first
+  // keeps every pattern below on a string of bounded length.
+  if (typeof text !== "string" || text.length > 40) return null;
+  // Spaces are allowed around the parts ("2d6 + 3") and nowhere inside a number ("1 2d6" is not
+  // twelve dice), so the parts are split on the letter and the sign rather than matched with a
+  // pattern full of optional whitespace.
+  const trimmed = text.trim();
+  const split = /^([^dD]*)[dD]([^+-]*)([+-].*)?$/.exec(trimmed);
+  const whole = (part: string | undefined, max: number) => {
+    const digits = (part ?? "").trim();
+    return /^\d+$/.test(digits) && digits.length <= max ? Number(digits) : null;
   };
+  const count = split ? whole(split[1], 3) : null;
+  const sides = split ? whole(split[2], 4) : null;
+  const bonus = split?.[3] ? whole(split[3].slice(1), 4) : 0;
+  if (!split || count === null || sides === null || bonus === null) {
+    const flat = Number(trimmed);
+    return trimmed !== "" && Number.isFinite(flat) && flat !== 0
+      ? { count: 0, sides: 0, flat: Math.trunc(flat) }
+      : null;
+  }
+  return { count, sides, flat: split[3]?.startsWith("-") ? -bonus : bonus };
 }
 
 /** The dice of a catalog entry's `amount`, which the schema already holds to `<count>d<sides>`. */

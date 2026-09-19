@@ -31,6 +31,7 @@ import {
   rowsFromCatalogEntry,
   rulesetCatalogEntryIssues,
   rulesetCombatant,
+  parseRulesetCombatDice,
   rulesetCombatOptions,
   rulesetCombatRoller,
   rulesetEncounterOutcome,
@@ -541,6 +542,20 @@ const who = (state: RulesetEncounterState, id: string): RulesetCombatant => {
 };
 const labels = (definition: RulesetDefinition, state: RulesetEncounterState, id: string) =>
   rulesetCombatOptions(definition, state, id).map((option) => option.label);
+
+// ── A sheet's dice column is free text, and only real dice are read as dice ──
+{
+  const read = (text: unknown) => parseRulesetCombatDice(text);
+  assert.deepEqual(read("2d6"), { count: 2, sides: 6, flat: 0 });
+  assert.deepEqual(read(" 1D8 + 3 "), { count: 1, sides: 8, flat: 3 });
+  assert.deepEqual(read("1d8-1"), { count: 1, sides: 8, flat: -1 });
+  assert.deepEqual(read("7"), { count: 0, sides: 0, flat: 7 }, "a plain number is a flat amount");
+  for (const notDice of ["", "   ", "rope", "d6", "2d", "2d6+", "1 2d6", "2d6+1 0", "1234d6", "2d6+3+1", 12, null]) {
+    assert.equal(read(notDice), null, `${JSON.stringify(notDice)} is not dice`);
+  }
+  // Long input is refused before any pattern sees it, so a pasted wall of spaces costs nothing.
+  assert.equal(read(`2d6${" ".repeat(100_000)}+3`), null);
+}
 
 // ── Initiative: the order, and the two tiebreaks ──
 {
