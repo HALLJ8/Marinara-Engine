@@ -262,6 +262,18 @@ const track = (definition: RulesetDefinition, state: RulesetEncounterState, id: 
     /costs 2 and the creature only ever has 1/,
   );
 
+  // A sequence is paid for with a budget on the creature's own turn, and a signature action with
+  // points on somebody else's. One inside the other would be neither.
+  assert.match(
+    refusal(
+      beastly((creature) => {
+        creature.signaturePoints = 2;
+        creature.actions[0].signature = { cost: 1 };
+      }),
+    ),
+    /is bought with points, so a sequence cannot name it/,
+  );
+
   // A sequence names another action of the same block, and never another sequence.
   assert.match(
     refusal(beastly((creature) => (creature.actions[2].sequence[0].action = "a_stranger"))),
@@ -749,6 +761,54 @@ const traveller = (live: unknown = {}): RulesetCombatantInput => ({
   );
   const spat = act(fiveE, state, { actorId: "twice", optionId: "double_spit", targetIds: ["brenna"] }, 16, 3);
   assert.equal(spat.events.filter((event) => event.type === "attack").length, 1, "and one strike is what happens");
+}
+
+// ── A signature sequence whose parts are all spent is not sold ──
+{
+  const lasher: RulesetCombatantInput = {
+    id: "lasher",
+    name: "Lasher",
+    side: "enemy",
+    block: {
+      health: 30,
+      defense: 12,
+      initiativeModifier: 0,
+      signaturePoints: 2,
+      actions: [
+        { id: "bite", name: "Bite", budget: "action", toHit: 10, damage: { count: 1, sides: 4, flat: 0 } },
+        {
+          id: "sting",
+          name: "Sting",
+          budget: "action",
+          toHit: 10,
+          damage: { count: 1, sides: 4, flat: 0 },
+          uses: { per: "encounter", count: 1 },
+        },
+        {
+          id: "lash_out",
+          name: "Lash out",
+          budget: "action",
+          sequence: [{ action: "sting", times: 1 }],
+          signature: { cost: 1 },
+        },
+      ],
+    },
+  };
+  // Brenna acts first, so it is her turn and the lasher may buy something.
+  const state = fight(fiveE, [fighter(), lasher], fiveBestiary, 18, 5);
+  assert.deepEqual(
+    rulesetSignatureOptions(fiveE, state, "lasher").map((option) => option.id),
+    ["lash_out"],
+  );
+  const bought = act(fiveE, state, { actorId: "lasher", optionId: "lash_out", targetIds: ["brenna"] }, 16, 3);
+  assert.equal(who(bought.state, "lasher").signature!.points, 1, "one point bought one sting");
+  assert.deepEqual(rulesetSignatureOptions(fiveE, bought.state, "lasher"), [], "with the sting spent, nothing is sold");
+  const again = act(fiveE, bought.state, { actorId: "lasher", optionId: "lash_out", targetIds: ["brenna"] });
+  assert.ok(
+    again.events.some((event) => event.type === "refused"),
+    "and asking for it anyway is refused",
+  );
+  assert.equal(who(again.state, "lasher").signature!.points, 1, "without a point being taken for nothing");
 }
 
 // ── A sequence with a target for each part, on Ember Roads ──

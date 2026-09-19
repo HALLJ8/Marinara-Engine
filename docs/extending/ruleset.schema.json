@@ -3604,7 +3604,19 @@
                               },
                               "$comment": {}
                             },
-                            "additionalProperties": false
+                            "additionalProperties": false,
+                            "anyOf": [
+                              {
+                                "required": [
+                                  "dice"
+                                ]
+                              },
+                              {
+                                "required": [
+                                  "flat"
+                                ]
+                              }
+                            ]
                           },
                           "save": {
                             "type": "object",

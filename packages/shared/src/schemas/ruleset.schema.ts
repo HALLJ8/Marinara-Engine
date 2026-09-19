@@ -2436,6 +2436,9 @@ function creatureIssues(
       // One budget, one list of strikes. A sequence of sequences would spend one budget on a tree,
       // and there would be nothing left to say how deep it may go.
       if (named.sequence) add(where, `"${step.action}" is a sequence, and a sequence cannot name another`);
+      // A signature action is bought with points while somebody else is acting. Inside a sequence it
+      // would be had for a budget on the creature's own turn, which is neither.
+      if (named.signature) add(where, `"${step.action}" is bought with points, so a sequence cannot name it`);
     });
   });
 }

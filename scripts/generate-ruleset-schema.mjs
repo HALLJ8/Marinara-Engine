@@ -107,11 +107,24 @@ function requireSaveEndsUntilSave(node) {
   }
 }
 
+// A creature action's damage names dice, a flat amount, or both: an empty one is refused by the
+// Engine, and that too is a refinement. The node is found by its shape: `dice`, `flat` and `type`.
+function requireDamageAmount(node) {
+  if (Array.isArray(node)) return node.forEach(requireDamageAmount);
+  if (!node || typeof node !== "object") return;
+  Object.values(node).forEach(requireDamageAmount);
+  const keys = Object.keys(node.properties ?? {});
+  if (node.type === "object" && keys.length === 3 && ["dice", "flat", "type"].every((key) => keys.includes(key))) {
+    node.anyOf = [{ required: ["dice"] }, { required: ["flat"] }];
+  }
+}
+
 const schema = zodToJsonSchema(rulesetDefinitionSchema, { $refStrategy: "none", target: "jsonSchema7" });
 requireOneCatalogSource(schema);
 requireOneEntryContent(schema);
 requireCatalogFeeds(schema);
 requireSaveEndsUntilSave(schema);
+requireDamageAmount(schema);
 boundScaledColumns(schema);
 requireOneHideComparison(schema);
 allowAnnotations(schema);

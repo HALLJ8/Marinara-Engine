@@ -156,6 +156,27 @@ export function rulesetActionAvailable(actor: RulesetCombatant, action: RulesetC
   return !actor.spent.includes(action.id);
 }
 
+/** Whether a part of a sequence can happen at all: a real action of this block, not a sequence
+ *  itself, not one that is bought with points, and not one that is used up or waiting for its dice.
+ *  The menu, the forecast and the resolution all ask this one question. */
+export function rulesetSequencePartAvailable(
+  actor: RulesetCombatant,
+  part: RulesetCombatAction | undefined,
+): part is RulesetCombatAction {
+  return !!part && !part.sequence && !part.signature && rulesetActionAvailable(actor, part);
+}
+
+/** A sequence with no part left that can happen would be paid for and do nothing. */
+export function rulesetSequenceCanHappen(actor: RulesetCombatant, action: RulesetCombatAction): boolean {
+  if (!action.sequence) return true;
+  return action.sequence.some((step) =>
+    rulesetSequencePartAvailable(
+      actor,
+      actor.actions.find((entry) => entry.id === step.actionId),
+    ),
+  );
+}
+
 /** What an action is expected to do. A sequence forecasts the SUM of its parts and no single chance
  *  to hit, because each part rolls its own against whoever it was pointed at. */
 function forecastFor(
@@ -175,7 +196,7 @@ function forecastFor(
     const spent = new Set<string>();
     const total = action.sequence.reduce((sum, step) => {
       const part = byId.get(step.actionId);
-      if (!part || !rulesetActionAvailable(actor, part) || spent.has(part.id)) return sum;
+      if (!rulesetSequencePartAvailable(actor, part) || spent.has(part.id)) return sum;
       let strikes = step.times;
       if (part.uses) {
         const uses = usesLeft.get(part.id) ?? actor.uses[part.id] ?? 0;
@@ -217,10 +238,7 @@ function optionFrom(
   // the actor's own menu. `rulesetSignatureOptions` is where it is offered.
   if (action.signature) return null;
   // A sequence whose parts are all gone, or all spent, would spend a budget and do nothing.
-  if (action.sequence) {
-    const parts = action.sequence.map((step) => actor.actions.find((entry) => entry.id === step.actionId));
-    if (!parts.some((part) => part && !part.sequence && rulesetActionAvailable(actor, part))) return null;
-  }
+  if (!rulesetSequenceCanHappen(actor, action)) return null;
   if ((actor.budgets[action.budget] ?? 0) < 1) return null;
   if (!rulesetActionAvailable(actor, action)) return null;
   const paid = planRulesetCombatCost(definition, actor, action);
@@ -333,7 +351,7 @@ export function rulesetSignatureOptions(
   const options: RulesetCombatOption[] = [];
   for (const action of actor.actions) {
     if (!action.signature || action.signature.cost > points) continue;
-    if (!rulesetActionAvailable(actor, action)) continue;
+    if (!rulesetActionAvailable(actor, action) || !rulesetSequenceCanHappen(actor, action)) continue;
     const option: RulesetCombatOption = {
       id: action.id,
       kind: action.kind,

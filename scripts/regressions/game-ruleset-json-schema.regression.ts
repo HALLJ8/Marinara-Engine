@@ -50,6 +50,27 @@ assert.equal(
     members.map((member) => member.properties?.kind?.const),
     [...RULESET_RESOLUTION_KINDS],
   );
+
+  // A refinement the generator cannot see has to be told to the editor by hand. A creature action's
+  // damage is one: the Engine refuses an empty one, so the published schema must as well.
+  const damageNodes: Array<{ anyOf?: unknown }> = [];
+  const walk = (node: unknown): void => {
+    if (Array.isArray(node)) return node.forEach(walk);
+    if (!node || typeof node !== "object") return;
+    const object = node as { properties?: Record<string, unknown>; anyOf?: unknown };
+    const keys = Object.keys(object.properties ?? {}).filter((key) => key !== "$comment");
+    if (keys.length === 3 && ["dice", "flat", "type"].every((key) => keys.includes(key))) damageNodes.push(object);
+    Object.values(node).forEach(walk);
+  };
+  walk(schema);
+  assert.ok(damageNodes.length > 0, "the schema describes a creature action's damage");
+  for (const node of damageNodes) {
+    assert.deepEqual(
+      node.anyOf,
+      [{ required: ["dice"] }, { required: ["flat"] }],
+      "and asks for dice or a flat amount",
+    );
+  }
 }
 
 console.info("game ruleset JSON Schema regression passed.");

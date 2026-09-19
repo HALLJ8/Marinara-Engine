@@ -23,6 +23,8 @@ import {
 import {
   planRulesetCombatCost,
   rulesetActionAvailable,
+  rulesetSequenceCanHappen,
+  rulesetSequencePartAvailable,
   rulesetAttackMode,
   rulesetCombatOptions,
   rulesetCostSteps,
@@ -713,7 +715,13 @@ function applySignature(
   if (rulesetCombatEffects(definition, combat, actor).has("cannot-act")) {
     return refusal(state, choice.actorId, "cannot-act", action.id);
   }
-  if (points === undefined || points < cost || !rulesetActionAvailable(actor, action)) {
+  // Nothing is paid for a sequence whose parts are all spent: it would buy nothing.
+  if (
+    points === undefined ||
+    points < cost ||
+    !rulesetActionAvailable(actor, action) ||
+    !rulesetSequenceCanHappen(actor, action)
+  ) {
     return refusal(state, choice.actorId, "insufficient", action.id);
   }
   const targets = pickTargets(state, actor, action.targets, choice.targetIds, action.id);
@@ -790,7 +798,7 @@ function resolveSequence(
     // One budget for the whole sequence, and each part still keeps its own books: a part that counts
     // its uses spends one, a part that recharges is spent until its dice bring it back, and a part
     // that has none left simply does not happen.
-    if (chosen.length === 0 || !rulesetActionAvailable(actor, part)) continue;
+    if (chosen.length === 0 || !rulesetSequencePartAvailable(actor, part)) continue;
     spendAvailability(ctx, actor, part);
     resolveAction(ctx, actor, part, chosen);
   }
