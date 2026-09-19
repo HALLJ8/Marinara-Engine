@@ -73,9 +73,7 @@ export function rulesetCombatRecapLines(definition: RulesetDefinition, summary: 
     const notes = [
       standing(member),
       member.temp > 0 ? `${member.temp} temporary` : "",
-      member.conditions.length > 0
-        ? member.conditions.map((id) => conditionLabel.get(id) ?? id).join(", ")
-        : "",
+      member.conditions.length > 0 ? member.conditions.map((id) => conditionLabel.get(id) ?? id).join(", ") : "",
     ].filter(Boolean);
     const suffix = notes.length > 0 ? ` (${notes.join("; ")})` : "";
     return `${member.name}: ${member.health}/${member.maxHealth} ${poolLabel}${suffix}`;

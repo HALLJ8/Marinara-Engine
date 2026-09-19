@@ -27,7 +27,11 @@ export function rulesetMenuGroups(options: DirectedRulesetOption[] | undefined):
   for (const kind of RULESET_MENU_KINDS) {
     const found = (options ?? []).filter((option) => option.kind === kind);
     if (found.length === 0) continue;
-    groups.push({ kind, labelKey: `game.combat.ruleset.group.${kind === "end-turn" ? "endTurn" : kind}`, options: found });
+    groups.push({
+      kind,
+      labelKey: `game.combat.ruleset.group.${kind === "end-turn" ? "endTurn" : kind}`,
+      options: found,
+    });
   }
   return groups;
 }
@@ -45,7 +49,9 @@ export function rulesetOptionCostText(
     parts.push(t("game.combat.ruleset.option.cost", { amount: cost.amount, pool: cost.label }));
   }
   if (option.signature) {
-    parts.push(t("game.combat.ruleset.option.signature", { cost: option.signature.cost, points: option.signature.points }));
+    parts.push(
+      t("game.combat.ruleset.option.signature", { cost: option.signature.cost, points: option.signature.points }),
+    );
   }
   if (typeof option.left === "number") parts.push(t("game.combat.ruleset.option.left", { left: option.left }));
   return parts.join(" · ");

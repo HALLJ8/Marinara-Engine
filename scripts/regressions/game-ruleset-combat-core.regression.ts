@@ -114,7 +114,7 @@ function firstOf<T extends RulesetCombatEvent["type"]>(events: RulesetCombatEven
     ],
   );
   assert.equal(combat.threat!.tiers.length, 9, "the scale an opponent is picked from, CR 0 to CR 5");
-  assert.equal(fiveE.coverage.combat, false, "coverage stays honest until a fight really runs on it");
+  assert.equal(fiveE.coverage.combat, true, "a fight really runs on it now, and coverage says so");
 
   // Nothing about the other example is shaped like this one.
   const rough = ember.combat!;

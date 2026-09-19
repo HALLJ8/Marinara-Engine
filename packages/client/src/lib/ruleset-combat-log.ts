@@ -76,27 +76,37 @@ function signed(modifier: number): string {
   return modifier < 0 ? `- ${Math.abs(modifier)}` : `+ ${modifier}`;
 }
 
-/** One roll, spelled out: what was thrown, what was kept when two were thrown, the modifier and the
- *  total the resolver reached. "17 + 5 = 22", or "17 and 4 with advantage, keeping 17, + 5 = 22". */
+/**
+ * One roll, spelled out: what was thrown, what was kept when more than one was thrown, the modifier
+ * and the total the resolver reached. "17 + 5 = 22", or "7, 19 with advantage, keeping 19 + 5 = 24".
+ *
+ * A roll with nothing added to it is printed as the die alone: the total IS the die, and "5 = 5"
+ * says nothing twice. A roll that kept one of several without saying which way it leaned says only
+ * that, because guessing advantage from which face survived would be this file deciding something
+ * the fight did not report.
+ */
 export function rulesetRollText(
   roll: { rolls: number[]; kept: number; modifier: number; total: number; mode?: RulesetCombatRollMode },
   t: TFunction,
 ): string {
-  const mode = roll.mode ?? "normal";
+  const sum = roll.rolls.reduce((total, face) => total + face, 0);
   const base =
-    mode === "normal" || roll.rolls.length < 2
+    roll.rolls.length < 2
       ? String(roll.kept)
-      : t(mode === "advantage" ? "game.combat.ruleset.roll.advantage" : "game.combat.ruleset.roll.disadvantage", {
-          rolls: roll.rolls.join(", "),
-          kept: roll.kept,
-        });
-  return roll.modifier === 0
-    ? t("game.combat.ruleset.roll.total", { roll: base, total: roll.total })
-    : t("game.combat.ruleset.roll.totalWithModifier", {
-        roll: base,
-        modifier: signed(roll.modifier),
-        total: roll.total,
-      });
+      : roll.mode === "advantage" || roll.mode === "disadvantage"
+        ? t(`game.combat.ruleset.roll.${roll.mode}`, { rolls: roll.rolls.join(", "), kept: roll.kept })
+        : // Several dice that add up to what was kept are the ruleset's own handful; several that do
+          // not are one of them being kept, and the line says only that.
+          t(sum === roll.kept ? "game.combat.ruleset.roll.sum" : "game.combat.ruleset.roll.kept", {
+            rolls: roll.rolls.join(sum === roll.kept ? " + " : ", "),
+            kept: roll.kept,
+          });
+  if (roll.modifier === 0) return base;
+  return t("game.combat.ruleset.roll.totalWithModifier", {
+    roll: base,
+    modifier: signed(roll.modifier),
+    total: roll.total,
+  });
 }
 
 /** The reason a step was refused, as a sentence. The server sends the same words back as the second
