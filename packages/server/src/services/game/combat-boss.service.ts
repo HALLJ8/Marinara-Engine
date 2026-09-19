@@ -161,7 +161,9 @@ export function buildRulesetCombatBossPrompt(
         order: view.order,
         candidates,
         units: view.combatants,
-        ...(view.grid ? { board: { width: view.grid.width, height: view.grid.height, distance: view.grid.distance } } : {}),
+        ...(view.grid
+          ? { board: { width: view.grid.width, height: view.grid.height, distance: view.grid.distance } }
+          : {}),
         ...(positions ? { positions } : {}),
         recentEvents: fight.events.slice(-16),
       }),

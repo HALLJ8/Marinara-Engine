@@ -676,7 +676,8 @@ export function getCapabilityPackageInstallIssue(
     return "A ruleset with a combat block requires schemaVersion 2 and capabilityApi 1.26 or newer";
   }
   // And the keys inside it that give a fight a board. Same file, same reading, same reason.
-  const combat = ruleset?.combat && typeof ruleset.combat === "object" ? (ruleset.combat as Record<string, unknown>) : undefined;
+  const combat =
+    ruleset?.combat && typeof ruleset.combat === "object" ? (ruleset.combat as Record<string, unknown>) : undefined;
   if (combat && !declaresApi(28)) {
     const positioned = ["distance", "ranged", "cover", "opportunity"].some((key) => combat[key] !== undefined);
     const attacks = Array.isArray(combat.attacks)

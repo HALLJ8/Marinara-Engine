@@ -338,8 +338,7 @@ export async function combatDirectorRoutes(
       const placed = state.rulesetFight!.encounter.combatants.filter(
         (combatant) => typeof combatant.x === "number" || typeof combatant.y === "number",
       );
-      if (placed.length !== state.rulesetFight!.encounter.combatants.length)
-        throw new Error("Invalid saved position.");
+      if (placed.length !== state.rulesetFight!.encounter.combatants.length) throw new Error("Invalid saved position.");
       for (const combatant of placed) {
         if (
           !Number.isInteger(combatant.x) ||

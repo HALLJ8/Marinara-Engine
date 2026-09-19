@@ -667,7 +667,7 @@
             "maxLength": 30
           },
           {
-            "$comment": "Distances in feet, which is what this file's combat block says a cell is five of. A melee weapon's reach is 5; a reach weapon's is 10. A weapon that is thrown or shot fills the two range columns in as well, and leaves the long one at 0 when it has none.",
+            "$comment": "Distances in feet, which is what this file's combat block says a cell is five of. A melee weapon's reach is 5; a reach weapon's is 10. A weapon that is thrown or shot fills the range columns in as well. A column left at 0 means the weapon carries no such distance, which is why an ordinary sword keeps both range columns at 0.",
             "id": "reach",
             "label": "Reach (ft)",
             "type": "number",

@@ -279,7 +279,10 @@ export function createRulesetFight(input: RulesetFightSeed): RulesetFightSeedRes
 function buildRulesetBoard(
   input: RulesetFightSeed,
   combatants: readonly RulesetCombatantInput[],
-): { grid: TacticalGrid; placements: Record<string, { x: number; y: number }>; battlefield?: unknown } | { error: string } | null {
+):
+  | { grid: TacticalGrid; placements: Record<string, { x: number; y: number }>; battlefield?: unknown }
+  | { error: string }
+  | null {
   if (!input.positioned || !input.definition.combat?.distance) return null;
   const bosses = new Set(input.enemies.filter((opponent) => opponent.boss).map((opponent) => opponent.id));
   const stands = combatants.map((entry) => ({
@@ -300,7 +303,9 @@ function buildRulesetBoard(
   );
   if (!generated.ok) return { error: generated.error };
   const { grid } = generated;
-  if (!placeSpawns(grid, stands, normalizeTacticalFormation(input.formation ?? undefined), rng, generated.protectedTiles))
+  if (
+    !placeSpawns(grid, stands, normalizeTacticalFormation(input.formation ?? undefined), rng, generated.protectedTiles)
+  )
     return { error: "Battlefield features prevent a connected deployment." };
   const placements: Record<string, { x: number; y: number }> = {};
   for (const stand of stands) placements[stand.id] = { x: stand.x, y: stand.y };

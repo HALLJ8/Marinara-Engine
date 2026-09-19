@@ -335,19 +335,21 @@ export function rulesetOptionTargets(
   // An area is aimed at a CELL, so nobody is named: which combatants it catches follows from where
   // it lands, and `rulesetAreaTargets` is the one place that answers it.
   if (positioned(state) && actionOf(actor, option.id)?.area) return [];
-  return state.combatants
-    .filter((combatant) => {
-      if (combatant.defeated) return false;
-      // Helping yourself is not help.
-      if (option.id === "standard:help" && combatant.id === actor.id) return false;
-      if (option.targets.side === "self") return combatant.id === actor.id;
-      if (option.targets.side === "ally") return combatant.side === actor.side;
-      if (option.targets.side === "enemy") return combatant.side !== actor.side;
-      return true;
-    })
-    // And then how far away they are, which is nothing at all in a fight without a board.
-    .filter((combatant) => rulesetTargetRefusal(state, actor.id, option.id, combatant.id) === null)
-    .map((combatant) => combatant.id);
+  return (
+    state.combatants
+      .filter((combatant) => {
+        if (combatant.defeated) return false;
+        // Helping yourself is not help.
+        if (option.id === "standard:help" && combatant.id === actor.id) return false;
+        if (option.targets.side === "self") return combatant.id === actor.id;
+        if (option.targets.side === "ally") return combatant.side === actor.side;
+        if (option.targets.side === "enemy") return combatant.side !== actor.side;
+        return true;
+      })
+      // And then how far away they are, which is nothing at all in a fight without a board.
+      .filter((combatant) => rulesetTargetRefusal(state, actor.id, option.id, combatant.id) === null)
+      .map((combatant) => combatant.id)
+  );
 }
 
 function firstTarget(state: RulesetEncounterState, actor: RulesetCombatant, action: RulesetCombatAction) {

@@ -307,7 +307,12 @@ export function rulesetReachableCells(
       const next = `${x},${y}`;
       if (rulesetCellBlocked(grid, x, y) || blockers.has(next)) continue;
       // No squeezing between two solid corners: a step corner-wise needs one of its two sides open.
-      if (dx !== 0 && dy !== 0 && rulesetCellBlocked(grid, at.x + dx, at.y) && rulesetCellBlocked(grid, at.x, at.y + dy))
+      if (
+        dx !== 0 &&
+        dy !== 0 &&
+        rulesetCellBlocked(grid, at.x + dx, at.y) &&
+        rulesetCellBlocked(grid, at.x, at.y + dy)
+      )
         continue;
       const cost = cheapest + enterCost(grid, x, y);
       if (cost > budget || cost >= (best.get(next) ?? Infinity)) continue;
@@ -353,7 +358,10 @@ function provokedBy(
   for (const cell of path) {
     for (const threat of threats) {
       if (provoked.includes(threat.combatant.id)) continue;
-      if (rulesetCellDistance(threat.at, previous) <= threat.reach && rulesetCellDistance(threat.at, cell) > threat.reach)
+      if (
+        rulesetCellDistance(threat.at, previous) <= threat.reach &&
+        rulesetCellDistance(threat.at, cell) > threat.reach
+      )
         provoked.push(threat.combatant.id);
     }
     previous = cell;

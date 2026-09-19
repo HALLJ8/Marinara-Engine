@@ -433,7 +433,14 @@ export type RulesetCombatEvent =
   /** What the ground the target stands on added to the defense the next attack is rolled against. */
   | { type: "cover"; targetId: string; bonus: number; defense: number }
   /** Where an area landed, and the cells it covered. */
-  | { type: "area"; actorId: string; optionId: string; label: string; at: RulesetCombatCell; cells: RulesetCombatCell[] }
+  | {
+      type: "area";
+      actorId: string;
+      optionId: string;
+      label: string;
+      at: RulesetCombatCell;
+      cells: RulesetCombatCell[];
+    }
   | {
       type: "dying";
       actorId: string;

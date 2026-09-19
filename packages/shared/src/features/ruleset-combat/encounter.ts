@@ -177,8 +177,14 @@ function textFromColumn(row: Record<string, unknown>, column?: string): string |
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
 
-/** One distance of an attack row, in cells: the number in its own column, or the same number on
- *  every row. Read only when the fight has a cell size to measure it in. */
+/**
+ * One distance of an attack row, in cells: the number in its own column, or the same number on
+ * every row. Read only when the fight has a cell size to measure it in.
+ *
+ * Zero is "this row does not carry that distance", which is what a number column on a sheet reads
+ * as when the player left it alone: a sword is not thrown because its range column says 0, and a
+ * weapon with no long distance has 0 in that column rather than a second row.
+ */
 function distanceInCells(
   source: RulesetCombatDistanceSource | undefined,
   row: Record<string, unknown>,
@@ -186,7 +192,7 @@ function distanceInCells(
 ): number | undefined {
   if (!source || perCell === undefined) return undefined;
   const value = "const" in source ? source.const : columnValue(row, source.column);
-  if (typeof value !== "number" || !Number.isFinite(value)) return undefined;
+  if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) return undefined;
   return rulesetInCells(value, perCell);
 }
 
@@ -219,9 +225,7 @@ function attackActions(
       ...(reach !== undefined ? { reach } : {}),
       // A row whose long distance came out shorter than its ordinary one is the player's row, not
       // the ruleset's rule, so it is read as having nothing beyond the ordinary one.
-      ...(normal !== undefined
-        ? { range: { normal, ...(long !== undefined && long > normal ? { long } : {}) } }
-        : {}),
+      ...(normal !== undefined ? { range: { normal, ...(long !== undefined && long > normal ? { long } : {}) } } : {}),
       toHit:
         abilityFromColumn(evaluated, row, source.toHit.ability?.column) +
         (proficient ? evaluated.proficiencyBonus : 0) +
@@ -414,7 +418,8 @@ function blockActions(block: RulesetStatBlockLike, perCell: number | undefined):
   const rangeOf = (range: RulesetStatBlockAction["range"]) => {
     if (range === undefined || perCell === undefined) return undefined;
     const normal = rulesetInCells(typeof range === "number" ? range : range.normal, perCell);
-    const long = typeof range === "number" || range.long === undefined ? undefined : rulesetInCells(range.long, perCell);
+    const long =
+      typeof range === "number" || range.long === undefined ? undefined : rulesetInCells(range.long, perCell);
     return { normal, ...(long !== undefined && long > normal ? { long } : {}) };
   };
   return block.actions.map((action, index) => ({

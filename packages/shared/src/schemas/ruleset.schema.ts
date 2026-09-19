@@ -1175,10 +1175,12 @@ const combatAttackSourceSchema = z
     /** The text column the attack is named by. */
     name: sheetId,
     /** How far one of these rows reaches to strike, in the ruleset's own distance unit. A row with
-     *  none reaches one cell, which is the smallest step a board has. */
+     *  none reaches one cell, which is the smallest step a board has. A column that reads 0 on a
+     *  row is that row saying it carries no such distance. */
     reach: combatDistanceSourceSchema.optional(),
     /** How far one of these rows is thrown or shot. `long` is what it still carries beyond `normal`,
-     *  which a ruleset may make harder through `combat.ranged`. */
+     *  which a ruleset may make harder through `combat.ranged`. A row whose `normal` column reads 0
+     *  is not thrown or shot at all, and swings at its `reach` instead. */
     range: z
       .object({ normal: combatDistanceSourceSchema, long: combatDistanceSourceSchema.optional() })
       .strict()
@@ -1353,7 +1355,10 @@ const combatSchema = z
       .strict()
       .optional(),
     /** What standing behind something adds to the defense an attack is rolled against. */
-    cover: z.object({ bonus: z.number().int().min(0).max(100) }).strict().optional(),
+    cover: z
+      .object({ bonus: z.number().int().min(0).max(100) })
+      .strict()
+      .optional(),
     /** The budget a strike at somebody leaving one's reach is paid out of. A ruleset that declares
      *  none has no such strikes. */
     opportunity: z.object({ budget: sheetId }).strict().optional(),

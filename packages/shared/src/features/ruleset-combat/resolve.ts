@@ -788,11 +788,7 @@ function applySignature(
 // ── The board ──
 
 /** Whether this option lands as a shape on the ground rather than on combatants named by id. */
-function positionedArea(
-  state: RulesetEncounterState,
-  actor: RulesetCombatant,
-  option: RulesetCombatOption,
-): boolean {
+function positionedArea(state: RulesetEncounterState, actor: RulesetCombatant, option: RulesetCombatOption): boolean {
   return !!state.board?.grid && !!actor.actions.find((entry) => entry.id === option.id)?.area;
 }
 
@@ -953,8 +949,7 @@ function resolveStandard(
     if (actor.movement !== undefined) {
       actor.movementLeft = (actor.movementLeft ?? 0) + rulesetMovementAllowance(ctx.definition, ctx.combat, actor);
     }
-  }
-  else if (action === "disengage") actor.flags.disengaged = true;
+  } else if (action === "disengage") actor.flags.disengaged = true;
   else if (action === "hide") actor.flags.hidden = true;
   else if (action === "ready") actor.flags.ready = true;
   else if (action === "help" && target) target.flags.helped = true;
