@@ -263,7 +263,7 @@
               "list": "knacks",
               "values": {
                 "name": "Coldfire Toss",
-                "notes": "Throw a sealed jar. Everyone near where it lands is burned, friends included."
+                "notes": "Throw a sealed jar. It burns up to three of those you pick, and a friend can be one of them."
               }
             }
           ],

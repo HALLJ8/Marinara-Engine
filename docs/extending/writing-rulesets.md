@@ -555,7 +555,7 @@ d20 system:
 - `economy`: required. `budgets` is what a turn may hold: an id, a label, `per` (`turn` refills at
   the start of the holder's own turn, `round` when a new round begins) and a `count`. The FIRST
   budget you declare is the main one, and is what a standard action spends. `movement` is an
-  optional value reference, read by the slice that gives a fight positions.
+  optional value reference. It is checked and stored today and nothing reads it yet (see Not yet).
 - `attacks`: optional. Sheet lists whose rows are weapons. `name` is the text column the row is
   named by, `damage.dice` the dice column, and each of `toHit.ability`, `toHit.proficiency`,
   `toHit.bonus`, `damage.ability`, `damage.bonus` and `damage.type` names a column of the same list.
@@ -579,8 +579,10 @@ d20 system:
   `attacks-against-disadvantage`, `attacks-against-adjacent-advantage`,
   `attacks-against-far-disadvantage`, `attacks-from-adjacent-critical`, `cannot-act`,
   `cannot-react`, `speed-zero`, `half-move-to-stand` and `ends-on-damage`. `failsSaves` names saves
-  the condition fails without rolling. The four that read distance, plus `cannot-react`, are
-  validated now and read by the slices that build movement and reactions.
+  the condition fails without rolling. The effects that need distance or movement
+  (`attacks-against-adjacent-advantage`, `attacks-against-far-disadvantage`,
+  `attacks-from-adjacent-critical`, `speed-zero`, `half-move-to-stand`), plus `cannot-react`, are
+  checked and stored today and change nothing in a fight yet (see Not yet).
 - `concentration`: optional. The live `text` field that records what is being held, the `save` that
   damage forces, the `floor` under that difficulty, and `fromDamage`, the share of the damage taken
   that sets it when it is higher. Starting a second ability that concentrates ends the first, and
