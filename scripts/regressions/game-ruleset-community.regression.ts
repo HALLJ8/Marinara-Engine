@@ -360,6 +360,27 @@ try {
     const imported = entries.find((entry) => entry.definition.id === "local/my-5e");
     assert.ok(imported, "the editors are told about imported rulesets");
     assert.deepEqual(imported.source, { kind: "local", url: null });
+
+    // The list carries the NEWEST definition. A game pinned to an older stored version asks for that
+    // one, so the sheet on screen is the one the server does its arithmetic with.
+    const exact = await app.inject({
+      method: "GET",
+      url: "/api/capability-packages/rulesets/version?rulesetId=local%2Fmy-5e&version=1",
+    });
+    assert.equal(exact.statusCode, 200, exact.body);
+    assert.equal(exact.json().definition.version, 1);
+    assert.equal(exact.json().definition.id, "local/my-5e", "served under the namespaced id, like the list");
+    const notStored = await app.inject({
+      method: "GET",
+      url: "/api/capability-packages/rulesets/version?rulesetId=local%2Fmy-5e&version=9",
+    });
+    assert.equal(notStored.statusCode, 404, notStored.body);
+    assert.equal(notStored.json().code, "ruleset_version_missing");
+    const official = await app.inject({
+      method: "GET",
+      url: "/api/capability-packages/rulesets/version?rulesetId=my-5e&version=1",
+    });
+    assert.equal(official.statusCode, 404, "a package installs one version, which the list already carries");
     assert.equal(
       entries.find((entry) => entry.definition.id === "my-5e")?.source,
       undefined,

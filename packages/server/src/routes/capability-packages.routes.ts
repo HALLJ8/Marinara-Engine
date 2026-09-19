@@ -12,6 +12,10 @@ import { refreshCapabilityAgentRegistry } from "../services/capability-packages/
 import { createChatsStorage } from "../services/storage/chats.storage.js";
 import { createAgentsStorage } from "../services/storage/agents.storage.js";
 
+const rulesetVersionQuery = z.object({
+  rulesetId: z.string().min(1).max(140),
+  version: z.coerce.number().int().min(1),
+});
 const packageParams = z.object({
   id: z
     .string()
@@ -92,6 +96,26 @@ export async function capabilityPackagesRoutes(app: FastifyInstance) {
         ...(versions ? { versions: [...versions.keys()].sort((left, right) => left - right) } : {}),
       })),
   );
+  // One stored version of an IMPORTED ruleset. The list above carries only the newest definition,
+  // but a game plays on the exact version it pinned, so the in-game sheet has to be able to ask for
+  // that one. Official packages install a single version and are answered by the list alone.
+  app.get("/rulesets/version", async (request, reply) => {
+    const { rulesetId, version } = rulesetVersionQuery.parse(request.query);
+    const registered = (await readRulesetRegistry(app.db)).get(rulesetId);
+    const definition = registered?.versions?.get(version);
+    if (!registered || !definition) {
+      return reply
+        .status(404)
+        .send({ error: "That version of the ruleset is not installed", code: "ruleset_version_missing" });
+    }
+    const listed: InstalledRuleset = {
+      packageId: registered.packageId,
+      definition,
+      ...(registered.source ? { source: registered.source } : {}),
+      versions: [...registered.versions!.keys()].sort((left, right) => left - right),
+    };
+    return listed;
+  });
   app.get<{ Params: { id: string } }>("/:id/release-notes", async (request) => {
     const { id } = packageParams.parse(request.params);
     return capabilityPackageManager.releaseNotes(id);
