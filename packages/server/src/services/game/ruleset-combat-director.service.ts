@@ -704,7 +704,13 @@ function areaCandidates(
   const average = option.forecast?.averageDamage ?? 0;
   const chance = option.forecast?.hitChance ?? 1;
   const candidates: Array<CombatAiCandidate<RulesetCandidate>> = [];
-  for (const aim of rulesetAimCells(encounter, actor.id, option.id)) {
+  // The same bound the view keeps, and the aims that catch the most people first, so what is left
+  // out on a very large board is what mattered least. The sort is stable, so equal aims keep the
+  // board's own order and the picker stays deterministic.
+  const aims = [...rulesetAimCells(encounter, actor.id, option.id)]
+    .sort((left, right) => right.targetIds.length - left.targetIds.length)
+    .slice(0, RULESET_AIM_LIMIT);
+  for (const aim of aims) {
     const caught = aim.targetIds
       .map((id) => rulesetCombatant(encounter, id))
       .filter((target): target is RulesetCombatant => !!target);
