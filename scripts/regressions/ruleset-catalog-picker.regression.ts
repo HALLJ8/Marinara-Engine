@@ -85,7 +85,7 @@ const roadFilter = catalog.filters?.find((filter) => filter.id === "road");
 const callingFilter = catalog.filters?.find((filter) => filter.id === "callings");
 assert.ok(gritFilter && roadFilter && callingFilter);
 assert.deepEqual(catalogFilterOptions(gritFilter, entries), ["0", "1"]);
-assert.deepEqual(catalogFilterOptions(roadFilter, entries), ["Any", "Ash Flats", "Glasslands", "Rustways"]);
+assert.deepEqual(catalogFilterOptions(roadFilter, entries), ["Ash Flats", "Every road", "Glasslands", "Rustways"]);
 assert.deepEqual(catalogFilterOptions(callingFilter, entries), [
   "Courier",
   "Ember-tender",

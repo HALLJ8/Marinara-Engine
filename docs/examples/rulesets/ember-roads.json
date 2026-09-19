@@ -194,7 +194,7 @@
           "id": "iron-stomach",
           "label": "Iron Stomach",
           "summary": "You can eat what the road offers and keep walking.",
-          "filters": { "grit": 0, "road": "Any", "callings": ["Hauler"] },
+          "filters": { "grit": 0, "road": "Every road", "callings": ["Hauler"] },
           "rows": [
             {
               "list": "knacks",
@@ -210,7 +210,7 @@
           "id": "last-ember",
           "label": "Last Ember",
           "summary": "Once between camps you can call a friend back from the edge.",
-          "filters": { "grit": 1, "road": "Any", "callings": ["Ember-tender"] },
+          "filters": { "grit": 1, "road": "Every road", "callings": ["Ember-tender"] },
           "rows": [
             {
               "list": "knacks",
@@ -257,7 +257,7 @@
           "id": "hold-the-line",
           "label": "Hold the Line",
           "summary": "You make the people beside you braver than they are.",
-          "filters": { "grit": 0, "road": "Any", "callings": ["Hauler", "Scout"] },
+          "filters": { "grit": 0, "road": "Every road", "callings": ["Hauler", "Scout"] },
           "rows": [
             {
               "list": "knacks",

@@ -35,8 +35,6 @@ function compare(left: string, right: string): number {
   return left.localeCompare(right, "en");
 }
 
-/** The distinct values the loaded entries actually carry for one declared filter. Derived from the
- *  entries rather than from the header, so a filter never offers a value nothing has. */
 /** What one entry says for one filter, as the texts the picker shows and matches: every tag of a
  *  tags value, a number as its text, a non-empty string as itself. */
 export function catalogEntryFilterTexts(entry: RulesetCatalogEntry, filterId: string): string[] {
@@ -46,6 +44,8 @@ export function catalogEntryFilterTexts(entry: RulesetCatalogEntry, filterId: st
   return typeof value === "string" && value ? [value] : [];
 }
 
+/** The distinct values the loaded entries actually carry for one declared filter. Derived from the
+ *  entries rather than from the header, so a filter never offers a value nothing has. */
 export function catalogFilterOptions(filter: RulesetCatalogFilter, entries: readonly RulesetCatalogEntry[]): string[] {
   const seen = new Set<string>();
   for (const entry of entries) {
