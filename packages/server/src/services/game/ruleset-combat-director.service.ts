@@ -54,7 +54,7 @@ import {
   type RulesetLiveStates,
 } from "@marinara-engine/shared";
 import { logger } from "../../lib/logger.js";
-import type { CombatDirectorState } from "./combat-director.service.js";
+import { combatDirectorView, type CombatDirectorState } from "./combat-director.service.js";
 
 /** How many events a session keeps. A screen prints the tail and asks for nothing older, so the
  *  ledger row stays small however long a fight runs.
@@ -87,6 +87,29 @@ export interface RulesetFightState {
 export type RulesetCommandResult = { ok: true } | { ok: false; error: string; code: string };
 
 const refuse = (error: string, code: string): RulesetCommandResult => ({ ok: false, error, code });
+
+/** Where the fight stands, once a command has been applied: who is waited on, or that it is over. */
+export function rulesetDirectorStage(state: CombatDirectorState): CombatDirectorState["stage"] {
+  const fight = fightOf(state);
+  if (!fight) return state.stage;
+  if (state.outcome) return "finished";
+  if (state.window) return "decision";
+  const actor = currentRulesetActor(fight.encounter);
+  return actor && rulesetController(state, fight, actor) === "manual" ? "action" : "select";
+}
+
+/** Where a command leaves the session. The director's own view is built once here, because that is
+ *  what keeps the Engine's `party`, `enemies` and `CombatSummary` in step with the fight, and a
+ *  fight that has ended has no decision open and nobody on turn. */
+function settled(state: CombatDirectorState): RulesetCommandResult {
+  combatDirectorView(state);
+  if (state.outcome) {
+    state.window = undefined;
+    state.choices = [];
+  }
+  state.stage = rulesetDirectorStage(state);
+  return { ok: true };
+}
 
 // ── Building the fight ──
 
@@ -265,6 +288,10 @@ export function syncRulesetCombatants(definition: RulesetDefinition, state: Comb
   const fight = fightOf(state);
   const combat = definition.combat;
   if (!fight || !combat) return;
+  // The ruleset decides who won, not the Engine's own hit points. They agree, because the numbers
+  // below are the same numbers, but the ruleset is the one that is read.
+  const outcome = rulesetEncounterOutcome(fight.encounter);
+  if (!state.outcome && outcome !== "ongoing") state.outcome = outcome;
   const units = new Map<string, Combatant>();
   for (const unit of [...state.party, ...state.enemies]) units.set(unit.id, unit);
   for (const combatant of fight.encounter.combatants) {
@@ -394,7 +421,8 @@ function rulesetCandidates(
   actorId: string,
 ): Array<CombatAiCandidate<RulesetCandidate>> {
   const combat = definition.combat;
-  if (!combat) return [];
+  const actor = rulesetCombatant(encounter, actorId);
+  if (!combat || !actor) return [];
   const candidates: Array<CombatAiCandidate<RulesetCandidate>> = [];
   for (const option of rulesetCombatOptions(definition, encounter, actorId)) {
     const price =
@@ -411,10 +439,13 @@ function rulesetCandidates(
       });
       continue;
     }
-    const friendly = option.targets.side === "ally" || option.targets.side === "self";
     for (const targetId of rulesetOptionTargets(encounter, actorId, option)) {
       const target = rulesetCombatant(encounter, targetId);
       if (!target) continue;
+      // Whose side the TARGET is on, not whose side the option was written for: an author may let a
+      // blast reach either side, and a fight where the Engine drops one on its own party is worse
+      // than one where it never does.
+      const ally = target.side === actor.side;
       const health = rulesetCombatHealth(definition, combat, target);
       const pool = Math.max(1, health.value + health.temp);
       const chance = option.forecast?.hitChance ?? 1;
@@ -424,15 +455,16 @@ function rulesetCandidates(
         targetId,
         cost: price,
       };
-      if (friendly) {
-        const missing = Math.max(0, health.max - health.value);
-        if (average > 0 && missing > 0) {
-          candidate.healing = Math.min(1, average / Math.max(1, health.max)) + (target.down ? 1 : 0);
-        } else if (average === 0) candidate.support = 0.4;
-      } else {
+      if (option.heals) {
+        // Never on the other side, and never on somebody with nothing to gain by it.
+        if (!ally || (health.value >= health.max && !target.down)) continue;
+        candidate.healing = Math.min(1, average / Math.max(1, health.max)) + (target.down ? 1 : 0);
+      } else if (average > 0) {
+        if (ally) continue;
         candidate.damage = Math.min(2, average / pool) * chance;
         if (average >= pool) candidate.finish = chance;
-      }
+      } else if (ally) candidate.support = 0.4;
+      else candidate.setup = 0.4;
       candidates.push(candidate);
     }
   }
@@ -566,7 +598,6 @@ function continueBossTurn(
     return;
   }
   if (currentRulesetActor(fight.encounter)?.id === actorId) advanceTurn(definition, state, fight);
-  state.stage = "select";
 }
 
 // ── Commands ──
@@ -594,9 +625,7 @@ export function commandRulesetCombatDirector(
 
   if (command.type === "flee") {
     state.outcome = "flee";
-    closeWindow(state);
-    state.stage = "finished";
-    return { ok: true };
+    return settled(state);
   }
 
   if (command.type === "control") {
@@ -606,7 +635,7 @@ export function commandRulesetCombatDirector(
     }
     if (state.window) return refuse("Resolve the open decision first.", "ruleset_combat_decision_open");
     fight.controllers[combatant.id] = command.controller;
-    return { ok: true };
+    return settled(state);
   }
 
   const actor = currentRulesetActor(fight.encounter);
@@ -625,8 +654,7 @@ export function commandRulesetCombatDirector(
     if (step.refused && step.refused.type === "refused") {
       return refuse(rulesetRefusalMessage(step.refused.reason), `ruleset_combat_${step.refused.reason}`);
     }
-    state.stage = "select";
-    return { ok: true };
+    return settled(state);
   }
 
   if (command.type === "choose" || command.type === "fallback") {
@@ -658,34 +686,19 @@ export function commandRulesetCombatDirector(
           actorId,
         );
         if (currentRulesetActor(fight.encounter)?.id === actorId) advanceTurn(definition, state, fight);
-        state.stage = "select";
-        return { ok: true };
+        return settled(state);
       }
     }
     continueBossTurn(definition, state, fight, actorId);
-    return { ok: true };
+    return settled(state);
   }
 
   // `continue`: one whole turn of whoever the player is not playing.
   if (state.window) return { ok: true };
-  if (controller === "manual") {
-    state.stage = "action";
-    return { ok: true };
-  }
+  if (controller === "manual") return settled(state);
   if (controller === "gm" && openRulesetWindow(definition, state, fight, actor.id)) return { ok: true };
   playRulesetTurn(definition, state, fight, actor.id);
-  state.stage = "select";
-  return { ok: true };
-}
-
-/** Where the fight stands, once a command has been applied. */
-export function rulesetDirectorStage(state: CombatDirectorState): CombatDirectorState["stage"] {
-  const fight = fightOf(state);
-  if (!fight) return state.stage;
-  if (state.outcome) return "finished";
-  if (state.window) return "decision";
-  const actor = currentRulesetActor(fight.encounter);
-  return actor && rulesetController(state, fight, actor) === "manual" ? "action" : "select";
+  return settled(state);
 }
 
 /** The resolver's own reason, in a sentence a player can read. The code beside it is what a client

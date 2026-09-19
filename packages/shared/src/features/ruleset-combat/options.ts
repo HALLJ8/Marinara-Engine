@@ -273,6 +273,7 @@ function optionFrom(
     label: action.label,
     budget: action.budget,
     targets: action.targets,
+    ...(action.heal ? { heals: true } : {}),
   };
   if (paid.cost.length > 0) option.cost = paid.cost;
   if (action.uses) option.left = actor.uses[action.id] ?? 0;
@@ -381,6 +382,7 @@ export function rulesetSignatureOptions(
       kind: action.kind,
       label: action.label,
       targets: action.targets,
+      ...(action.heal ? { heals: true } : {}),
       signature: { cost: action.signature.cost, points },
     };
     if (action.uses) option.left = actor.uses[action.id] ?? 0;
