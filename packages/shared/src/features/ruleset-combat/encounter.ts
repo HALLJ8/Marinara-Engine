@@ -317,6 +317,7 @@ function abilityAction(
       difficulty: source.saveDifficulty ? resolve(source.saveDifficulty) : 0,
     };
   }
+  if (source.saveDifficulty) action.saveDifficulty = resolve(source.saveDifficulty);
   if (mechanics.applies?.length) action.applies = mechanics.applies.map((entry2) => ({ ...entry2 }));
   if (mechanics.concentration) action.concentration = true;
   return action;
@@ -405,6 +406,7 @@ function blockActions(block: RulesetStatBlockLike): RulesetCombatAction[] {
     ...(action.autoHit ? { autoHit: true } : {}),
     ...(action.damage ? { damage: { ...action.damage } } : {}),
     ...(action.save ? { save: { ...action.save } } : {}),
+    ...(action.saveDifficulty !== undefined ? { saveDifficulty: action.saveDifficulty } : {}),
     ...(action.applies?.length ? { applies: action.applies.map((entry) => ({ ...entry })) } : {}),
   }));
 }

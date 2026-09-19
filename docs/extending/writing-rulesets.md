@@ -517,7 +517,7 @@ d20 system:
     "budgets": [
       { "id": "action", "label": "Action", "per": "turn", "count": 1 },
       { "id": "bonus", "label": "Bonus action", "per": "turn", "count": 1 },
-      { "id": "reaction", "label": "Reaction", "per": "round", "count": 1 }
+      { "id": "reaction", "label": "Reaction", "per": "turn", "count": 1 }
     ],
     "movement": { "field": "speed" }
   },
@@ -562,7 +562,9 @@ d20 system:
 - `abilities`: optional. Sheet lists whose catalog-marked rows are abilities, filtered exactly as
   `battle.skills` are with `onlyWhen` and `alwaysWhen`. What each one does is that entry's own
   `mechanics`; the block says which `budget` they spend by default, the `toHit` an entry that rolls
-  to hit adds, and the `saveDifficulty` an entry's save is rolled against.
+  to hit adds, and the `saveDifficulty` an entry's save is rolled against. An entry that asks for a
+  save, its own or one that ends a condition it applies, is refused when the list it lands in has
+  no `saveDifficulty`: a save against nothing would always succeed.
 - `standard`: optional, from the closed list `dash`, `disengage`, `dodge`, `help`, `hide`, `ready`.
   Today `dodge` (attacks against the dodger are rolled twice and the worse kept) and `help` (the
   helped ally's next attack is rolled twice and the better kept) are resolved, `dash` and

@@ -1147,7 +1147,7 @@
       "budgets": [
         { "id": "action", "label": "Action", "per": "turn", "count": 1 },
         { "id": "bonus", "label": "Bonus action", "per": "turn", "count": 1 },
-        { "id": "reaction", "label": "Reaction", "per": "round", "count": 1 }
+        { "id": "reaction", "label": "Reaction", "per": "turn", "count": 1 }
       ],
       "movement": { "field": "speed" }
     },

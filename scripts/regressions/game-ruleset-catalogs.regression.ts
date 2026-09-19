@@ -264,6 +264,9 @@ const catalogFile = (entries: unknown[], catalog = "knacks") =>
     (doc) => {
       doc.sheet.saves = [{ id: "nerve", label: "Nerve", ability: "heart" }];
       doc.sheet.live.pools[0].group = "embers";
+      // A fight has to have something to roll that save against, so a ruleset that gains saves
+      // says what that is on the list the entry lands in.
+      for (const source of doc.combat?.abilities ?? []) source.saveDifficulty = { const: 8 };
     },
   );
   assert.deepEqual(declared, [], "a save the sheet declares and a pool group are both usable costs");

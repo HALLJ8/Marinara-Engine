@@ -50,6 +50,9 @@ export interface RulesetStatBlockAction {
   autoHit?: boolean;
   damage?: RulesetCombatDamage;
   save?: RulesetCombatSaveRider;
+  /** What a save that ENDS one of `applies` is rolled against, when the action has no save of its
+   *  own to borrow the number from. */
+  saveDifficulty?: number;
   applies?: RulesetCombatApplies[];
   targetCount?: number;
   reach?: number;
@@ -105,6 +108,8 @@ export interface RulesetCombatAction {
   heal?: RulesetCombatAmount;
   temporary?: RulesetCombatAmount;
   save?: RulesetCombatSaveRider;
+  /** The source's own save difficulty, for a save-ends on an action with no save of its own. */
+  saveDifficulty?: number;
   applies?: RulesetCombatApplies[];
   concentration?: boolean;
   /** How the price is paid. The name is what the sheet's own `use` command knows the row by, and

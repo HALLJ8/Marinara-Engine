@@ -109,7 +109,7 @@ function firstOf<T extends RulesetCombatEvent["type"]>(events: RulesetCombatEven
     [
       ["action", "turn", 1],
       ["bonus", "turn", 1],
-      ["reaction", "round", 1],
+      ["reaction", "turn", 1],
     ],
   );
   assert.equal(combat.threat!.tiers.length, 9, "the scale an opponent is picked from, CR 0 to CR 5");
@@ -246,6 +246,24 @@ function firstOf<T extends RulesetCombatEvent["type"]>(events: RulesetCombatEven
     issues({ applies: [{ condition: "prone", duration: "until-save", saveEnds: { save: "luck", at: "turn-end" } }] }),
     /Unknown save "luck"/,
   );
+  // A save has to be rolled against something. With the abilities source's saveDifficulty gone, an
+  // entry that asks for a save, its own or one that ends a condition, is refused rather than
+  // quietly saved against nothing.
+  const noDifficulty = structuredClone(fiveE);
+  delete (noDifficulty.combat!.abilities[0] as { saveDifficulty?: unknown }).saveDifficulty;
+  const bare = (mechanics: Record<string, unknown>) =>
+    rulesetCatalogEntryIssues(noDifficulty, header(["spells"]), [entry(mechanics)])
+      .map((issue) => `${issue.path.join(".")}: ${issue.message}`)
+      .join("; ");
+  assert.match(
+    bare({ save: { save: "dex_save", onSuccess: "half" } }),
+    /mechanics\.save: The combat abilities source for "spells" declares no saveDifficulty/,
+  );
+  assert.match(
+    bare({ applies: [{ condition: "prone", duration: "until-save", saveEnds: { save: "str_save", at: "turn-end" } }] }),
+    /mechanics\.applies: The combat abilities source for "spells" declares no saveDifficulty/,
+  );
+  assert.equal(bare({ targetCount: 2 }), "", "an entry that asks for no save needs none");
   assert.match(issues({ scales: { from: { derived: "power" }, table: [[1, 0]] } }), /Unknown derived value "power"/);
   assert.equal(issues({ scales: { from: { field: "level" }, table: [[1, 0]] } }), "");
   assert.equal(issues({ temporary: { dice: "1d4", flat: 4 } }), "");

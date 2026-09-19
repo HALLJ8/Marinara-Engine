@@ -2227,6 +2227,22 @@ export function rulesetCatalogEntryIssues(
         add([...path, "saveEnds", "save"], `Unknown save "${applies.saveEnds.save}"`);
       }
     });
+    // A save needs something to be rolled against. In a fight that number comes from the abilities
+    // source of the list the entry lands in, so an entry that asks for a save (its own, or one that
+    // ends a condition) in a list whose source declares no `saveDifficulty` would be saved against
+    // nothing, and everybody would always succeed.
+    const asksForSave = !!mechanics?.save || !!mechanics?.applies?.some((applies) => applies.saveEnds);
+    if (asksForSave && definition.combat) {
+      const lists = new Set(entry.rows.map((row) => row.list));
+      (definition.combat.abilities ?? []).forEach((source) => {
+        if (lists.has(source.list) && source.saveDifficulty === undefined) {
+          add(
+            [index, "mechanics", mechanics?.save ? "save" : "applies"],
+            `The combat abilities source for "${source.list}" declares no saveDifficulty for this save to be rolled against`,
+          );
+        }
+      });
+    }
     if (mechanics?.budget !== undefined && budgets && !budgets.has(mechanics.budget)) {
       add([index, "mechanics", "budget"], `Unknown budget "${mechanics.budget}"`);
     }

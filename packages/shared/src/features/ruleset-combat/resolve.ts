@@ -477,8 +477,9 @@ function endConditionsOnDamage(ctx: RulesetCombatContext, target: RulesetCombata
  *  turn, so a condition lasts the same time whoever put it on. */
 function tickConditions(ctx: RulesetCombatContext, actor: RulesetCombatant, at: "turn-start" | "turn-end"): void {
   for (const entry of [...actor.tracked]) {
-    if (entry.saveEnds?.at === at) {
-      const ended = rollSave(ctx, actor, entry.saveEnds.save, entry.difficulty ?? 0, entry.source);
+    // A save with nothing to be rolled against is not rolled: the condition runs on its clock.
+    if (entry.saveEnds?.at === at && entry.difficulty !== undefined) {
+      const ended = rollSave(ctx, actor, entry.saveEnds.save, entry.difficulty, entry.source);
       if (ended) {
         removeCondition(ctx, actor, entry.condition, "save");
         continue;
@@ -782,7 +783,13 @@ function resolveAction(
       for (const applies of action.applies ?? []) {
         applyConditionId(ctx, target, applies.condition, applies, {
           sourceId: actor.id,
-          ...(action.save ? { difficulty: action.save.difficulty } : {}),
+          // The action's own save when it has one, otherwise what its source says saves are rolled
+          // against. Never zero by default: that would let everybody shake a condition off.
+          ...(action.save
+            ? { difficulty: action.save.difficulty }
+            : action.saveDifficulty !== undefined
+              ? { difficulty: action.saveDifficulty }
+              : {}),
           ...(action.concentration ? { concentration: true } : {}),
         });
       }
