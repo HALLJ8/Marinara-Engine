@@ -677,7 +677,11 @@ const catalogAppliesSchema = z
   .strict()
   .superRefine((applies, ctx) => {
     if (applies.duration === "until-save" && !applies.saveEnds) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["saveEnds"], message: '"until-save" needs the save that ends it' });
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["saveEnds"],
+        message: '"until-save" needs the save that ends it',
+      });
     }
   });
 
@@ -1831,7 +1835,8 @@ function refineRulesetDefinition(def: RulesetDefinitionBase, ctx: z.RefinementCt
       unique(combat.threat.tiers, at("threat", "tiers"), "threat tier");
       combat.threat.tiers.forEach((tier, index) => {
         for (const key of ["health", "damagePerRound"] as const) {
-          if (tier[key][0] > tier[key][1]) issue(at("threat", "tiers", index, key, 0), "The lowest is above the highest");
+          if (tier[key][0] > tier[key][1])
+            issue(at("threat", "tiers", index, key, 0), "The lowest is above the highest");
         }
       });
     }
