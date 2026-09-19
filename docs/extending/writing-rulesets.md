@@ -6,15 +6,20 @@ A ruleset is one JSON file. It is data, not code. Nothing in it runs, so importi
 
 ## Read this first: what a ruleset can and cannot do
 
-A ruleset can only fill in the blanks of a mechanic the Engine already knows. Today the Engine knows one way to resolve a check, called `dice-sum`: roll some dice, add numbers from the sheet, and meet or beat a difficulty. You choose the dice, how a score becomes a modifier, what training is worth, whether advantage exists, and what natural results do. That covers d20 systems, 2d6 plus stat systems, and many others.
+A ruleset can only fill in the blanks of a mechanic the Engine already knows. Today the Engine knows two ways to resolve a check, and your file picks one with `resolution.kind`:
 
-A mechanic that does not fit that shape cannot be written in a ruleset file. Dice pools that count successes, exploding dice, roll-under percentile checks, and degrees of success are examples. Each of those needs a new resolution kind inside the Engine, which is a code contribution with tests, not a JSON file. If your system needs one, open a feature request on the Engine repository and describe the mechanic with a few worked rolls. Those worked rolls become the tests.
+- **`dice-sum`**: roll some dice, add numbers from the sheet, and meet or beat a difficulty. That covers d20 systems, 2d6 plus stat systems, and many others.
+- **`dice-pool`**: throw the character's own number of dice and count the ones that reach a target. That covers systems where a rating is a handful of dice rather than a bonus.
+
+Both are described in full under [Resolution kinds](#resolution-kinds).
+
+A mechanic that does not fit either shape cannot be written in a ruleset file. Taking the highest die of a pool, roll-under percentile checks, symbol dice, and opposed pools are examples. Each of those needs a new resolution kind inside the Engine, which is a code contribution with tests, not a JSON file. If your system needs one, open a feature request on the Engine repository and describe the mechanic with a few worked rolls. Those worked rolls become the tests.
 
 Combat is separate too. Battles run on Marinara's own combat, in whichever Combat Preference the game was created with. A ruleset cannot change how a battle is resolved. What it can do is lend the battle the numbers on its character sheets, with an optional `battle` block: see [Battles](#battles-lending-the-sheet-to-marinaras-combat).
 
 ## Quickstart
 
-1. Copy the example file [`ember-roads.json`](https://github.com/Pasta-Devs/Marinara-Engine/blob/staging/docs/examples/rulesets/ember-roads.json). It is a small 2d6 system with three stats, written to show that nothing in the format assumes a d20 or six abilities. For a full-size example, see the 5e (SRD 5.1) file in [`ruleset-5e-2014.example.json`](https://github.com/Pasta-Devs/Marinara-Engine/blob/staging/docs/development/ruleset-5e-2014.example.json).
+1. Copy the example file that matches how your system rolls. [`ember-roads.json`](https://github.com/Pasta-Devs/Marinara-Engine/blob/staging/docs/examples/rulesets/ember-roads.json) is a small 2d6 system with three stats, written to show that nothing in the format assumes a d20 or six abilities. [`gravewatch.json`](https://github.com/Pasta-Devs/Marinara-Engine/blob/staging/docs/examples/rulesets/gravewatch.json) is a small ten-sided dice pool with three ratings and six trades. For a full-size example, see the 5e (SRD 5.1) file in [`ruleset-5e-2014.example.json`](https://github.com/Pasta-Devs/Marinara-Engine/blob/staging/docs/development/ruleset-5e-2014.example.json).
 2. Change `id` to your own. An id is lowercase letters, digits, and single hyphens, such as `ember-roads`.
 3. Edit the sheet, the rests, and the Game Master text.
 4. Import it (see [Trying your ruleset](#trying-your-ruleset)). The import checks the whole file and tells you what is wrong, line by line, before anything is saved.
@@ -51,7 +56,17 @@ The file may be up to 256 KB. Text that ends up in a prompt (names, labels, Game
 
 Ids inside the sheet (abilities, skills, fields, pools, and so on) are lowercase letters, digits, and underscores, starting with a letter, such as `grit_max`.
 
-### Resolution
+### Resolution kinds
+
+`resolution.kind` picks how a check is rolled. Both kinds read the same character sheet and share three keys, so the parts of the file below `resolution` do not change when you switch:
+
+- `abilityModifier`: how a score on the sheet becomes a number. `identity` means the score is the number. `floorHalfMinusTen` is the 5e rule. `stepTable` lets you list your own thresholds as `[[score, number], ...]`.
+- `proficiencyTiers`: the training levels a skill or save can have. The first one is what an unlisted skill gets. A tier adds `flat`, or `multiplier` times a proficiency bonus, or both. If your system has a proficiency bonus, name where it comes from with `"proficiency": { "bonus": { "derived": "proficiency_bonus" } }`.
+- `proficiency`: optional, and only needed by a tier that multiplies.
+
+What the resulting number means is the kind's business: `dice-sum` adds it to the roll, `dice-pool` throws that many dice.
+
+#### `dice-sum`: add the dice up
 
 ```json
 "resolution": {
@@ -71,11 +86,77 @@ Ids inside the sheet (abilities, skills, fields, pools, and so on) are lowercase
 ```
 
 - `dice`: how many dice and how many sides. The total is what gets compared to the difficulty.
-- `abilityModifier`: how a score on the sheet becomes the number added to a roll. `identity` means the score is the modifier. `floorHalfMinusTen` is the 5e rule. `stepTable` lets you list your own thresholds as `[[score, modifier], ...]`.
-- `proficiencyTiers`: the training levels a skill or save can have. The first one is what an unlisted skill gets. A tier adds `flat`, or `multiplier` times a proficiency bonus, or both. If your system has a proficiency bonus, name where it comes from with `"proficiency": { "bonus": { "derived": "proficiency_bonus" } }`.
 - `advantage`: whether the Game Master may ask for the dice to be rolled twice and one roll kept.
-- `naturals`: what the highest and lowest face of a single die do for checks and for saves: `none`, `both`, `max-only`, or `min-only`. Leave it out for pure arithmetic.
-- `difficultyLadder`: the difficulties the Game Master is told to pick from.
+- `naturals`: what the highest and lowest face of a single die do for checks and for saves: `none`, `both`, `max-only`, or `min-only`. Leave it out for pure arithmetic. It needs a single die, so a 2d6 system has to use `none`.
+- `difficultyLadder`: the difficulties the Game Master is told to pick from. `dc` is the number the total must reach.
+
+#### `dice-pool`: throw the dice and count them
+
+The sheet's number is the **size of the pool**, not a bonus on top of it. A rating of 3 and a trade worth 2 throw five dice. That is the whole trick: no new sheet vocabulary, no new editor, and a system whose ratings are handfuls of dice is written with the same `abilities`, `skills` and `proficiencyTiers` as any other.
+
+```json
+"resolution": {
+  "kind": "dice-pool",
+  "die": { "sides": 10 },
+  "abilityModifier": { "op": "identity" },
+  "proficiencyTiers": [
+    { "id": "rating_0", "label": "Untried" },
+    { "id": "rating_1", "label": "Shown once", "flat": 1 }
+  ],
+  "pool": { "min": 1, "max": 15 },
+  "target": { "default": 7, "min": 5, "max": 9 },
+  "explode": { "from": 10 },
+  "cancel": { "upTo": 1 },
+  "botch": { "upTo": 1 },
+  "exceptional": { "successes": 5 },
+  "situationalDice": { "min": -3, "max": 3 },
+  "difficultyLadder": [
+    { "label": "Plain work", "successes": 1, "target": 6 },
+    { "label": "Grim", "successes": 3, "target": 8 }
+  ]
+}
+```
+
+- `die`: how many sides one die of the pool has, from 2 to 100.
+- `pool`: the range the sheet's number is held to before anything explodes. A `min` of 0 lets an empty pool fail with no roll at all, and `max` can be 100 at most.
+- `target`: the face a die has to reach to count. Write `min` below `max` to let the Game Master move it per check with `threshold=`; write all three the same to fix it.
+- `double`: optional. A face at or above `from` counts twice.
+- `explode`: optional. A face at or above `from` rolls one more die, and a die added that way can explode in turn. The extra dice are capped at `pool.max` on top of the pool itself, so one check throws at most twice `pool.max` dice and a low `from` cannot roll forever.
+- `cancel`: optional. A face at or below `upTo` takes one success away. The count never goes below zero.
+- `botch`: optional. When **no** die succeeded and a face at or below `upTo` showed, the check is a critical failure. A pool whose one success was cancelled away has failed, not botched.
+- `exceptional`: optional. This many net successes or more, on a check that succeeded, is a critical success.
+- `situationalDice`: optional. The range of dice the Game Master may add or take for one check with `bonus=`, for stunts, wounds or bad light.
+- `difficultyLadder`: `successes` is how many the check needs. A step may also name a `target`, but only where the target is adjustable and only inside its range.
+
+`cancel` and `botch` faces must be below the lowest target, and every face any of these rules names has to be a face the die actually has. A rule that could never fire is refused at import rather than found in play.
+
+A pool ruleset is Capability API 1.24 for a packaged ruleset. A community ruleset you import is validated by the Engine that reads it, so it needs nothing.
+
+#### What the Game Master may write on a pool check
+
+```
+[skill_check: skill="Ward" dc="2" who="Bram the Quiet" threshold="8" bonus="-2" with="Sinew"]
+```
+
+- `dc` is the number of **successes** needed, not a target number. It may be anything from 1 up to the most one roll could ever count: the pool's maximum, doubled when dice can explode, and doubled again when faces count twice.
+- `threshold=` moves the per-die target, and is only offered while `target.min` is below `target.max`.
+- `bonus=` adds or takes dice, and is only offered while `situationalDice` is declared.
+- `with=` rolls a skill or save with another ability than its own. It works on both kinds, so a 5e ruleset gets "Strength (Intimidation)" from the same attribute.
+
+Each one is held to what your file declares: a value outside the range is pulled back to the nearest end, and an attribute your ruleset does not offer is ignored rather than refusing the check. The saved record then shows what the roll really used: the threshold and the bonus dice after your limits, and `with=` only when that ability was swapped in. The Engine always throws the dice itself. A pool result the model wrote is replaced, `mode="advantage"` is ignored because the kind has no advantage, and a die the player rolled before the turn does not apply.
+
+#### What is out of scope, and why
+
+Each of these needs its own resolution kind, because none of them can be expressed by counting dice against a target:
+
+- **Take the highest die** (as in Blades in the Dark) needs a partial-success tier that a check result does not have.
+- **Stance pools compared to a stat** (as in Lasers and Feelings) decide "over or under" per check, which is a different comparison.
+- **Symbol dice** (as in Genesys) do not produce numbers at all.
+- **Opposed pools** resolve two characters at once; a check has one roller.
+- **Roll-under and open-ended percentile** compare in the other direction.
+- **Sum pools with a wild die** (as in OpenD6) add the dice up and treat one of them specially.
+
+Two things this kind does not model are re-rolls bought with a resource and automatic successes. The closest the Game Master can get is `bonus=` dice together with a `[sheet:]` command that spends the resource, which keeps both visible on the sheet and in the log. That is an approximation: extra dice are not a re-roll of one die and do not guarantee a success.
 
 ### The sheet
 

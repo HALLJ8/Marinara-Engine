@@ -73,17 +73,25 @@ export function AnimatedSkillCheckResult({
         hero
         highlightValue={result.rollMode !== "normal" ? result.usedRoll : undefined}
         resolution={result.resolution}
+        threshold={result.threshold}
       />
       <div className="skill-check-roll-result">
         <span>
-          {result.rollMode !== "normal"
-            ? localizeUi("ui.dice.animatedskillcheckresult.usingValue1", { value1: result.usedRoll })
-            : result.resolution === "sum" &&
-                result.rolls.length === 1 &&
-                result.usedRoll === result.rolls[0] &&
-                result.total === result.usedRoll + result.modifier
-              ? localizeUi("ui.dice.animatedskillcheckresult.rolledValue1", { value1: result.usedRoll })
-              : localizeUi("ui.dice.animatedskillcheckresult.resultValue1", { value1: result.total })}
+          {/* A pool counts successes, so it says how many it got and how many it owed. Nothing is
+              added up and no single die was kept, which is why neither wording below fits it. */}
+          {result.resolution === "successes"
+            ? localizeUi("ui.dice.animatedskillcheckresult.successesNeeded", {
+                count: result.total,
+                needed: result.dc,
+              })
+            : result.rollMode !== "normal"
+              ? localizeUi("ui.dice.animatedskillcheckresult.usingValue1", { value1: result.usedRoll })
+              : result.resolution === "sum" &&
+                  result.rolls.length === 1 &&
+                  result.usedRoll === result.rolls[0] &&
+                  result.total === result.usedRoll + result.modifier
+                ? localizeUi("ui.dice.animatedskillcheckresult.rolledValue1", { value1: result.usedRoll })
+                : localizeUi("ui.dice.animatedskillcheckresult.resultValue1", { value1: result.total })}
         </span>
         <strong>{label}</strong>
       </div>

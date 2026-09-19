@@ -7,6 +7,7 @@
 // dangling reference still reads as 0 instead of failing a turn.
 
 import {
+  RULESET_POOL_MAX_DICE,
   rulesetSheetEnvelopeSchema,
   type RulesetDefinition,
   type RulesetSheetBuild,
@@ -255,10 +256,19 @@ export function isRulesetItemHidden(
 
 // ── Checks ──
 
-export type RulesetCheckTarget =
-  | { type: "skill"; id: string; label: string }
-  | { type: "save"; id: string; label: string }
-  | { type: "ability"; id: string; label: string };
+/** A skill or save also carries the ability it normally rolls with, and the one a `with=` asked
+ *  for instead, so the modifier can swap the first for the second without re-reading the sheet. */
+interface RulesetTrainedCheckTarget {
+  type: "skill" | "save";
+  id: string;
+  label: string;
+  /** The entry's own ability, when it names one. */
+  ability?: string;
+  /** The ability the request named instead. Only ever an ability this sheet declares. */
+  withAbility?: string;
+}
+
+export type RulesetCheckTarget = RulesetTrainedCheckTarget | { type: "ability"; id: string; label: string };
 
 function normalizeCheckName(value: string): string {
   return value
@@ -267,36 +277,69 @@ function normalizeCheckName(value: string): string {
     .trim();
 }
 
+/** The spellings one sheet entry answers to: its id, its label and its short form. */
+function checkNames(entry: { id: string; label: string; short?: string }): string[] {
+  return [
+    normalizeCheckName(entry.id),
+    normalizeCheckName(entry.label),
+    entry.short ? normalizeCheckName(entry.short) : "",
+  ].filter(Boolean);
+}
+
+/** The ability a name means in this ruleset, or null. Used for `with=`, which is a bare ability
+ *  name rather than a check request. */
+function matchAbilityId(definition: RulesetDefinition, requested: string): string | null {
+  const name = normalizeCheckName(requested);
+  if (!name) return null;
+  const base = name.replace(/\s(?:ability check|check|saving throw|save)$/, "").trim();
+  const ability = definition.sheet.abilities.find(
+    (entry) => checkNames(entry).includes(name) || checkNames(entry).includes(base),
+  );
+  return ability?.id ?? null;
+}
+
 /** What a requested check name means in this ruleset: a skill, a save, or a raw ability check.
  *  Matches ids and labels, with "check", "save" and "saving throw" suffixes understood, so
  *  "Dexterity save", "dex_save" and "DEX saving throw" are one request. Null when the ruleset has
- *  no such thing; the caller then rolls unmodified dice rather than guessing an ability. */
-export function matchRulesetCheckTarget(definition: RulesetDefinition, requested: string): RulesetCheckTarget | null {
+ *  no such thing; the caller then rolls unmodified dice rather than guessing an ability.
+ *
+ *  `withAbility` is the tag's `with=`: roll this skill or save with another ability than its own.
+ *  A name no ability answers to is IGNORED rather than refused, so the entry keeps its own
+ *  ability; the resolver notices the unset `withAbility` and says so in the log. It means nothing
+ *  on a raw ability check, which already names the ability it rolls. */
+export function matchRulesetCheckTarget(
+  definition: RulesetDefinition,
+  requested: string,
+  withAbility?: string,
+): RulesetCheckTarget | null {
   const { sheet } = definition;
   const name = normalizeCheckName(requested);
   if (!name) return null;
   const saveWord = /\s(?:saving throw|save)$/.test(name);
   const base = name.replace(/\s(?:ability check|check|saving throw|save)$/, "").trim();
-  const names = (entry: { id: string; label: string; short?: string }) =>
-    [
-      normalizeCheckName(entry.id),
-      normalizeCheckName(entry.label),
-      entry.short ? normalizeCheckName(entry.short) : "",
-    ].filter(Boolean);
+  const names = checkNames;
+  const override = withAbility ? matchAbilityId(definition, withAbility) : null;
+  const trained = (type: "skill" | "save", entry: { id: string; label: string; ability?: string }) => ({
+    type,
+    id: entry.id,
+    label: entry.label,
+    ...(entry.ability ? { ability: entry.ability } : {}),
+    ...(override ? { withAbility: override } : {}),
+  });
 
   const save = sheet.saves.find((entry) => names(entry).includes(name));
-  if (save) return { type: "save", id: save.id, label: save.label };
+  if (save) return trained("save", save);
   if (saveWord) {
     // "<ability> save": the save that rolls with that ability, when exactly one does.
     const ability = sheet.abilities.find((entry) => names(entry).includes(base));
     const forAbility = ability ? sheet.saves.filter((entry) => entry.ability === ability.id) : [];
-    if (forAbility.length === 1) return { type: "save", id: forAbility[0]!.id, label: forAbility[0]!.label };
+    if (forAbility.length === 1) return trained("save", forAbility[0]!);
     const byBase = sheet.saves.find((entry) => names(entry).includes(base));
-    if (byBase) return { type: "save", id: byBase.id, label: byBase.label };
+    if (byBase) return trained("save", byBase);
     return null;
   }
   const skill = sheet.skills.find((entry) => names(entry).includes(name) || names(entry).includes(base));
-  if (skill) return { type: "skill", id: skill.id, label: skill.label };
+  if (skill) return trained("skill", skill);
   const ability = sheet.abilities.find((entry) => names(entry).includes(base));
   if (ability) return { type: "ability", id: ability.id, label: ability.label };
   return null;
@@ -304,9 +347,21 @@ export function matchRulesetCheckTarget(definition: RulesetDefinition, requested
 
 export function rulesetCheckModifier(evaluated: EvaluatedRulesetSheet, target: RulesetCheckTarget | null): number {
   if (!target) return 0;
-  if (target.type === "skill") return evaluated.skillMods[target.id] ?? 0;
-  if (target.type === "save") return evaluated.saveMods[target.id] ?? 0;
-  return evaluated.abilityMods[target.id] ?? 0;
+  if (target.type === "ability") return evaluated.abilityMods[target.id] ?? 0;
+  const own = target.type === "skill" ? evaluated.skillMods[target.id] : evaluated.saveMods[target.id];
+  const base = own ?? 0;
+  if (!target.withAbility) return base;
+  // `with=`: the entry's own ability modifier steps aside for the named one. The training tier and
+  // the sheet's own free bonus are untouched, which is what makes this one number, not a new check.
+  const replaced = target.ability ? (evaluated.abilityMods[target.ability] ?? 0) : 0;
+  return base - replaced + (evaluated.abilityMods[target.withAbility] ?? 0);
+}
+
+/** One check number, spelled the way its kind means it: a modifier added to the dice, or how many
+ *  dice there are. Everywhere a check value is shown to a player or written into a prompt. */
+export function formatRulesetCheckValue(definition: RulesetDefinition, value: number): string {
+  if (definition.resolution.kind === "dice-pool") return `${value} ${value === 1 ? "die" : "dice"}`;
+  return value >= 0 ? `+${value}` : `${value}`;
 }
 
 export interface RulesetCheckRoll {
@@ -323,9 +378,28 @@ export interface RulesetCheckRoll {
   dice: string;
 }
 
+/** A check that threw nothing at all: the shape every "no roll happened" answer takes, so no path
+ *  ever has to invent a die to have something to return. Built fresh each time, because a caller
+ *  spreads it into a result it then owns. */
+function noRoll(): RulesetCheckRoll {
+  return {
+    rolls: [],
+    usedRoll: 0,
+    total: 0,
+    success: false,
+    criticalSuccess: false,
+    criticalFailure: false,
+    rollMode: "normal",
+    dice: "",
+  };
+}
+
 /** Roll a `dice-sum` check. Advantage and disadvantage cancel, and are ignored entirely when the
  *  ruleset does not allow them. `preRolled` stands in for the dice when the player rolled first;
- *  it is honoured only for a single-die ruleset and only within the die's faces. */
+ *  it is honoured only for a single-die ruleset and only within the die's faces.
+ *
+ *  A ruleset of another kind has no dice to sum, so it comes back as a failure with no roll rather
+ *  than borrowing a die this system does not have. Callers dispatch on `resolution.kind`. */
 export function rollDiceSumCheck(
   definition: RulesetDefinition,
   input: {
@@ -338,7 +412,9 @@ export function rollDiceSumCheck(
   },
   rollDie: (sides: number) => number,
 ): RulesetCheckRoll {
-  const { dice, naturals, advantage: allowsAdvantage } = definition.resolution;
+  const resolution = definition.resolution;
+  if (resolution.kind !== "dice-sum") return noRoll();
+  const { dice, naturals, advantage: allowsAdvantage } = resolution;
   const single = dice.count === 1;
   const preRolled =
     single && Number.isInteger(input.preRolled) && input.preRolled! >= 1 && input.preRolled! <= dice.sides
@@ -372,5 +448,97 @@ export function rollDiceSumCheck(
     criticalFailure,
     rollMode: useAdvantage ? "advantage" : useDisadvantage ? "disadvantage" : "normal",
     dice: `${rolls.length}d${dice.sides}`,
+  };
+}
+
+export interface RulesetPoolRoll extends RulesetCheckRoll {
+  /** The per-die target the successes were counted with, so a reader can mark the dice that
+   *  counted. It is the ruleset's default unless the request moved it inside the declared range. */
+  threshold: number;
+  /** The situational dice the roll actually added or took: the request's `bonus=` clamped into the
+   *  ruleset's range, and 0 where the ruleset declares none. A record is written from this, never
+   *  from what the tag asked for. */
+  bonusDice: number;
+}
+
+function clampInteger(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, Math.round(value)));
+}
+
+/** Roll a `dice-pool` check: throw the sheet's own number of dice and count the ones that reach
+ *  the target. `total` and `usedRoll` are both the NET successes, so a reader that knows nothing
+ *  about pools still shows the number the outcome turned on.
+ *
+ *  Never throws, and never rolls a die this ruleset did not declare. `threshold` and `bonusDice`
+ *  are the Game Master's two per-check freedoms and are clamped into what the ruleset allows
+ *  rather than refused, because a check the model asked for slightly wrong is still a check.
+ *  A ruleset of another kind comes back as a failure with no roll. */
+export function rollDicePoolCheck(
+  definition: RulesetDefinition,
+  input: {
+    /** The sheet's number for this check, which here is how many dice to throw. */
+    modifier: number;
+    /** How many successes the check needs. */
+    required: number;
+    /** Taken so the two rollers answer the same question. No pool rule reads it today. */
+    isSave: boolean;
+    /** `threshold=`, honoured only where the ruleset lets the target move. */
+    threshold?: number;
+    /** `bonus=`, honoured only where the ruleset declares situational dice. */
+    bonusDice?: number;
+  },
+  rollDie: (sides: number) => number,
+): RulesetPoolRoll {
+  const resolution = definition.resolution;
+  if (resolution.kind !== "dice-pool") return { ...noRoll(), threshold: 0, bonusDice: 0 };
+  const { die, pool, target, double, explode, cancel, botch, exceptional, situationalDice } = resolution;
+
+  const threshold =
+    target.min < target.max && Number.isFinite(input.threshold)
+      ? clampInteger(input.threshold!, target.min, target.max)
+      : target.default;
+  const bonusDice =
+    situationalDice && Number.isFinite(input.bonusDice)
+      ? clampInteger(input.bonusDice!, situationalDice.min, situationalDice.max)
+      : 0;
+
+  const count = clampInteger((Number.isFinite(input.modifier) ? input.modifier : 0) + bonusDice, pool.min, pool.max);
+  const rolls: number[] = [];
+  for (let i = 0; i < count; i++) rolls.push(rollDie(die.sides));
+  if (explode) {
+    // Chained, by walking the array as it grows: a die added at the end is itself examined. The
+    // extra dice are capped so a low `from` on a big pool cannot roll for the rest of the turn.
+    const cap = Math.min(pool.max, RULESET_POOL_MAX_DICE);
+    let extra = 0;
+    for (let i = 0; i < rolls.length && extra < cap; i++) {
+      if (rolls[i]! >= explode.from) {
+        rolls.push(rollDie(die.sides));
+        extra += 1;
+      }
+    }
+  }
+
+  let successes = 0;
+  let cancelled = 0;
+  for (const roll of rolls) {
+    if (roll >= threshold) successes += double && roll >= double.from ? 2 : 1;
+    if (cancel && roll <= cancel.upTo) cancelled += 1;
+  }
+  const total = Math.max(0, successes - cancelled);
+  // A botch is "nothing worked AND something went wrong", read BEFORE cancelling: a pool whose one
+  // success was cancelled away failed, it did not botch.
+  const criticalFailure = !!botch && successes === 0 && rolls.some((roll) => roll <= botch.upTo);
+  const success = !criticalFailure && total >= input.required;
+  return {
+    rolls,
+    usedRoll: total,
+    total,
+    success,
+    criticalSuccess: success && !!exceptional && total >= exceptional.successes,
+    criticalFailure,
+    rollMode: "normal",
+    dice: `${rolls.length}d${die.sides}`,
+    threshold,
+    bonusDice,
   };
 }

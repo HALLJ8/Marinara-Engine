@@ -6,6 +6,7 @@ import { useState, type ReactNode } from "react";
 import { useTranslation as useUiTranslation } from "react-i18next";
 import { FileText } from "lucide-react";
 import type { RulesetDefinition } from "@marinara-engine/shared";
+import { rulesetRulesSummary } from "../../lib/ruleset-resolution";
 import { Modal } from "../ui/Modal";
 
 /** One labelled row of the summary. */
@@ -106,11 +107,13 @@ export function RulesetImportReviewModal({
             <section className="space-y-2 rounded-xl border border-[var(--border)] bg-[var(--background)]/45 p-3">
               <ReviewRow label={t("game.ruleset.import.coverageLabel")}>{review.coverage.summary}</ReviewRow>
               <ReviewRow label={t("game.ruleset.import.resolutionLabel")}>
-                {review.resolution.kind === "dice-sum"
-                  ? t("game.ruleset.import.resolutionDiceSum", {
-                      dice: `${review.resolution.dice.count}d${review.resolution.dice.sides}`,
-                    })
-                  : review.resolution.kind}
+                {/* A headline, then one line per optional rule the file turned on. A ruleset that
+                    turns none on is the single line it has always been. */}
+                {rulesetRulesSummary(review, t).map((line) => (
+                  <span key={line} className="block">
+                    {line}
+                  </span>
+                ))}
               </ReviewRow>
               <ReviewRow label={t("game.ruleset.import.combatLabel")}>
                 {review.coverage.combat

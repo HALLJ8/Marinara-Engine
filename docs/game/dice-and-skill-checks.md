@@ -105,6 +105,8 @@ The Game Master can specify another notation, such as `[skill_check: skill="Endu
 
 Success pools must state both the per-die threshold and the number of successes needed: `[skill_check: skill="Intimidation" dc="4" dice="6d10" resolution="successes" threshold="6"]` rolls six d10s, counts each die showing at least 6 once, and succeeds with at least four successes. The engine does not guess a missing threshold or implement exploding dice, botches, or other special pool rules. A pool without a valid threshold stays unresolved, with any model-invented numbers removed.
 
+This is the pool a game with **no ruleset** gets, and it is unchanged. A game that carries a ruleset built on dice pools is a different thing, with rules the engine actually holds; see [Games that use a ruleset](#games-that-use-a-ruleset) below.
+
 Unsupported requests such as `4d6kh3`, `3d6!`, or `4dF` are not rolled. The engine logs the unsupported notation and removes invented numbers from check records. These outcomes remain open; the engine does not silently substitute a different dice system.
 
 ### Advantage and disadvantage
@@ -133,10 +135,22 @@ When a game has a ruleset:
 - A check can be for a party member. The Game Master adds `who="Name"` to the tag, and the Engine uses that character's sheet. Without `who`, the player is checked. A party member who has no sheet yet rolls on a blank one, with every value at the ruleset's default. A name that matches nobody in the party, or that two party members share, rolls the dice with no modifier at all. The one exception is your own character's name: if a party member shares it, that name still means you and uses your sheet. The Engine never borrows someone else's sheet.
 - Natural results follow the ruleset. Under 5e (SRD 5.1) a natural 20 or natural 1 has no special effect on checks and saves, so a natural 20 that misses the difficulty fails. This differs from Marinara's own rules on purpose.
 - Numbers the Game Master writes itself are not trusted. A finished-looking tag is rolled again and replaced when its modifier is not the one on the sheet, when it rolled a different number or size of dice than the ruleset does, when the die it counted is not the one its roll mode keeps, or when it claims a natural result the ruleset does not have.
-- A die you rolled yourself before the check is used only when the ruleset rolls a single d20. A ruleset that rolls other dice, such as 2d6, ignores it and rolls normally.
+- A die you rolled yourself before the check is used only when the ruleset rolls a single d20. A ruleset that rolls other dice, such as 2d6 or a pool, ignores it and rolls normally.
+- The Game Master can roll a skill or a save with a different ability than the one it normally uses, by adding `with="Ability"` to the tag. Only an ability your ruleset declares counts; anything else is ignored and the skill keeps its own.
 - Roll placeholders can name the ruleset's abilities, skills and saves, and `PROF` for the proficiency bonus when the ruleset has one.
 - If the ruleset's package is missing or older than the one the game was created on, checks are saved without numbers and stay owed. They are never rolled with another system's rules.
 - The Game Master also keeps each character's resources, conditions and rests up to date on the sheet, and the Engine refuses a change the sheet does not allow. See [The ruleset sheet](party-and-npcs.md#the-ruleset-sheet).
+
+### Rulesets that roll a pool of dice
+
+Some systems do not add a bonus to a roll. Instead, the number on the sheet is how many dice you throw, and you count the ones that come up high enough. A ruleset can be written that way, and a game on one behaves a little differently:
+
+- **The sheet's number is dice.** A rating of 3 and a trade worth 2 throw five dice. Your sheet shows that as "5 dice" rather than "+5", in the editor and in what the Game Master reads.
+- **The difficulty is a count of successes.** A hard job asks for three successes, not for a total of 15. The ruleset's difficulty ladder says how many each step needs.
+- **The Engine throws the dice and counts them.** Which faces count, whether a high face rolls another die or counts twice, whether low faces cancel successes, and what counts as a fumble or a standout success, all come from the ruleset. The dice card shows every die that was thrown, with the ones that reached the target picked out from the ones that did not, and reads how many successes came up against how many the check needed. A big pool wraps onto more rows rather than shrinking, and the card never shows a total the dice were not added up to.
+- **The Game Master can adjust one check**, if the ruleset allows it: a harder or easier per-die target, and dice added or taken for the circumstances. Both are held to the range the ruleset declares.
+- **The Game Master never supplies the numbers.** A pool result written into the narration is always replaced by the Engine's own roll. Advantage does not apply, and neither does a die you rolled yourself before the check.
+- **Letting the Game Master see one die of each size does not apply to these checks.** The dice it is shown are twenty-sided; a pool check is rolled blind by the Engine and narrated the way every other blind roll is.
 
 ## Finishing a rolled turn in one request
 

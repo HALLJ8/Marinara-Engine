@@ -108,8 +108,10 @@ function assertRefused(input: unknown, pattern: RegExp, message: string) {
 
 // ── Refusals an author can act on ──
 {
+  // A kind the Engine does not implement, rather than one it merely does not implement YET: the
+  // registry is closed, so a mechanic nobody wrote code for is refused at import.
   const unknownKind = example();
-  unknownKind.resolution.kind = "dice-pool";
+  unknownKind.resolution.kind = "coin-flip";
   assertRefused(unknownKind, /^resolution\.kind: /, "an unknown resolution kind is refused");
 
   const unknownKey = example();

@@ -4934,6 +4934,8 @@ function replaceFirstUnresolvedSkillCheckTag(
     if (result.who && (tag.who ?? "").trim().toLowerCase() !== result.who.trim().toLowerCase()) return fullTag;
 
     replaced = true;
+    // The result holds what the roll applied of `with=` and `bonus=`, so the record needs nothing
+    // from the tag.
     return serializeResolvedSkillCheckTag(result);
   });
 }
@@ -9331,6 +9333,11 @@ export async function gameRoutes(app: FastifyInstance) {
     preRolledD20: z.number().int().min(1).max(20).optional(),
     /** The party member to roll for in a game with a pinned ruleset; ignored without one. */
     who: z.string().trim().min(1).max(100).optional(),
+    /** `with=`, `threshold=` and `bonus=` off the tag, so this fallback asks the ruleset the same
+     *  question generation would have. Each is ignored where the ruleset does not take it. */
+    withAbility: z.string().trim().min(1).max(100).optional(),
+    threshold: z.number().int().min(1).max(1000).optional(),
+    bonusDice: z.number().int().min(-20).max(20).optional(),
     messageId: z.string().min(1).optional(),
   });
 
@@ -9348,6 +9355,9 @@ export async function gameRoutes(app: FastifyInstance) {
       disadvantage: input.disadvantage,
       preRolledD20: input.preRolledD20,
       who: input.who,
+      withAbility: input.withAbility,
+      threshold: input.threshold,
+      bonusDice: input.bonusDice,
     });
 
     let updatedContent: string | undefined;

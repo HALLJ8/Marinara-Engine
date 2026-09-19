@@ -26,6 +26,7 @@ import { RulesetCatalogPicker } from "./RulesetCatalogPicker";
 import { RulesetCatalogRefreshModal } from "./RulesetCatalogRefreshModal";
 import { rulesetCatalogQuery } from "../../hooks/use-capability-packages";
 import { applyCatalogRefresh, planCatalogRefresh, type CatalogRefreshRow } from "../../lib/ruleset-catalog";
+import { rulesetCheckValueText } from "../../lib/ruleset-resolution";
 import { DraftNumberInput } from "../ui/DraftNumberInput";
 import { DraftTextarea } from "../ui/DraftTextarea";
 
@@ -35,10 +36,6 @@ type ListRow = Record<string, Scalar>;
 const inputClass =
   "w-full min-w-0 rounded-lg border border-[var(--border)] bg-[var(--input)] px-2 py-1 text-xs text-[var(--foreground)]";
 const labelClass = "text-[0.6875rem] font-medium text-[var(--muted-foreground)]";
-
-function signed(value: number): string {
-  return value >= 0 ? `+${value}` : String(value);
-}
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max);
@@ -242,7 +239,7 @@ function TrainedRows({
               className={`${inputClass} text-center`}
             />
             <span className="text-right text-xs font-semibold tabular-nums text-[var(--foreground)]">
-              {signed(modifiers[entry.id] ?? 0)}
+              {rulesetCheckValueText(definition, modifiers[entry.id] ?? 0, t)}
             </span>
           </div>
         ))}
@@ -414,7 +411,7 @@ export function RulesetSheetEditor({
                 className={`${inputClass} text-center`}
               />
               <span className="text-xs font-semibold tabular-nums text-[var(--foreground)]">
-                {signed(evaluated.abilityMods[ability.id] ?? 0)}
+                {rulesetCheckValueText(definition, evaluated.abilityMods[ability.id] ?? 0, t)}
               </span>
             </label>
           ))}

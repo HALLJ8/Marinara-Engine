@@ -424,6 +424,21 @@ export interface SkillCheckResult {
    * player, and always absent under the Engine's own rules, which only ever check the player.
    */
   who?: string;
+  /**
+   * Per-die target a success pool counted with, so a card can mark the dice that counted. Set by
+   * both pool paths: the legacy `resolution="successes"` tag, which knows the threshold it was
+   * given, and a `dice-pool` ruleset, which knows the one its rules chose. Absent on every summed
+   * check, where there is no such thing.
+   */
+  threshold?: number;
+  /**
+   * What a ruleset check actually applied of the tag's `with=` and `bonus=`: the ability's label
+   * when the skill was rolled with another ability than its own, and the situational dice after the
+   * ruleset's clamp. Absent when nothing was applied, so a record never claims an ask that the roll
+   * ignored. Only a ruleset game sets them.
+   */
+  withAbility?: string;
+  bonusDice?: number;
 }
 
 // ── The sighted dice pool (opt-in, last) ──

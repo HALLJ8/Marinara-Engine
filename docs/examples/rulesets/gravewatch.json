@@ -1,0 +1,107 @@
+{
+  "$comment": "A small original example ruleset for the authoring guide. It throws a handful of ten-sided dice and counts the ones that reach a target number, to show what the dice-pool resolution kind looks like written out. Nothing in it is taken from a published game. Copy it, change the id, and make it yours.",
+  "schemaVersion": 1,
+  "id": "gravewatch",
+  "version": 1,
+  "name": "Gravewatch",
+  "edition": "Example ruleset, first draft",
+  "license": {
+    "spdx": "CC0-1.0",
+    "attribution": "Written for the Marinara Engine docs. Do what you like with it."
+  },
+  "coverage": {
+    "checks": true,
+    "saves": true,
+    "sheet": true,
+    "resources": true,
+    "rests": true,
+    "combat": false,
+    "summary": "A pool of ten-sided dice against a target number, three ratings, six trades and one vigil."
+  },
+  "resolution": {
+    "$comment": "The sheet's number for a check is the SIZE of the pool, not a bonus on top of it. A rating of 3 and a trade worth 2 throw five dice.",
+    "kind": "dice-pool",
+    "die": { "sides": 10 },
+    "abilityModifier": { "op": "identity" },
+    "proficiencyTiers": [
+      { "id": "rating_0", "label": "Untried" },
+      { "id": "rating_1", "label": "Shown once", "flat": 1 },
+      { "id": "rating_2", "label": "Steady", "flat": 2 },
+      { "id": "rating_3", "label": "Trusted", "flat": 3 },
+      { "id": "rating_4", "label": "Sworn", "flat": 4 },
+      { "id": "rating_5", "label": "Gravewise", "flat": 5 }
+    ],
+    "pool": { "min": 1, "max": 15 },
+    "target": { "default": 7, "min": 5, "max": 9 },
+    "explode": { "from": 10 },
+    "cancel": { "upTo": 1 },
+    "botch": { "upTo": 1 },
+    "exceptional": { "successes": 5 },
+    "situationalDice": { "min": -3, "max": 3 },
+    "difficultyLadder": [
+      { "label": "Plain work", "successes": 1, "target": 6 },
+      { "label": "Awkward", "successes": 2 },
+      { "label": "Grim", "successes": 3, "target": 8 },
+      { "label": "Hopeless", "successes": 5, "target": 9 }
+    ]
+  },
+  "sheet": {
+    "version": 1,
+    "sections": [
+      { "id": "about", "label": "About" },
+      { "id": "kit", "label": "Kit" }
+    ],
+    "abilities": [
+      { "id": "sinew", "label": "Sinew", "short": "SIN", "min": 1, "max": 5, "default": 2 },
+      { "id": "nerve", "label": "Nerve", "short": "NRV", "min": 1, "max": 5, "default": 2 },
+      { "id": "warmth", "label": "Warmth", "short": "WRM", "min": 1, "max": 5, "default": 2 }
+    ],
+    "skills": [
+      { "id": "dig", "label": "Dig", "ability": "sinew" },
+      { "id": "wrestle", "label": "Wrestle", "ability": "sinew" },
+      { "id": "listen", "label": "Listen", "ability": "nerve" },
+      { "id": "ward", "label": "Ward", "ability": "nerve" },
+      { "id": "soothe", "label": "Soothe", "ability": "warmth" },
+      { "id": "barter", "label": "Barter", "ability": "warmth" }
+    ],
+    "saves": [{ "id": "steel", "label": "Steel", "ability": "nerve" }],
+    "$comment": "The free per-entry bonus is dice here too, so it is kept to a range a warden could actually earn.",
+    "bonusRange": { "min": 0, "max": 3 },
+    "fields": [
+      { "id": "post", "label": "Post", "type": "text", "maxLength": 60, "section": "about" },
+      { "id": "lantern", "label": "Lantern oil", "type": "number", "min": 0, "max": 6, "default": 3, "section": "kit" }
+    ],
+    "derived": [
+      {
+        "id": "resolve_max",
+        "label": "Resolve maximum",
+        "op": "sum",
+        "of": [{ "const": 2 }, { "abilityMod": "nerve" }],
+        "section": "about"
+      }
+    ],
+    "live": {
+      "pools": [{ "id": "resolve", "label": "Resolve", "max": { "derived": "resolve_max" } }],
+      "conditions": [
+        { "id": "rattled", "label": "Rattled" },
+        { "id": "marked", "label": "Marked" }
+      ]
+    }
+  },
+  "rests": [
+    {
+      "id": "vigil",
+      "label": "Stand down from the vigil",
+      "restore": [{ "pool": "resolve", "to": "max" }],
+      "clear": { "conditions": ["rattled"] }
+    }
+  ],
+  "gm": {
+    "checkGuidance": "This game uses the Gravewatch rules. When a warden tries something the barrow roads could punish, call for a check with one of the trades on the sheet and pick a difficulty from the ladder. The Engine throws the warden's own pool of ten-sided dice, counts the successes and reports what happened. Never write dice or results yourself.",
+    "sheetGuidance": "The character sheets below are authoritative. Resolve is what a warden spends to steady themselves when the dark answers back, and it only comes back when the vigil ends.",
+    "sheetSummary": {
+      "fields": ["post"],
+      "derived": ["resolve_max"]
+    }
+  }
+}

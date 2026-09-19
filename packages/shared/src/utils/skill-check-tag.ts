@@ -63,6 +63,19 @@ export interface SkillCheckTag {
    * the name matches a sheet is the resolver's business.
    */
   who?: string;
+  /**
+   * `with=` as the GM wrote it: roll this skill or save with another ability than its own. Carried,
+   * never judged — whether the ruleset has such an ability is the resolver's business, and a name
+   * no ability answers to is ignored there rather than refused here.
+   */
+  withAbility?: string;
+  /**
+   * `bonus=` as a whole number, when the GM wrote a readable one: dice a pool ruleset adds or
+   * takes for this one check. Read like `threshold=` and held to the same rule — `Number` rather
+   * than `parseInt`, so "1.5" stays unusable instead of becoming 1, and whether the ruleset allows
+   * situational dice at all is decided by the resolver.
+   */
+  bonusDice?: number;
   /** `pool=` exactly as written, for the mismatch log. Present whenever `poolDeclared` is. */
   poolRaw?: string;
   /**
@@ -326,8 +339,18 @@ export function parseSkillCheckTagBody(body: string): SkillCheckTag | null {
     const threshold = Number(values.get("threshold"));
     if (Number.isFinite(threshold)) tag.threshold = threshold;
   }
+  // A whole number of dice, or nothing. `Number` rather than `parseInt`, so "1.5" stays unusable
+  // instead of becoming 1, and the emptiness test comes first because `Number("")` is 0 and an
+  // attribute written with no value has declared nothing.
+  const bonusValue = values.get("bonus")?.trim();
+  if (bonusValue) {
+    const bonus = Number(bonusValue);
+    if (Number.isInteger(bonus)) tag.bonusDice = bonus;
+  }
   const who = values.get("who")?.trim();
   if (who) tag.who = who.slice(0, 100);
+  const withAbility = values.get("with")?.trim();
+  if (withAbility) tag.withAbility = withAbility.slice(0, 100);
   if (values.has("pool")) {
     tag.poolDeclared = true;
     tag.poolRaw = values.get("pool")!;
@@ -340,6 +363,39 @@ export function parseSkillCheckTagBody(body: string): SkillCheckTag | null {
   const total = Number.parseInt(values.get("total") ?? "", 10);
   const resultValue = values.get("result")?.trim().toLowerCase();
   const resolution: SkillCheckResult["resolution"] = declaredResolution === "successes" ? "successes" : "sum";
+
+  // An EMPTY pool is a real result with no dice in it: a ruleset whose pool may be 0 fails the check
+  // without a roll and records `dice="0dN" rolls=""`. Read it back as the failure it was, so the
+  // record survives a reload instead of looking like a check nobody rolled. Nothing else may have
+  // an empty `rolls=`, and the shape is never Engine-rollable, so this cannot adopt a model's claim
+  // as a roll: it can only ever say "no dice, no successes".
+  const emptyPool =
+    values.has("rolls") &&
+    (rollsValue ?? "").trim() === "" &&
+    resolution === "successes" &&
+    // The written strings, not the parsed numbers: `parseInt` reads "0 or so" as 0, and only the
+    // Engine's own exact record may be read back this way.
+    values.get("total")?.trim() === "0" &&
+    values.get("modifier")?.trim() === "0" &&
+    /^0d[1-9]\d{0,3}$/.test(declaredDice ?? "") &&
+    (resultValue === "failure" || resultValue === "critical_failure" || resultValue === "critical failure");
+  if (emptyPool) {
+    tag.resolvedResult = {
+      skill,
+      dc,
+      rolls: [],
+      usedRoll: 0,
+      modifier: 0,
+      total: 0,
+      success: false,
+      criticalSuccess: false,
+      criticalFailure: resultValue !== "failure",
+      rollMode: "normal",
+      resolution,
+      dice: declaredDice,
+    };
+    return tag;
+  }
 
   if (!rollsValue || Number.isNaN(modifier) || Number.isNaN(total) || !resultValue) {
     // Sparse tag — the resolver will roll + apply modifier, unless the tag names
