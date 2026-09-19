@@ -241,6 +241,10 @@ const aroundHidden = planCatalogAddition(definition, catalog.id, [lastEmber], {}
 assert.deepEqual(Object.keys(aroundHidden.lists), ["knacks"]);
 assert.equal(aroundHidden.dropped, 0);
 assert.equal(planCatalogAddition(definition, catalog.id, [lastEmber], {}, new Set(["knacks", "tricks"])).dropped, 1);
+// A stored sheet is read tolerantly: a list that is not rows reads as empty instead of throwing.
+const malformed = { knacks: "not rows" } as unknown as Parameters<typeof planCatalogAddition>[3];
+assert.equal(catalogEntryAlreadyAdded(catalog.id, roadSense, catalog.feeds, malformed), false);
+assert.equal(planCatalogAddition(definition, catalog.id, [roadSense], malformed).lists.knacks?.length, 1);
 // An entry for a list this ruleset does not have is dropped the same way.
 const strayEntry = {
   id: "stray",

@@ -139,6 +139,13 @@ export function filterCatalogEntries(
   );
 }
 
+/** A stored sheet is read tolerantly, so a list the file holds as something other than rows reads
+ *  as having none instead of throwing in the middle of the picker. */
+function storedRows(lists: RulesetSheetBuild["lists"], listId: string): CatalogListRow[] {
+  const rows: unknown = lists[listId];
+  return Array.isArray(rows) ? (rows as CatalogListRow[]) : [];
+}
+
 /** Whether the sheet already holds a row this entry wrote, in any list the catalog feeds. Picking it
  *  again is allowed and adds another copy, so this only marks, it never blocks. */
 export function catalogEntryAlreadyAdded(
@@ -148,7 +155,7 @@ export function catalogEntryAlreadyAdded(
   lists: RulesetSheetBuild["lists"],
 ): boolean {
   const ref = catalogRowRef(catalogId, entry.id);
-  return feeds.some((listId) => (lists[listId] ?? []).some((row) => row[RULESET_CATALOG_ROW_KEY] === ref));
+  return feeds.some((listId) => storedRows(lists, listId).some((row) => row[RULESET_CATALOG_ROW_KEY] === ref));
 }
 
 export type CatalogAdditionTarget = {
@@ -207,7 +214,7 @@ export function planCatalogAddition(
       continue;
     }
     for (const row of built) {
-      const rows = next[row.list] ?? [...(lists[row.list] ?? [])];
+      const rows = next[row.list] ?? [...storedRows(lists, row.list)];
       rows.push(row.row);
       next[row.list] = rows;
     }
@@ -219,7 +226,7 @@ export function planCatalogAddition(
   for (const list of definition.sheet.lists) {
     const rows = next[list.id];
     if (!rows) continue;
-    const current = lists[list.id]?.length ?? 0;
+    const current = storedRows(lists, list.id).length;
     const target = {
       listId: list.id,
       label: list.label,
