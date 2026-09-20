@@ -634,6 +634,17 @@ const cellsOf = (cells: Array<{ x: number; y: number }>) =>
   });
   assert.equal(rulesetOpportunityAttack(carrying(who(casting, "corwin"), "Fire Bolt")), null);
 
+  // A shape that comes off the caster is not a shot: a foe at the elbow makes shooting harder and
+  // breathing no harder at all, so a cone with no distance of its own is rolled plainly.
+  const crowded = fight(fiveE, [wizard(), snag(), mote("far", "Far mote")], [12, 9, 3], {
+    grid: open(8, 1),
+    placements: { corwin: { x: 0, y: 0 }, snag: { x: 1, y: 0 }, far: { x: 2, y: 0 } },
+  });
+  const breath = optionNamed(fiveE, crowded, "corwin", "Scouring Breath");
+  assert.equal(rulesetOptionReach(crowded, "corwin", breath.id)!.shot, false);
+  const thrown = optionNamed(fiveE, crowded, "corwin", "Fireball");
+  assert.equal(rulesetOptionReach(crowded, "corwin", thrown.id)!.shot, true, "a ball thrown a hundred feet is");
+
   // A touch is not a shot either: an ability whose range is 0 reaches the next cell and no further,
   // and the foe it is laid on does not make it harder.
   const touching = fight(fiveE, [wizard(), snag(), mote("far", "Far mote")], [12, 9, 3], {

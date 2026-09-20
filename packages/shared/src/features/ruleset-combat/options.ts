@@ -98,7 +98,9 @@ export function rulesetOptionReach(
     // there the cell only says which way it points.
     const carried = action.range?.long ?? action.range?.normal;
     const max = carried ?? (action.area.shape === "burst" ? 0 : action.area.size);
-    return { max, normal: action.range?.normal ?? max, shot: true, swing: 0 };
+    // Only a shape with a distance of its own is SHOT: one that comes off the actor, a breath or a
+    // burst set down where they stand, is not made harder by a foe at their elbow.
+    return { max, normal: action.range?.normal ?? max, shot: !!action.range, swing: 0 };
   }
   if (action.range) {
     // Something that carries a reach AS WELL is a thrown weapon: a swing in hand, a shot beyond.
@@ -200,11 +202,13 @@ export function rulesetAimCells(
   for (const bounds of boxes) {
     for (let y = bounds.top; y <= bounds.bottom; y++) {
       for (let x = bounds.left; x <= bounds.right; x++) {
-        if (++looked > RULESET_AIM_SCAN_CEILING) return aims;
         const key = `${x},${y}`;
-        // Two people standing close together share cells, and a cell is offered once.
+        // Two people standing close together share cells, and a cell is both looked at and offered
+        // once: a cell seen twice must not spend the ceiling, or a crowd could use it up before the
+        // cells further out are ever reached.
         if (seen.has(key)) continue;
         seen.add(key);
+        if (++looked > RULESET_AIM_SCAN_CEILING) return aims;
         const at = { x, y };
         if (!rulesetAimLegal(state, actorId, optionId, at)) continue;
         const targetIds = rulesetAreaTargets(state, actorId, optionId, at);

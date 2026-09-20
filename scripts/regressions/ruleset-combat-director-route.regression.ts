@@ -531,6 +531,23 @@ try {
       });
       assert.equal(walled.statusCode, 400, walled.body);
       assert.match(walled.json().error, /Invalid saved position/);
+      // A fight with NO board carrying any coordinate at all is refused, whatever the value is.
+      for (const stray of [{ y: 2 }, { x: null }, { x: "2" }] as Array<Record<string, unknown>>) {
+        const doc = JSON.parse(honest);
+        delete doc.rulesetFight.encounter.board;
+        for (const combatant of doc.rulesetFight.encounter.combatants) {
+          delete combatant.x;
+          delete combatant.y;
+          delete combatant.movement;
+          delete combatant.movementLeft;
+        }
+        Object.assign(doc.rulesetFight.encounter.combatants[0], stray);
+        await engineStates.updateStateById(row.id, JSON.stringify(doc), undefined, boarded.chat.id);
+        const answer = await app.inject({ url: stateUrl });
+        assert.equal(answer.statusCode, 400, `${JSON.stringify(stray)} is not a position: ${answer.body}`);
+        assert.match(answer.json().error, /Invalid saved position/);
+      }
+
       // Off the board altogether is still refused.
       const outside = await tamper((combatants, tiles) => {
         combatants[1]!.x = tiles[0]!.length + 5;

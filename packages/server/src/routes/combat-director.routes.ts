@@ -358,7 +358,13 @@ export async function combatDirectorRoutes(
       for (const combatant of placed) {
         if (rulesetCellBlocked(grid, combatant.x!, combatant.y!)) throw new Error("Invalid saved position.");
       }
-    } else if (state.rulesetFight?.encounter.combatants.some((combatant) => typeof combatant.x === "number")) {
+    } else if (
+      // A fight with no board has no cells to stand in, so a saved combatant carrying EITHER
+      // coordinate at all, whatever it holds, was not written by the resolver.
+      state.rulesetFight?.encounter.combatants.some(
+        (combatant) => Object.hasOwn(combatant, "x") || Object.hasOwn(combatant, "y"),
+      )
+    ) {
       throw new Error("Invalid saved position.");
     }
     if (state.tactical) {
