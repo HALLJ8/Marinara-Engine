@@ -4,6 +4,8 @@ This file is the release-notes source of truth for Marinara Engine. Reuse these 
 
 ## [Unreleased]
 
+- Game wound sheets describe zero-penalty wounds accurately instead of calling a marked track unmarked.
+
 - Roleplay dice commands accept an optional situational bonus or penalty and DC, combine the adjustment with the automatic attribute bonus, and show the DC on the existing dice card (#6417).
 
 - Something a character picked from a Game Mode ruleset's catalogs can now change a check rather than a fight: a charm that throws the dice that fell wrong again, or that simply hands over a success. The ruleset says what it costs and what it does, the Game Master names it on the check itself, and the Engine pays for it and applies it on the same roll, because the dice are thrown before any bookkeeping runs. An entry that says it scales is bought as many times over as the price was paid. A charm the character has not picked, one the pool cannot pay for, or one the Engine cannot read the catalog for does nothing at all and costs nothing, and the record says which charm was applied, how many dice were thrown again and how many successes nobody rolled. The Gravewatch example ships one. The model never touches the dice: it names what the player spent and the Engine rolls.

@@ -1170,7 +1170,7 @@
   "game.ruleset.sheet.wound.levelTitle": "{{level}} {{penalty}}",
   "game.ruleset.sheet.wound.mark": "Mark",
   "game.ruleset.sheet.wound.marked": "marked {{kind}}",
-  "game.ruleset.sheet.wound.noPenalty": "{{name}} is unmarked, so nothing is taken off your rolls.",
+  "game.ruleset.sheet.wound.noPenalty": "{{name}} applies no penalty to your rolls.",
   "game.ruleset.sheet.wound.overflow_one": "1 more mark had nowhere to go.",
   "game.ruleset.sheet.wound.overflow_other": "{{count}} more marks had nowhere to go.",
   "game.ruleset.sheet.wound.penalty": "{{name}} is at {{level}}, so {{penalty}} applies to your rolls.",
