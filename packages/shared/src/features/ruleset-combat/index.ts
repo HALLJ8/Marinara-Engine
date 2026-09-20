@@ -48,6 +48,7 @@ export {
   rulesetCombatant,
   rulesetCombatConditions,
   rulesetCombatEffects,
+  rulesetCombatDamageKind,
   rulesetCombatHealth,
   rulesetCombatStanding,
   rulesetMovementAllowance,

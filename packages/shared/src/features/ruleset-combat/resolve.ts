@@ -17,6 +17,7 @@ import {
   rulesetCombatConditions,
   rulesetCombatEffects,
   rulesetCombatFailsSave,
+  rulesetCombatDamageKind,
   rulesetCombatHealth,
   rulesetCombatStanding,
   rulesetMovementAllowance,
@@ -183,8 +184,7 @@ function dealDamage(ctx: RulesetCombatContext, target: RulesetCombatant, input: 
   }
   const toTemp = Math.min(before.temp, dealt);
   if (dealt > 0) {
-    if (target.sheet)
-      writeRulesetSheet(ctx.definition, target, { op: "damage", pool: ctx.combat.health.pool, amount: dealt });
+    if (target.sheet) writeHealthLoss(ctx, target, dealt, input.damageType);
     else if (target.health) {
       target.health.temp = before.temp - toTemp;
       target.health.value = Math.max(0, before.value - (dealt - toTemp));
@@ -227,6 +227,56 @@ function dealDamage(ctx: RulesetCombatContext, target: RulesetCombatant, input: 
   return dealt;
 }
 
+/**
+ * What a landing blow does to the sheet's health, whichever shape it takes.
+ *
+ * A POOL loses the points, temporary buffer first, exactly as it always has.
+ *
+ * A WOUND TRACK takes ONE MARK per blow, not one per point. That is what a track is for: these
+ * systems do not count damage down, they tick a box and the boxes get worse. The rolled amount
+ * still decides whether the blow lands AT ALL, so a miss and a blow softened to nothing mark
+ * nothing, but one that lands marks once whether it rolled 3 or 30. Which KIND it marks is the
+ * ruleset's own `combat.damageKinds`, never a guess.
+ *
+ * Resistances, vulnerabilities and immunities are not in the picture here: they live on a stat
+ * block, and a combatant with a stat block has no sheet to mark. They still do exactly what they
+ * always did to an opponent's own numbers, above.
+ */
+function writeHealthLoss(
+  ctx: RulesetCombatContext,
+  target: RulesetCombatant,
+  dealt: number,
+  damageType: string | undefined,
+): void {
+  const health = ctx.combat.health;
+  if (!("track" in health)) {
+    writeRulesetSheet(ctx.definition, target, { op: "damage", pool: health.pool, amount: dealt });
+    return;
+  }
+  writeRulesetSheet(ctx.definition, target, {
+    op: "damage",
+    track: health.track,
+    kind: rulesetCombatDamageKind(ctx.combat, damageType),
+    amount: 1,
+  });
+}
+
+/** And the other way: a pool gets the points back, a wound track has ONE mark cleared, lightest
+ *  first, by the same rule the player's own sheet clears one. */
+function writeHealthGain(ctx: RulesetCombatContext, target: RulesetCombatant, amount: number): void {
+  const health = ctx.combat.health;
+  if (!("track" in health)) {
+    writeRulesetSheet(ctx.definition, target, { op: "restore", pool: health.pool, amount });
+    return;
+  }
+  writeRulesetSheet(ctx.definition, target, {
+    op: "damage",
+    track: health.track,
+    kind: rulesetCombatDamageKind(ctx.combat, undefined),
+    amount: -1,
+  });
+}
+
 function dealHeal(
   ctx: RulesetCombatContext,
   target: RulesetCombatant,
@@ -235,8 +285,7 @@ function dealHeal(
   const before = healthOf(ctx, target);
   const amount = Math.max(0, Math.floor(input.amount));
   if (amount > 0) {
-    if (target.sheet)
-      writeRulesetSheet(ctx.definition, target, { op: "restore", pool: ctx.combat.health.pool, amount });
+    if (target.sheet) writeHealthGain(ctx, target, amount);
     else if (target.health) target.health.value = Math.min(target.health.max, before.value + amount);
   }
   const after = healthOf(ctx, target);
@@ -261,8 +310,12 @@ function grantTemporary(
 ): void {
   const amount = Math.max(0, Math.floor(input.amount));
   const before = healthOf(ctx, target);
-  if (amount > before.temp) {
-    if (target.sheet) writeRulesetSheet(ctx.definition, target, { op: "temp", pool: ctx.combat.health.pool, amount });
+  // A wound track carries no buffer, and there is nothing sensible a temporary point could be on
+  // one, so a ruleset whose health is a track is refused a `temporary` at IMPORT. This branch is
+  // what makes that refusal honest at runtime too: nothing is written and nothing is invented.
+  const health = ctx.combat.health;
+  if (amount > before.temp && !("track" in health)) {
+    if (target.sheet) writeRulesetSheet(ctx.definition, target, { op: "temp", pool: health.pool, amount });
     else if (target.health) target.health.temp = amount;
   }
   ctx.events.push({

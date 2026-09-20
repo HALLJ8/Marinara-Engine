@@ -1189,6 +1189,17 @@ const catalogSchema = z
 /** One live pool, named. Its own object so the block reads the same wherever a pool is wanted. */
 const battlePoolSchema = z.object({ pool: sheetId }).strict();
 
+/** What a fight takes away: one live POOL, or one WOUND TRACK. A pool counts points down; a track
+ *  is marked, and "out of it" is the track being full rather than a number reaching zero. Both
+ *  shapes are read through `rulesetCombatHealth`, which reports a track as the levels it has LEFT,
+ *  so every rule that already asks "is this combatant still above zero" keeps its own words. */
+const combatHealthSchema = z.union([battlePoolSchema, z.object({ track: sheetId }).strict()]);
+
+/** How a fight's damage TYPE becomes a kind of mark on a wound track. Declared rather than assumed,
+ *  because only the ruleset knows whether its fire is a bruise or a wound, and `default` is what
+ *  anything unmapped lands as, including a blow that carries no type at all. */
+const combatDamageKindsSchema = z.object({ default: sheetId, byType: z.record(sheetId).optional() }).strict();
+
 /** A sheet list that contributes combat skills. Only rows carrying the `_catalog` mark count, and
  *  only when the entry they came from has `mechanics`: a hand-typed row says nothing in numbers.
  *  `onlyWhen` is the boolean column a row must have set (5e's "prepared"); `alwaysWhen` lets a row
@@ -1208,7 +1219,7 @@ const battleSkillsSchema = z
  *  is why `coverage.combat` keeps its own meaning and nothing here reads it. */
 const battleSchema = z
   .object({
-    health: battlePoolSchema,
+    health: combatHealthSchema,
     energy: battlePoolSchema.optional(),
     slots: z
       .array(z.object({ pool: sheetId, level: z.number().int().min(1).max(9) }).strict())
@@ -1405,7 +1416,7 @@ const combatSchema = z
   .object({
     /** The closed registry of combat kinds. Adding one is an Engine PR with regressions. */
     kind: z.literal("attack-vs-defense"),
-    health: battlePoolSchema,
+    health: combatHealthSchema,
     /** What an attack is rolled against. */
     defense: rulesetValueRefSchema,
     initiative: z.object({ dice: combatDiceSchema, modifier: rulesetValueRefSchema.optional() }).strict(),
@@ -1458,6 +1469,8 @@ const combatSchema = z
     dying: combatDyingSchema.optional(),
     /** The damage types this system has. Matched without case, so "Fire" and "fire" are one type. */
     damageTypes: z.array(promptSafeText(40)).max(40).optional(),
+    /** Required when `health` names a wound track, and refused when it names a pool. */
+    damageKinds: combatDamageKindsSchema.optional(),
     threat: z
       .object({ tiers: z.array(combatThreatTierSchema).min(1).max(40) })
       .strict()
@@ -2141,20 +2154,42 @@ function refineRulesetDefinition(def: RulesetDefinitionBase, ctx: z.RefinementCt
     return list;
   };
 
+  /** A health block: one declared live POOL that counts down, or one WOUND TRACK that is marked.
+   *  Returns the track id when it named one, so the rules that only make sense for a track can be
+   *  checked against it. Shared by `battle` and `combat`, which mean the same thing by health. */
+  const checkHealth = (health: { pool: string } | { track: string }, path: (string | number)[]): string | null => {
+    if ("track" in health) {
+      if (!tracks.has(health.track)) {
+        issue([...path, "track"], `Unknown track "${health.track}"`);
+        return null;
+      }
+      // A plain track is a bounded integer with no levels to fill, so "out of it" would be a number
+      // the fight picked rather than one the ruleset declared.
+      if (!woundTracks.has(health.track)) {
+        issue([...path, "track"], `"${health.track}" has no levels, so a fight has nothing to mark on it`);
+        return null;
+      }
+      return health.track;
+    }
+    declaredPool(health.pool, [...path, "pool"]);
+    // A pool that starts empty counts UP (stress, corruption), so as health it would put every
+    // fresh character into their first fight already down.
+    if (sheet.live.pools.find((pool) => pool.id === health.pool)?.start === "empty") {
+      issue([...path, "pool"], `"${health.pool}" starts empty, so it cannot be the health pool`);
+    }
+    return null;
+  };
+
   if (def.battle) {
     const battle = def.battle;
     const battlePool = declaredPool;
-    battlePool(battle.health.pool, ["battle", "health", "pool"]);
-    // A pool that starts empty counts UP (stress, corruption), so as health it would put every
-    // fresh character into their first fight already down.
-    if (sheet.live.pools.find((pool) => pool.id === battle.health.pool)?.start === "empty") {
-      issue(["battle", "health", "pool"], `"${battle.health.pool}" starts empty, so it cannot be the health pool`);
-    }
+    checkHealth(battle.health, ["battle", "health"]);
+    const battleHealthId = "track" in battle.health ? battle.health.track : battle.health.pool;
     if (battle.energy) {
       battlePool(battle.energy.pool, ["battle", "energy", "pool"]);
       // Health is not spendable as energy: the Engine drains hit points as damage and spends the
       // energy pool as a cost, and one pool cannot be both.
-      if (battle.energy.pool === battle.health.pool) {
+      if (battle.energy.pool === battleHealthId) {
         issue(["battle", "energy", "pool"], "The energy pool cannot also be the health pool");
       }
     }
@@ -2163,7 +2198,7 @@ function refineRulesetDefinition(def: RulesetDefinitionBase, ctx: z.RefinementCt
     battle.slots?.forEach((slot, index) => {
       const path = ["battle", "slots", index];
       battlePool(slot.pool, [...path, "pool"]);
-      if (slot.pool === battle.health.pool || slot.pool === battle.energy?.pool) {
+      if (slot.pool === battleHealthId || slot.pool === battle.energy?.pool) {
         issue([...path, "pool"], `"${slot.pool}" is already the health or energy pool`);
       }
       if (slotPools.has(slot.pool)) issue([...path, "pool"], `Duplicate slot pool "${slot.pool}"`);
@@ -2182,12 +2217,7 @@ function refineRulesetDefinition(def: RulesetDefinitionBase, ctx: z.RefinementCt
   if (def.combat) {
     const combat = def.combat;
     const at = (...path: (string | number)[]) => ["combat", ...path];
-    declaredPool(combat.health.pool, at("health", "pool"));
-    // A pool that starts empty counts UP (stress, corruption), so as health it would put every
-    // fresh character into their first fight already down.
-    if (sheet.live.pools.find((pool) => pool.id === combat.health.pool)?.start === "empty") {
-      issue(at("health", "pool"), `"${combat.health.pool}" starts empty, so it cannot be the health pool`);
-    }
+    const healthTrack = checkHealth(combat.health, at("health"));
     checkRef(combat.defense, at("defense"), derivedIds);
     if (combat.initiative.modifier) checkRef(combat.initiative.modifier, at("initiative", "modifier"), derivedIds);
     // The same rule the check dice follow: an extreme face is only a face when one die was thrown.
@@ -2328,6 +2358,37 @@ function refineRulesetDefinition(def: RulesetDefinitionBase, ctx: z.RefinementCt
       if (damageTypes.has(key)) issue(at("damageTypes", index), `Duplicate damage type "${type}"`);
       damageTypes.add(key);
     });
+
+    // How a fight's damage type becomes a mark. Only a wound track has kinds, so the mapping and
+    // the track go together in both directions: without it a fight would have to guess what kind
+    // of harm a blow is, and with a pool there is nothing for it to say.
+    if (healthTrack) {
+      const kinds = new Set(
+        (sheet.live.tracks.find((track) => track.id === healthTrack)?.kinds ?? []).map((kind) => kind.id),
+      );
+      if (!combat.damageKinds) {
+        issue(
+          at("damageKinds"),
+          `Health is the wound track "${healthTrack}", so the block says what kind of harm its damage is`,
+        );
+      } else {
+        if (!kinds.has(combat.damageKinds.default)) {
+          issue(at("damageKinds", "default"), `"${combat.damageKinds.default}" is not a kind of "${healthTrack}"`);
+        }
+        for (const [type, kind] of Object.entries(combat.damageKinds.byType ?? {})) {
+          // Only checked where the ruleset says what its types are, exactly as a creature's
+          // resistances are: one that declares none reads a type as free text.
+          if (damageTypes.size > 0 && !damageTypes.has(type.trim().toLowerCase())) {
+            issue(at("damageKinds", "byType", type), `Unknown damage type "${type}"`);
+          }
+          if (!kinds.has(kind)) {
+            issue(at("damageKinds", "byType", type), `"${kind}" is not a kind of "${healthTrack}"`);
+          }
+        }
+      }
+    } else if (combat.damageKinds) {
+      issue(at("damageKinds"), "damageKinds maps damage onto a wound track's kinds, and health is a pool");
+    }
 
     if (combat.threat) {
       unique(combat.threat.tiers, at("threat", "tiers"), "threat tier");
@@ -2844,6 +2905,15 @@ export function rulesetCatalogEntryIssues(
           );
         }
       });
+    }
+    // Temporary points are a buffer damage drains first, and a wound track has no buffer: it has
+    // boxes, and a box is either marked or it is not. Rather than invent a meaning (a free level? a
+    // mark that clears itself?) a ruleset whose fights are fought on a track is refused the key.
+    if (mechanics?.temporary && definition.combat && "track" in definition.combat.health) {
+      add(
+        [index, "mechanics", "temporary"],
+        `Health is the wound track "${definition.combat.health.track}", which carries no buffer for temporary points`,
+      );
     }
     if (mechanics?.budget !== undefined && budgets && !budgets.has(mechanics.budget)) {
       add([index, "mechanics", "budget"], `Unknown budget "${mechanics.budget}"`);

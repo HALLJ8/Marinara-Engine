@@ -4138,19 +4138,38 @@
       "type": "object",
       "properties": {
         "health": {
-          "type": "object",
-          "properties": {
-            "pool": {
-              "type": "string",
-              "maxLength": 40,
-              "pattern": "^[a-z][a-z0-9_]*$"
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "pool": {
+                  "type": "string",
+                  "maxLength": 40,
+                  "pattern": "^[a-z][a-z0-9_]*$"
+                },
+                "$comment": {}
+              },
+              "required": [
+                "pool"
+              ],
+              "additionalProperties": false
             },
-            "$comment": {}
-          },
-          "required": [
-            "pool"
-          ],
-          "additionalProperties": false
+            {
+              "type": "object",
+              "properties": {
+                "track": {
+                  "type": "string",
+                  "maxLength": 40,
+                  "pattern": "^[a-z][a-z0-9_]*$"
+                },
+                "$comment": {}
+              },
+              "required": [
+                "track"
+              ],
+              "additionalProperties": false
+            }
+          ]
         },
         "energy": {
           "type": "object",
@@ -4261,19 +4280,38 @@
           "const": "attack-vs-defense"
         },
         "health": {
-          "type": "object",
-          "properties": {
-            "pool": {
-              "type": "string",
-              "maxLength": 40,
-              "pattern": "^[a-z][a-z0-9_]*$"
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "pool": {
+                  "type": "string",
+                  "maxLength": 40,
+                  "pattern": "^[a-z][a-z0-9_]*$"
+                },
+                "$comment": {}
+              },
+              "required": [
+                "pool"
+              ],
+              "additionalProperties": false
             },
-            "$comment": {}
-          },
-          "required": [
-            "pool"
-          ],
-          "additionalProperties": false
+            {
+              "type": "object",
+              "properties": {
+                "track": {
+                  "type": "string",
+                  "maxLength": 40,
+                  "pattern": "^[a-z][a-z0-9_]*$"
+                },
+                "$comment": {}
+              },
+              "required": [
+                "track"
+              ],
+              "additionalProperties": false
+            }
+          ]
         },
         "defense": {
           "type": "object",
@@ -5264,6 +5302,32 @@
             "maxLength": 40
           },
           "maxItems": 40
+        },
+        "damageKinds": {
+          "type": "object",
+          "properties": {
+            "default": {
+              "type": "string",
+              "maxLength": 40,
+              "pattern": "^[a-z][a-z0-9_]*$"
+            },
+            "byType": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string",
+                "maxLength": 40,
+                "pattern": "^[a-z][a-z0-9_]*$"
+              },
+              "properties": {
+                "$comment": {}
+              }
+            },
+            "$comment": {}
+          },
+          "required": [
+            "default"
+          ],
+          "additionalProperties": false
         },
         "threat": {
           "type": "object",

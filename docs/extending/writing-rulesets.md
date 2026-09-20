@@ -232,6 +232,13 @@ Plenty of systems do not count hit points at all. They have a column of boxes, e
 
 **Marking it in play.** The Game Master writes `[sheet: op="damage" track="harm" kind="knock" amount="1"]`, and heals with a negative `amount`. The pool form of `damage`, which names `pool=` instead, is unchanged. The plain `track` command is refused on a wound track: a bare number cannot say what the new marks are. The player can also mark and clear boxes by hand on the sheet, which is what these systems expect.
 
+**A fight can mark one too.** Point `combat.health` at the track instead of a pool and the fight
+marks it: a blow that lands marks one box, of the kind `combat.damageKinds` says that damage type
+is, and a character whose track is full is down, which is what your dying rule reads. Healing clears
+one mark. Temporary points are refused, because a track has no buffer for them to sit in. The Engine
+reads a track as the levels it has LEFT, so everything else about a fight, going down, being
+revived, the log and the recap, is unchanged.
+
 **A rest can heal a wound track.** A restore step naming one with `"to"` clears it down to that many marks, overflow and all; one naming it with `"by"` clears that many, overflow first. A step that would ADD marks does nothing, because a rest names no kind to mark with.
 
 ### The penalty on your rolls
@@ -617,10 +624,9 @@ same keys for a d20 system:
 ### Every key
 
 - `kind`: `"attack-vs-defense"`. One side rolls dice against the other's defense; a hit does damage.
-- `health`: required. The live pool a fight takes away, as `battle.health` is. Its temporary buffer,
-  if the pool allows one, is what damage drains first. It has to be a pool: a fight cannot mark a
-  wound track yet, so a ruleset whose health is a track keeps it for checks and for the player to
-  mark by hand, and either leaves `combat` out or names a pool for fights. See Not yet.
+- `health`: required. What a fight takes away. Either `{ "pool": "grit" }`, a live pool it counts
+  down, whose temporary buffer if it has one is what damage drains first; or `{ "track": "harm" }`,
+  a wound track it MARKS. A track needs `damageKinds` beside it, and grants no temporary points.
 - `defense`: required, a value reference. A field the player enters, or a derived value you compute.
 - `initiative`: required. The dice rolled once at the start, and an optional modifier reference. A
   tie goes to the higher modifier, and then to the order the fight was set up in.
@@ -673,6 +679,10 @@ same keys for a d20 system:
   costs (`damageWhileDown`, `criticalWhileDown`) and the `condition` a downed character is in.
   Without this block a character at zero is simply down, and healing brings them back.
 - `damageTypes`: optional. The types your system has, matched without case.
+- `damageKinds`: required when `health` names a wound track, and refused when it names a pool. It
+  says which of the track's `kinds` a blow marks: `default` is what anything unmapped lands as,
+  including a blow that carries no type at all, and `byType` maps your own `damageTypes` onto kinds.
+  `{ "default": "bashing", "byType": { "fire": "aggravated" } }`.
 - `threat`: optional, and needed by a bestiary. `tiers`, the scale an opponent is picked from: an id,
   a label, a `health` band, a `defense`, a `toHit`, a `damagePerRound` band and a `saveDifficulty`.
   Every creature you ship names one of these tiers, and an opponent nobody wrote is pulled onto the
@@ -994,11 +1004,10 @@ Said plainly, because a ruleset should not claim what the Engine does not do:
   one turn and the next arrives with reactions.
 - Conditions do what the closed effect list can say and no more. A condition that gives
   disadvantage on ability checks, or resistance to everything, is a plain record on the sheet today.
-- **A fight cannot mark a wound track.** `combat.health` names a live pool, and damage subtracts
-  from it. A wound track is marked by the player and by the Game Master's own sheet command, and its
-  penalty bites every check, but a fight resolved by the `combat` block still needs a pool to take
-  away from. A ruleset whose health is a track either leaves `combat` out and plays its fights in
-  the narration, or keeps a pool beside the track for fights to spend.
+- **A fight marks a wound track once per blow, not once per point.** That is what a track is for,
+  but it does mean the size of a hit changes nothing about what it does: a hit for 3 and a hit for
+  30 both mark one box. Resistances and immunities never reach a track either, because they live on
+  an opponent's stat block and an opponent has no sheet.
 
 ## Layers: variants of your own ruleset
 

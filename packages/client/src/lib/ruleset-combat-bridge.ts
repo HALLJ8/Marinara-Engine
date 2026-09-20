@@ -62,8 +62,15 @@ export function isRulesetCombatFight(input: {
  */
 export function rulesetCombatRecapLines(definition: RulesetDefinition, summary: RulesetEncounterSummary): string[] {
   const combat = definition.combat;
-  const poolLabel =
-    definition.sheet.live.pools.find((pool) => pool.id === combat?.health.pool)?.label ?? combat?.health.pool ?? "";
+  // What this ruleset calls the thing a fight takes away, whichever shape it keeps it in. A wound
+  // track's numbers are the levels it has LEFT, which is what the rest of the recap already reads,
+  // so the only thing that changes here is the name beside them.
+  const health = combat?.health;
+  const healthLabel = !health
+    ? ""
+    : "track" in health
+      ? (definition.sheet.live.tracks.find((track) => track.id === health.track)?.label ?? health.track)
+      : (definition.sheet.live.pools.find((pool) => pool.id === health.pool)?.label ?? health.pool);
   const conditionLabel = new Map(definition.sheet.live.conditions.map((entry) => [entry.id, entry.label]));
   // Stable outranks dying, because a member who has stopped slipping is not still on the clock, and
   // both outrank plain "down": the ruleset's own dying rule is what put them there.
@@ -76,7 +83,7 @@ export function rulesetCombatRecapLines(definition: RulesetDefinition, summary: 
       member.conditions.length > 0 ? member.conditions.map((id) => conditionLabel.get(id) ?? id).join(", ") : "",
     ].filter(Boolean);
     const suffix = notes.length > 0 ? ` (${notes.join("; ")})` : "";
-    return `${member.name}: ${member.health}/${member.maxHealth} ${poolLabel}${suffix}`;
+    return `${member.name}: ${member.health}/${member.maxHealth} ${healthLabel}${suffix}`;
   });
   const lines = [`Party on ${definition.name} rules: ${party.join("; ")}`];
   const alive = summary.enemies.filter((enemy) => !enemy.defeated);
