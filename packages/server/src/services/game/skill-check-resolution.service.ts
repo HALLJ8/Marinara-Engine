@@ -371,7 +371,7 @@ export function buildSkillCheckRulesetContext(
 
 export interface RulesetCheckPurchase {
   /** What really left the sheet, for the record. */
-  spent: { pool: string; amount: number };
+  spent?: { pool: string; amount: number };
   /** What it bought, for the roller. */
   bought: {
     dice?: number;
@@ -459,10 +459,8 @@ function planRulesetEntryCheck(
       }
     }
   }
-  if (!paidPool) return null;
-
   return {
-    spent: { pool: paidPool, amount: paidAmount },
+    ...(paidPool ? { spent: { pool: paidPool, amount: paidAmount } } : {}),
     bought: {
       ...(effect.dice ? { dice: effect.dice * steps } : {}),
       ...(effect.successes ? { successes: effect.successes * steps } : {}),
@@ -608,7 +606,7 @@ function resolveRulesetSkillCheck(
     // Said even on a summed check, where it is also inside `modifier`: "-2 because you are Wounded"
     // is not something a player can read out of one number.
     ...(penalty !== 0 ? { penalty } : {}),
-    ...(purchase ? { spent: purchase.spent } : {}),
+    ...(purchase?.spent ? { spent: purchase.spent } : {}),
     ...(purchase?.used ? { used: purchase.used } : {}),
   };
   // The injected d20 (tests, the sighted pool) stands in only where a d20 is what is rolled.

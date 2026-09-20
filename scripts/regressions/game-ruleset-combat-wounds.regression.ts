@@ -343,9 +343,11 @@ for (const marks of ["per-blow", "per-point"] as const) {
               {
                 ...foe.block.actions[0]!,
                 damage: {
+                  count: 0,
+                  sides: 0,
                   flat: 1,
                   type: reverse ? "cut" : "crush",
-                  plus: [{ flat: 1, type: reverse ? "crush" : "cut" }],
+                  plus: [{ count: 0, sides: 0, flat: 1, type: reverse ? "crush" : "cut" }],
                 },
               },
             ],
