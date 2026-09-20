@@ -2730,7 +2730,10 @@ function refineRulesetDefinition(def: RulesetDefinitionBase, ctx: z.RefinementCt
         }
       }
     } else if (combat.damageKinds) {
-      issue(at("damageKinds"), "damageKinds maps damage onto a wound track's kinds, and health is a pool");
+      issue(
+        at("damageKinds"),
+        "damageKinds maps damage onto a wound track's kinds, and health is a pool, which has nowhere to keep one: point health at a wound track if what KIND a wound was still matters after the blow",
+      );
     }
 
     if (combat.threat) {
