@@ -74,6 +74,7 @@ for (const theme of ["light", "dark"] as const) {
       await expect(activeBackground).toHaveCSS("opacity", "0.8");
       await expect(page.locator("[data-conversation-background-gradient-veil]")).toHaveCSS("opacity", "0.35");
       await page.locator('[data-tour="panel-settings"]').click();
+      await expect(page.getByRole("heading", { name: "Settings", exact: true })).not.toBeVisible();
       await page.screenshot({ path: testInfo.outputPath(`background-eighty-${theme}.png`) });
     } finally {
       if (chatId) await request.delete(`/api/chats/${chatId}?force=true`).catch(() => undefined);
