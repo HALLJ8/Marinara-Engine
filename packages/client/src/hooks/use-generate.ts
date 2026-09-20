@@ -1453,6 +1453,16 @@ export function useGenerate() {
       const transportStreaming = useUIStore.getState().enableStreaming;
       const streamingEnabled = transportStreaming;
       const chatModeForGeneration = getCachedChatMode(qc, params.chatId);
+      const continuedMessage = params.continueMessageId
+        ? getCachedMessages(qc, params.chatId).find((message) => message.id === params.continueMessageId)
+        : undefined;
+      if (chatModeForGeneration === "roleplay" && continuedMessage) {
+        useChatStore.getState().setContinuationStream(params.chatId, {
+          messageId: continuedMessage.id,
+          content: continuedMessage.content,
+          addNewline: useUIStore.getState().continueAddsNewline,
+        });
+      }
       const smoothRoleplayTypewriter = chatModeForGeneration === "roleplay";
       const shouldDisplayRawStream =
         chatModeForGeneration !== "conversation" || !!params.regenerateMessageId || !!params.continueMessageId;
@@ -2494,6 +2504,11 @@ export function useGenerate() {
                 agentType?: string;
               };
               if (rw.editedText) {
+                // Post-processing rewrites the complete stored message, including its original text.
+                const continuation = useChatStore.getState().continuationStreams.get(params.chatId);
+                if (continuation) {
+                  useChatStore.getState().setContinuationStream(params.chatId, { ...continuation, content: "" });
+                }
                 const rewrittenText = normalizeLineBreakSpacing(rw.editedText);
                 const builtInRewriteApplied =
                   rw.rewriteApplied === true &&
@@ -2647,7 +2662,7 @@ export function useGenerate() {
                 const generatedText = normalizeLineBreakSpacing(fullBuffer + pendingText);
                 const heldMessage = {
                   ...savedMessage,
-                  content: generatedText || savedMessage.content,
+                  content: params.continueMessageId ? savedMessage.content : generatedText || savedMessage.content,
                   extra: heldExtra as unknown as Message["extra"],
                 };
                 holdingTextRewrite = true;

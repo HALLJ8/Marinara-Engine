@@ -4,6 +4,9 @@ This file is the release-notes source of truth for Marinara Engine. Reuse these 
 
 ## [Unreleased]
 
+- Roleplay `/continue` and `/cont` display their streamed text inside the original reply, preserving its existing content and newline preference; an empty send still creates a separate reply (#6394).
+- Narrator dice commands can target the active persona by name, including character cards used as personas, and apply that identity's assigned RPG attribute modifier (#6395).
+
 - Conversation and Roleplay chats keep the latest message in view while their opening layout finishes loading, on desktop and mobile; scrolling through older history still takes precedence (#6392).
 
 - Touch dragging in chats and resource libraries lets a second finger scroll the list while the first keeps holding the item; lifting the scrolling finger no longer drops or assigns it (#6390).

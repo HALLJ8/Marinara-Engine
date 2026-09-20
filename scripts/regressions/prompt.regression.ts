@@ -1469,6 +1469,10 @@ const cases: RegressionCase[] = [
         "The experimentcontinues.",
       );
       assert.equal(appendContinuationMessageContent("The experiment", "continues."), "The experiment\n\ncontinues.");
+      assert.equal(
+        appendContinuationMessageContent("  The experiment \r\n", "\n continues.\t"),
+        "  The experiment\n\ncontinues.\t",
+      );
       assert.match(CONTINUE_ASSISTANT_MESSAGE_DIRECT_PROMPT, /appended directly/i);
       assert.match(CONTINUE_ASSISTANT_MESSAGE_DIRECT_PROMPT, /no newline or separator/i);
     },
