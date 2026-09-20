@@ -4640,6 +4640,8 @@ function AppearanceSettings({ group = "app" }: { group?: AppearanceGroup }) {
   const setDefaultRoleplayBackground = useUIStore((s) => s.setDefaultRoleplayBackground);
   const chatBackgroundBlur = useUIStore((s) => s.chatBackgroundBlur);
   const setChatBackgroundBlur = useUIStore((s) => s.setChatBackgroundBlur);
+  const conversationBackgroundImageOpacity = useUIStore((s) => s.conversationBackgroundImageOpacity);
+  const setConversationBackgroundImageOpacity = useUIStore((s) => s.setConversationBackgroundImageOpacity);
   const resetAppearanceSettings = useUIStore((s) => s.resetAppearanceSettings);
   const activeChatId = useChatStore((s) => s.activeChatId);
   const { data: appearanceChat } = useChat(activeChatId);
@@ -5435,6 +5437,27 @@ function AppearanceSettings({ group = "app" }: { group?: AppearanceGroup }) {
                       {chatBackgroundBlur === 0
                         ? localizeUi("ui.panels.appearancesettings.off")
                         : localizeUi("ui.panels.appearancesettings.value1Px", { value1: chatBackgroundBlur })}
+                    </span>
+                  </div>
+                </label>
+                <label className="flex flex-col gap-1 rounded-lg bg-[var(--secondary)]/45 p-3 ring-1 ring-[var(--border)]/70">
+                  <span className="inline-flex items-center gap-1 text-[0.6875rem] font-medium">
+                    {localizeUi("settings.controls.conversationBackgroundImageOpacity.label")}
+                    <HelpTooltip text={localizeUi("settings.controls.conversationBackgroundImageOpacity.help")} />
+                  </span>
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="range"
+                      aria-label={localizeUi("settings.controls.conversationBackgroundImageOpacity.label")}
+                      min={0}
+                      max={100}
+                      step={5}
+                      value={conversationBackgroundImageOpacity}
+                      onChange={(event) => setConversationBackgroundImageOpacity(Number(event.target.value))}
+                      className="min-w-0 flex-1 accent-[var(--primary)]"
+                    />
+                    <span className="w-12 text-right text-xs tabular-nums text-[var(--muted-foreground)]">
+                      {conversationBackgroundImageOpacity}%
                     </span>
                   </div>
                 </label>
