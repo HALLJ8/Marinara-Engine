@@ -7698,6 +7698,31 @@ export async function generateRoutes(app: FastifyInstance) {
           /** Live sheet state after any check in this turn bought something with a pool. Set by the
            *  check pass and read by the sheet-command pass, which is the order they happened in. */
           let checkSpendLive: RulesetLiveStates | null = null;
+          /**
+           * The live sheet state THIS TURN starts from, read once and shared by both passes.
+           *
+           * The check pass spends before the dice are thrown and the sheet pass spends after, so
+           * they have to begin from the same balance or one turn would pay twice out of two
+           * different starting points. It is the row this turn follows, or a continuation's own
+           * row; reading "the newest stored row" instead is a different balance whenever the turn
+           * does not follow the newest one, which is what a regenerate and a swipe are.
+           */
+          let turnStartLivePromise: Promise<RulesetLiveStates | null> | null = null;
+          const turnStartRulesetLive = () => {
+            turnStartLivePromise ??= (async () => {
+              const continuedRow = input.continueMessageId
+                ? await gameStateStore.getByChatAndMessage(
+                    input.chatId,
+                    input.continueMessageId,
+                    Number.isInteger(continueTargetMessage?.activeSwipeIndex)
+                      ? (continueTargetMessage.activeSwipeIndex as number)
+                      : 0,
+                  )
+                : null;
+              return parseStoredRulesetLive((continuedRow ?? baseGameStateSnapshot)?.rulesetLive);
+            })();
+            return turnStartLivePromise;
+          };
 
           // Some models inline reasoning blocks instead of using provider-native
           // thinking channels. Lift those blocks into message.extra.thinking.
@@ -8205,7 +8230,8 @@ export async function generateRoutes(app: FastifyInstance) {
             // than by a marker in the text that would change how an older turn reads.
             const dicePoolSession = await ensureGameDicePoolSession();
             const rolled = await resolveSkillCheckTagsInContent(fullResponse, {
-              loadContext: () => loadSkillCheckModifierContext(app.db, input.chatId),
+              loadContext: async () =>
+                loadSkillCheckModifierContext(app.db, input.chatId, await turnStartRulesetLive()),
               chatId: input.chatId,
               // Keyed on the pin being PRESENT, not on it resolving. A pin the install cannot
               // honour must still fail closed (the context refuses to load and the checks are
@@ -8348,19 +8374,12 @@ export async function generateRoutes(app: FastifyInstance) {
             try {
               const sheetContext = await loadGameRulesetSheetContext(app.db, input.chatId, turnGameRuleset);
               if (sheetContext) {
-                const continuedRow = input.continueMessageId
-                  ? await gameStateStore.getByChatAndMessage(
-                      input.chatId,
-                      input.continueMessageId,
-                      Number.isInteger(continueTargetMessage?.activeSwipeIndex)
-                        ? (continueTargetMessage.activeSwipeIndex as number)
-                        : 0,
-                    )
-                  : null;
                 rulesetSheetTurn = applyGameRulesetSheetTurn(
                   sheetContext,
                   fullResponse,
-                  withSpends(parseStoredRulesetLive((continuedRow ?? baseGameStateSnapshot)?.rulesetLive)),
+                  // The same turn-start state the check pass read, with whatever it already spent
+                  // laid over it, so the two passes of one turn cannot begin from two balances.
+                  withSpends(await turnStartRulesetLive()),
                   await loadTurnRulesetCatalogs(sheetContext, fullResponse),
                 );
                 if (rulesetSheetTurn.content !== fullResponse) {

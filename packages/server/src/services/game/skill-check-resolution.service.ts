@@ -227,7 +227,20 @@ async function findPlayerCharacterCard(
  * the player character card's sheet attributes as the fallback the shipped
  * endpoint has always used (playerStats.attributes is never seeded today).
  */
-export async function loadSkillCheckModifierContext(db: DB, chatId: string): Promise<SkillCheckModifierContext> {
+export async function loadSkillCheckModifierContext(
+  db: DB,
+  chatId: string,
+  /**
+   * The live state this TURN starts from, when the caller knows it. A generating turn does: it is
+   * the row the turn follows, or a continuation's own row, and it is what the sheet-command pass
+   * later starts from too. Without it this reads the newest row instead, which is a different
+   * balance whenever the turn does not follow the newest one — a regenerate or a swipe — and the
+   * two passes of one turn would then spend from two different starting points. Left out, the
+   * newest stored state stands, which is right for a caller with no turn of its own, such as the
+   * `POST /game/skill-check` endpoint.
+   */
+  turnStartLive?: RulesetLiveStates | null,
+): Promise<SkillCheckModifierContext> {
   const stateStore = createGameStateStorage(db);
   const snapshot = await stateStore.getLatest(chatId);
   const playerStats = parsePlayerStats(snapshot?.playerStats, chatId);
@@ -258,13 +271,14 @@ export async function loadSkillCheckModifierContext(db: DB, chatId: string): Pro
         skills: null,
         attributes: null,
         sheetAttributes: {},
-        // The live state of this chat's sheets, off the snapshot already read above: it is where a
-        // wound track's marks live, and a check cannot know what a wound costs without them.
+        // The live state of this chat's sheets: it is where a wound track's marks live, and a
+        // check cannot know what a wound costs without them. The turn's own starting state when
+        // the caller handed one over, and otherwise the snapshot read above.
         ruleset: buildSkillCheckRulesetContext(
           pinned.definition,
           cards,
           playerCard,
-          parseStoredRulesetLive(snapshot?.rulesetLive),
+          turnStartLive === undefined ? parseStoredRulesetLive(snapshot?.rulesetLive) : turnStartLive,
         ),
       };
     }
