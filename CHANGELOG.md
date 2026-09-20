@@ -4,6 +4,8 @@ This file is the release-notes source of truth for Marinara Engine. Reuse these 
 
 ## [Unreleased]
 
+- A Game Mode ruleset can now say that one weapon is a single strike a turn however many attacks its wielder has. A weapon list that buys several strikes may name a column that holds its own rows to one, which is what a crossbow needs: 5e's Loading property says you fire once when you take the Attack action whatever your count, and until now a character with Extra Attack was offered the same number of shots with a crossbow as swings with a sword. Ruleset packages that use it need Capability API 1.32, and a list that says nothing is unchanged.
+
 - The ruleset authoring guide now says WHY a health pool cannot carry kinds of harm, rather than only that it is refused: a pool records how much damage landed, a wound track records how much and what kind each piece of it was, so a system where a wound stays bashing, lethal or aggravated after the blow needs a track. The refusal an author sees says the same thing and names the remedy.
 
 - Downloadable packages can use the host Engine's LLM, image and video integrations, inheriting provider fixes, queues and request safeguards without bundling stale service copies. These integrations require Capability API 1.31.
