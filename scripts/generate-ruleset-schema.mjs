@@ -120,10 +120,9 @@ function requireDamageAmount(node) {
     ["dice", "flat", "type"].every((key) => keys.includes(key)) && keys.every((key) => DAMAGE_KEYS.includes(key));
   // A rider's amount carries no type of its own (it takes the blow's), so it is dice and flat alone.
   // It still has to say one of them, exactly as a clause does, or it adds nothing.
-  // A node that ALREADY requires one of them says the rule itself: a creature's health is dice and
-  // an optional flat, and telling it "dice or flat" on top reads as though flat alone would do.
-  const riderAmountShaped =
-    keys.length === 2 && keys.includes("dice") && keys.includes("flat") && (node.required ?? []).length === 0;
+  // A rider's amount carries no type of its own, so its keys alone look like every other pair of
+  // dice and flat in the file, a creature's health included. The schema marks it by name instead.
+  const riderAmountShaped = node.description === "rider-amount";
   if (node.type === "object" && (damageShaped || riderAmountShaped)) {
     node.anyOf = [{ required: ["dice"] }, { required: ["flat"] }];
   }

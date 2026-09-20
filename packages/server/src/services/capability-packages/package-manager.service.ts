@@ -778,7 +778,10 @@ export function getCapabilityPackageInstallIssue(
           );
         })
       : false;
-    if (strikes || conditions) {
+    // The part of a dodge its flag does not carry. Same reason as the two above: an Engine that does
+    // not know the key refuses the whole strict file rather than ignoring it.
+    const dodgeSaves = combat.standardEffects !== undefined;
+    if (strikes || conditions || dodgeSaves) {
       return "A ruleset that says what one turn can do requires schemaVersion 2 and capabilityApi 1.29 or newer";
     }
   }

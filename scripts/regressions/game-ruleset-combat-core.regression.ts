@@ -1798,6 +1798,12 @@ const labels = (definition: RulesetDefinition, state: RulesetEncounterState, id:
     refusal(withEntry(emberText, (mechanics) => (mechanics.standard = { actions: ["dash"], budget: "act" }))),
     /This ruleset does not have the standard action "dash"/,
   );
+  // Ember Roads' only budget IS the one a standard action is already taken for, so a permission
+  // naming it grants nothing and would offer the same action twice, once at each id.
+  assert.match(
+    refusal(withEntry(emberText, (mechanics) => (mechanics.standard = { actions: ["dodge"], budget: "act" }))),
+    /Every standard action is already taken for "act", so this permission grants nothing/,
+  );
   assert.match(
     refusal(withEntry(emberText, (mechanics) => (mechanics.standard = { actions: ["dodge"], budget: "swing" }))),
     /Unknown budget "swing"/,
@@ -2752,6 +2758,15 @@ const labels = (definition: RulesetDefinition, state: RulesetEncounterState, id:
     });
     assert.match(getCapabilityPackageInstallIssue(manifest(28), conditionOnly) ?? "", economyIssue);
     assert.equal(getCapabilityPackageInstallIssue(manifest(29), conditionOnly), null);
+    // The part of a dodge its flag does not carry is its own declaration: an Engine that does not
+    // know the key refuses the whole file, so a package carrying it has to say 1.29.
+    const dodgeOnly = variant(emberText, (doc) => {
+      doc.catalogs = [];
+      doc.sheet.saves = [{ id: "reflex", label: "Reflex", ability: "brawn" }];
+      doc.combat.standardEffects = { dodge: { saves: ["reflex"] } };
+    });
+    assert.match(getCapabilityPackageInstallIssue(manifest(28), dodgeOnly) ?? "", economyIssue);
+    assert.equal(getCapabilityPackageInstallIssue(manifest(29), dodgeOnly), null);
     // And the entries, inline or in the catalog file the install already holds.
     const inline = variant(emberText, (doc) => {
       doc.catalogs = (doc.catalogs ?? []).filter((catalog: Record<string, any>) => catalog.holds !== "creatures");

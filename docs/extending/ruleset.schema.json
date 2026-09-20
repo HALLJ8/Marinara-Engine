@@ -3144,19 +3144,7 @@
                         },
                         "$comment": {}
                       },
-                      "additionalProperties": false,
-                      "anyOf": [
-                        {
-                          "required": [
-                            "dice"
-                          ]
-                        },
-                        {
-                          "required": [
-                            "flat"
-                          ]
-                        }
-                      ]
+                      "additionalProperties": false
                     },
                     "damageType": {
                       "type": "string",
@@ -3293,19 +3281,7 @@
                         },
                         "$comment": {}
                       },
-                      "additionalProperties": false,
-                      "anyOf": [
-                        {
-                          "required": [
-                            "dice"
-                          ]
-                        },
-                        {
-                          "required": [
-                            "flat"
-                          ]
-                        }
-                      ]
+                      "additionalProperties": false
                     },
                     "concentration": {
                       "type": "boolean"
@@ -3419,19 +3395,7 @@
                         },
                         "$comment": {}
                       },
-                      "additionalProperties": false,
-                      "anyOf": [
-                        {
-                          "required": [
-                            "dice"
-                          ]
-                        },
-                        {
-                          "required": [
-                            "flat"
-                          ]
-                        }
-                      ]
+                      "additionalProperties": false
                     },
                     "scales": {
                       "type": "object",
@@ -3614,6 +3578,7 @@
                             "$comment": {}
                           },
                           "additionalProperties": false,
+                          "description": "rider-amount",
                           "anyOf": [
                             {
                               "required": [
@@ -4293,6 +4258,7 @@
                               "$comment": {}
                             },
                             "additionalProperties": false,
+                            "description": "rider-amount",
                             "anyOf": [
                               {
                                 "required": [

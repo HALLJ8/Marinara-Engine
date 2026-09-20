@@ -751,7 +751,9 @@ const riderCoreShape = {
     .max(2)
     .optional(),
   oncePer: z.enum(["turn", "round"]),
-  amount: z.object(catalogAmountShape).strict(),
+  // Marked so the published JSON Schema can find it by name rather than by guessing from its keys,
+  // which would also match every other pair of dice and flat in the file.
+  amount: z.object(catalogAmountShape).strict().describe("rider-amount"),
   /** The kind of harm it deals. Without one it is the blow's own kind. */
   type: promptSafeText(40).optional(),
 };
@@ -915,8 +917,8 @@ const catalogMechanicsSchema = z
         message: "Something free spends no budget, so it names none",
       });
     }
-    // A standard action bought with the MAIN budget is the one the block already offers, so saying
-    // it again would put the same thing on the menu twice.
+    // Naming one twice would offer it twice. (Naming the MAIN budget is refused where the ruleset's
+    // own economy is in reach, which is not here.)
     if (mechanics.standard && mechanics.standard.actions.length !== new Set(mechanics.standard.actions).size) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
@@ -3059,6 +3061,13 @@ export function rulesetCatalogEntryIssues(
       const path = [index, "mechanics", "standard"];
       if (!budgets?.has(mechanics.standard.budget)) {
         add([...path, "budget"], `Unknown budget "${mechanics.standard.budget}"`);
+      } else if (mechanics.standard.budget === definition.combat.economy.budgets[0]?.id) {
+        // A standard action is already bought with the first budget, so a permission naming that one
+        // grants nothing and would put the same thing on the menu twice, once at each id.
+        add(
+          [...path, "budget"],
+          `Every standard action is already taken for "${mechanics.standard.budget}", so this permission grants nothing`,
+        );
       }
       const declared = new Set<string>(definition.combat.standard ?? []);
       mechanics.standard.actions.forEach((action, actionIndex) => {

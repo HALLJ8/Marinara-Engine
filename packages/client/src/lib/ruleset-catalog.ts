@@ -514,6 +514,26 @@ export function formatCatalogMechanics(
       }),
     );
   }
+  // A rider never reaches the menu, so its line is the only place a reader learns what it does: how
+  // much it adds, of what, and how often. Without this the picker says only the word "Rider".
+  if (mechanics.rider) {
+    const added = formatAmount(mechanics.rider.amount);
+    if (added) {
+      parts.push(
+        t("game.ruleset.catalog.mechanics.riderAmount", {
+          amount: added,
+          type: mechanics.rider.type ?? t("game.ruleset.catalog.mechanics.riderSameType"),
+        }),
+      );
+    }
+    parts.push(
+      t(
+        mechanics.rider.oncePer === "round"
+          ? "game.ruleset.catalog.mechanics.riderOnceRound"
+          : "game.ruleset.catalog.mechanics.riderOnceTurn",
+      ),
+    );
+  }
   if (mechanics.targets) parts.push(t(TARGET_KEYS[mechanics.targets]));
   if (mechanics.friendlyFire) parts.push(t("game.ruleset.catalog.mechanics.friendlyFire"));
   if (mechanics.attackRoll) parts.push(t("game.ruleset.catalog.mechanics.attackRoll"));
