@@ -521,6 +521,10 @@ interface RulesetCandidate {
  *  they open up before cutting, which needs a scoring pass this slice does not have. */
 const RULESET_MOVE_CANDIDATE_CELLS = 48;
 
+/** The largest board on which a shape is also aimed from the cells an actor could walk to. The
+ *  generator's own largest board is 14 by 10; this is a few times that. */
+const RULESET_AREA_WALK_BOARD_CELLS = 400;
+
 /** What one strike on the way is worth against doing the thing at all: enough that a creature will
  *  not walk through three people's reach for a marginally better target, and not so much that it
  *  will stand still rather than take one hit to reach the only enemy it can fight. */
@@ -662,6 +666,12 @@ function rulesetCandidatesFrom(
     // A shape lands on a cell, so the aims are the candidates: each one is worth what it catches,
     // and the actor's own side counts against it.
     if (option.area) {
+      // Aiming a shape is the one thing here whose cost grows with the BOARD, and it is asked again
+      // from every cell the actor might walk to. On the boards this Engine draws that is nothing; on
+      // a far larger one that arrived through an import, a shape is only aimed from where the actor
+      // really stands, which costs a creature a cleverer walk and never costs the server a turn.
+      const grid = encounter.board?.grid;
+      if (standing && grid && grid.width * grid.height > RULESET_AREA_WALK_BOARD_CELLS) continue;
       candidates.push(...areaCandidates(definition, combat, encounter, actor, option, standing));
       continue;
     }

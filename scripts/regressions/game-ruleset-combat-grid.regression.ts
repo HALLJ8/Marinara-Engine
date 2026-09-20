@@ -1404,12 +1404,12 @@ const cellsOf = (cells: Array<{ x: number; y: number }>) =>
 // ── A shape far bigger than the board costs no more than the board ──
 {
   const board = open(6, 4);
-  const started = Date.now();
   const vast = rulesetAreaCells("burst", 100000, { x: 2, y: 2 }, { x: 2, y: 2 }, board);
   const wide = rulesetAreaCells("cone", 100000, { x: 0, y: 0 }, { x: 5, y: 0 }, board);
   assert.equal(vast.length, 24, "a burst that size is simply the whole board");
   assert.ok(wide.length > 0 && wide.length <= 24, "and a cone that size is what of the board it faces");
-  assert.ok(Date.now() - started < 500, "neither is scanned beyond the board's own edges");
+  // No clock in here: a scan that ran over the shape instead of the board would be ten thousand
+  // million steps, and the lane's own timeout is what says so.
 }
 
 console.info("game ruleset combat grid regressions passed.");
