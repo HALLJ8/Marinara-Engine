@@ -70,11 +70,23 @@ for (const theme of ["light", "dark"] as const) {
       }, connection.id);
       const editor = page.locator(".mari-editor-shell");
       await expect(editor).toBeVisible();
+      const save = async () => {
+        const button = editor.getByRole("button", { name: "Save", exact: true });
+        const [response] = await Promise.all([
+          page.waitForResponse(
+            (response) =>
+              new URL(response.url()).pathname === `/api/connections/${connection.id}` &&
+              response.request().method() === "PATCH",
+          ),
+          button.click(),
+        ]);
+        expect(response.ok()).toBeTruthy();
+        await expect(button).toBeEnabled();
+      };
       await editor.getByRole("button", { name: /Atlas Cloud.*setup/i }).click();
       await editor.getByRole("textbox", { name: /prototype/ }).fill("cinematic");
       await editor.getByRole("combobox", { name: "shot_type", exact: true }).selectOption({ value: "1" });
-      await editor.getByRole("button", { name: "Save", exact: true }).click();
-      await expect(editor.getByText("Saved", { exact: true })).toBeAttached();
+      await save();
       await expect.poll(storedOptions).toEqual({ "vendor/first": { prototype: "cinematic", shot_type: "1" } });
       await editor.getByRole("combobox", { name: "shot_type", exact: true }).scrollIntoViewIfNeeded();
       await page.screenshot({ path: testInfo.outputPath(`atlas-options-${theme}.png`) });
@@ -83,8 +95,7 @@ for (const theme of ["light", "dark"] as const) {
       await expect(editor.getByRole("textbox", { name: /prototype/ })).not.toBeVisible();
       await editor.getByRole("textbox", { name: /negative_prompt/ }).fill("blurry");
       await editor.getByRole("combobox", { name: "shot_type", exact: true }).selectOption({ value: "2" });
-      await editor.getByRole("button", { name: "Save", exact: true }).click();
-      await expect(editor.getByText("Saved", { exact: true })).toBeAttached();
+      await save();
       const secondOptions = { negative_prompt: "blurry", shot_type: "__model_default__" };
       await expect.poll(storedOptions).toEqual({
         "vendor/first": { prototype: "cinematic", shot_type: "1" },
@@ -94,8 +105,7 @@ for (const theme of ["light", "dark"] as const) {
       await expect(editor.getByRole("textbox", { name: /prototype/ })).toHaveValue("cinematic");
       await editor.getByRole("button", { name: "Reset model options", exact: true }).click();
       await expect(editor.getByRole("textbox", { name: /prototype/ })).toHaveValue("");
-      await editor.getByRole("button", { name: "Save", exact: true }).click();
-      await expect(editor.getByText("Saved", { exact: true })).toBeAttached();
+      await save();
       await expect.poll(storedOptions).toEqual({ "vendor/second": secondOptions });
     } finally {
       await page.close();

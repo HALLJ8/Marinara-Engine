@@ -107,14 +107,21 @@ function requireSaveEndsUntilSave(node) {
   }
 }
 
-// A creature action's damage names dice, a flat amount, or both: an empty one is refused by the
-// Engine, and that too is a refinement. The node is found by its shape: `dice`, `flat` and `type`.
+// A creature action's damage, and every clause beside it, names dice, a flat amount, or both: an
+// empty one is refused by the Engine, and that too is a refinement. The node is found by its shape:
+// `dice`, `flat` and `type`, and nothing but the keys a blow or a clause carries.
+const DAMAGE_KEYS = ["dice", "flat", "type", "plus", "save"];
 function requireDamageAmount(node) {
   if (Array.isArray(node)) return node.forEach(requireDamageAmount);
   if (!node || typeof node !== "object") return;
   Object.values(node).forEach(requireDamageAmount);
-  const keys = Object.keys(node.properties ?? {});
-  if (node.type === "object" && keys.length === 3 && ["dice", "flat", "type"].every((key) => keys.includes(key))) {
+  const keys = Object.keys(node.properties ?? {}).filter((key) => key !== "$comment");
+  const damageShaped =
+    ["dice", "flat", "type"].every((key) => keys.includes(key)) && keys.every((key) => DAMAGE_KEYS.includes(key));
+  // A rider's amount carries no type of its own, so its keys alone look like every other pair of
+  // dice and flat in the file, a creature's health included. The schema marks it by name instead.
+  const riderAmountShaped = node.description === "rider-amount";
+  if (node.type === "object" && (damageShaped || riderAmountShaped)) {
     node.anyOf = [{ required: ["dice"] }, { required: ["flat"] }];
   }
 }
@@ -147,7 +154,26 @@ function requireDistanceForMeasured(node) {
   ];
 }
 
+/**
+ * Two rules a catalog entry's mechanics keep that the shape alone does not say: an entry of the
+ * kind `rider` has to carry the `rider` that describes it, and something `free` spends no budget so
+ * it names none. Zod refuses both at import; an author's editor should refuse them while typing.
+ */
+function requireMechanicsPairs(node) {
+  if (Array.isArray(node)) return node.forEach(requireMechanicsPairs);
+  if (!node || typeof node !== "object") return;
+  Object.values(node).forEach(requireMechanicsPairs);
+  const properties = node.properties;
+  if (node.type !== "object" || !properties?.kind || !properties.rider || !properties.free) return;
+  node.allOf = [
+    ...(node.allOf ?? []),
+    { if: { properties: { kind: { const: "rider" } }, required: ["kind"] }, then: { required: ["rider"] } },
+    { not: { required: ["free", "budget"] } },
+  ];
+}
+
 const schema = zodToJsonSchema(rulesetDefinitionSchema, { $refStrategy: "none", target: "jsonSchema7" });
+requireMechanicsPairs(schema);
 requireOneCatalogSource(schema);
 requireOneEntryContent(schema);
 requireCatalogFeeds(schema);

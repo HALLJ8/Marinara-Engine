@@ -668,6 +668,46 @@ const catalogDice = z
 
 const catalogAmountShape = { dice: catalogDice.optional(), flat: z.number().int().optional() };
 
+/** How many SECOND amounts one blow may carry beside its first. Three, because a blow written as a
+ *  list of four separate things is a blow nobody at a table could read out. */
+export const RULESET_DAMAGE_MAX_PLUS = 3;
+
+/** The save one clause asks the TARGET for, on top of whatever the action itself asked. `difficulty`
+ *  is the clause's own number; without one it falls back to the action's, and then to the number the
+ *  source it came from rolls saves against. `onSuccess` says what a success leaves of THIS clause:
+ *  nothing at all, or half of it. (The action's own `save` uses the same word for something else:
+ *  there "none" means the save changes nothing. A clause is only ever rolled against to take
+ *  something off it, so it has no third value.) */
+const catalogClauseSaveSchema = z
+  .object({
+    save: sheetId,
+    difficulty: z.number().int().min(0).max(1000).optional(),
+    onSuccess: z.enum(["none", "half"]),
+  })
+  .strict();
+
+/** One more amount on the same blow, rolled and typed on its own: "and 2d6 fire", "and 1d6 poison
+ *  the target may shake off". Never a second attack roll: a clause rides the blow that carried it. */
+const catalogPlusClauseSchema = z
+  .object({
+    dice: catalogDice.optional(),
+    flat: z.number().int().min(-1000).max(10000).optional(),
+    type: promptSafeText(40).optional(),
+    save: catalogClauseSaveSchema.optional(),
+  })
+  .strict()
+  .superRefine((clause, ctx) => {
+    if (clause.dice === undefined && clause.flat === undefined) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "A clause names dice, a flat amount, or both" });
+    }
+  });
+
+/** The generic actions the kind implements, named once so a ruleset opts into the ones it has. Up
+ *  here rather than beside the combat block because a catalog entry names them too: an ability that
+ *  lets its holder buy one of them with another budget says which ones. */
+const combatStandardActionSchema = z.enum(["dash", "disengage", "dodge", "help", "hide", "ready"]);
+export const RULESET_COMBAT_STANDARD_ACTIONS = combatStandardActionSchema.options;
+
 /** How long a condition an entry applies lasts. `until-save` has no clock of its own, so it needs
  *  the save that ends it beside it, or nothing would ever take it off again. */
 const catalogDurationSchema = z.union([
@@ -696,12 +736,82 @@ const catalogAppliesSchema = z
     }
   });
 
+/** What a rider is, minus where it comes from. A rider is PASSIVE: nobody takes it, and it adds one
+ *  more damage clause to the first qualifying hit of its period, automatically.
+ *
+ *  `when` is any-of: one of the listed things being true is enough. "advantage" is how the attack
+ *  roll finally leaned, and "ally-adjacent" is a standing ally of the attacker who can act, within
+ *  one cell of the target on a board and anywhere at all without one. */
+const riderCoreShape = {
+  /** The one moment a rider fires. More of them arrive with the slice that builds windows. */
+  on: z.literal("hit"),
+  when: z
+    .array(z.enum(["advantage", "ally-adjacent"]))
+    .min(1)
+    .max(2)
+    .optional(),
+  oncePer: z.enum(["turn", "round"]),
+  // Marked so the published JSON Schema can find it by name rather than by guessing from its keys,
+  // which would also match every other pair of dice and flat in the file.
+  amount: z.object(catalogAmountShape).strict().describe("rider-amount"),
+  /** The kind of harm it deals. Without one it is the blow's own kind. */
+  type: promptSafeText(40).optional(),
+};
+
+const riderAmountIssue = (rider: { amount: { dice?: string; flat?: number } }, ctx: z.RefinementCtx) => {
+  if (rider.amount.dice === undefined && rider.amount.flat === undefined) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["amount"],
+      message: "A rider names dice, a flat amount, or both",
+    });
+  }
+};
+
+/** A rider a party member carries, from a catalog entry. `sources` names the attack lists it fires
+ *  on and `requires` one truthy column of those lists' rows, so a rider that only comes off certain
+ *  weapons says which without the Engine knowing one word of what a weapon is. */
+const catalogRiderSchema = z
+  .object({
+    ...riderCoreShape,
+    sources: z.array(sheetId).min(1).max(8).optional(),
+    requires: z.object({ column: sheetId }).strict().optional(),
+  })
+  .strict()
+  .superRefine(riderAmountIssue);
+
+/** The keys a passive carries nothing of: a rider is not something anybody takes, so anything that
+ *  would put it on a menu or spend something for it is refused where an author can still see it. */
+const RIDER_ENTRY_FORBIDS = [
+  "range",
+  "area",
+  "targets",
+  "friendlyFire",
+  "amount",
+  "damageType",
+  "plus",
+  "attackRoll",
+  "save",
+  "cost",
+  "perCostStep",
+  "concentration",
+  "reaction",
+  "targetCount",
+  "autoHit",
+  "applies",
+  "temporary",
+  "budget",
+  "free",
+  "gives",
+  "standard",
+] as const;
+
 /** What an entry DOES. The Engine does not act on it in this slice: it validates it and the client
  *  shows one compact line. A later combat bridge turns it into the Engine's own `CombatSkill`, so
  *  the vocabulary is closed and strict, and a typo is refused now rather than ignored then. */
 const catalogMechanicsSchema = z
   .object({
-    kind: z.enum(["attack", "heal", "buff", "debuff", "utility"]),
+    kind: z.enum(["attack", "heal", "buff", "debuff", "utility", "rider"]),
     /** In the catalog's own distance unit. 0 is self or touch. */
     range: z.number().finite().min(0).optional(),
     area: z
@@ -712,6 +822,8 @@ const catalogMechanicsSchema = z
     friendlyFire: z.boolean().optional(),
     amount: z.object(catalogAmountShape).strict().optional(),
     damageType: promptSafeText(40).optional(),
+    /** More amounts on the same blow, beside `amount`, each rolled and typed on its own. */
+    plus: z.array(catalogPlusClauseSchema).max(RULESET_DAMAGE_MAX_PLUS).optional(),
     attackRoll: z.boolean().optional(),
     save: z
       .object({ save: sheetId, onSuccess: z.enum(["none", "half", "negates"]) })
@@ -739,8 +851,82 @@ const catalogMechanicsSchema = z
     scales: z.object({ from: rulesetValueRefSchema, table: stepTableSchema }).strict().optional(),
     /** Which budget of the action economy a use spends, instead of the list's own default. */
     budget: sheetId.optional(),
+    /** Costs no budget at all: a turn may hold as many of these as their own price allows. */
+    free: z.literal(true).optional(),
+    /** Budgets this hands its user the moment it is used, for this turn only. Capped where it
+     *  lands, so nothing can be saved up for a later turn. */
+    gives: z
+      .array(z.object({ budget: sheetId, count: z.number().int().min(1).max(10) }).strict())
+      .min(1)
+      .max(4)
+      .optional(),
+    /** The standard actions its holder may take for a budget other than the main one. The menu
+     *  offers them beside the ordinary ones, and the resolver spends the budget named here. */
+    standard: z
+      .object({ actions: z.array(combatStandardActionSchema).min(1).max(6), budget: sheetId })
+      .strict()
+      .optional(),
+    /** What this adds to the first qualifying hit of a period, all by itself. */
+    rider: catalogRiderSchema.optional(),
   })
-  .strict();
+  .strict()
+  .superRefine((mechanics, ctx) => {
+    // A rider and the kind that says it is one always come together: one without the other is an
+    // entry that either does nothing or says it is passive and then asks to be taken.
+    if (mechanics.rider && mechanics.kind !== "rider") {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["kind"],
+        message: 'An entry with a rider is of the kind "rider"',
+      });
+    }
+    if (mechanics.kind === "rider") {
+      if (!mechanics.rider) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["rider"],
+          message: 'A "rider" entry says what its rider does',
+        });
+      }
+      for (const key of RIDER_ENTRY_FORBIDS) {
+        if (mechanics[key] !== undefined) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: [key],
+            message: "A rider is passive: nobody takes it, so it carries nothing that would be taken",
+          });
+        }
+      }
+    }
+    // A second amount needs a first one to ride: a blow made of nothing but clauses would be an
+    // amount written in the one place nothing reads it.
+    if (mechanics.plus && !mechanics.amount) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["plus"], message: "A clause needs an amount beside it" });
+    }
+    // An `amount` that MENDS is health given back, and there is nothing for a second damage clause
+    // to be typed against or saved out of.
+    if (mechanics.plus && mechanics.kind === "heal") {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["plus"], message: "A heal carries no damage clauses" });
+    }
+    // Free of the economy, or spending one named budget of it. Both at once says two things about
+    // the same use and the menu would have to pick one.
+    if (mechanics.free && mechanics.budget !== undefined) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["free"],
+        message: "Something free spends no budget, so it names none",
+      });
+    }
+    // Naming one twice would offer it twice. (Naming the MAIN budget is refused where the ruleset's
+    // own economy is in reach, which is not here.)
+    if (mechanics.standard && mechanics.standard.actions.length !== new Set(mechanics.standard.actions).size) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["standard", "actions"],
+        message: "The same standard action is named twice",
+      });
+    }
+  });
 
 /** What the picker may filter on. `startFrom` names a sheet field the picker opens on, so a caster
  *  sees their own school first. Nothing here knows the word "spell" or "class". */
@@ -816,6 +1002,8 @@ const creatureDamageSchema = z
     dice: catalogDice.optional(),
     flat: z.number().int().min(-1000).max(10000).optional(),
     type: promptSafeText(40).optional(),
+    /** More amounts on the same blow, each rolled and typed on its own. */
+    plus: z.array(catalogPlusClauseSchema).max(RULESET_DAMAGE_MAX_PLUS).optional(),
   })
   .strict()
   .superRefine((damage, ctx) => {
@@ -965,6 +1153,23 @@ const creatureActionSchema = z
     }
   });
 
+/** How many riders one creature may carry. Four, for the same reason a blow carries three clauses:
+ *  past that nobody at a table could hold the creature in their head. */
+export const RULESET_CREATURE_MAX_RIDERS = 4;
+
+/** A rider a creature carries. The same shape a catalog entry's is, with the two keys that read a
+ *  character sheet's own lists swapped for the one thing a block has: its own action ids. */
+const creatureRiderSchema = z
+  .object({
+    id: sheetId,
+    name: promptSafeText(80),
+    ...riderCoreShape,
+    /** The actions of this same block it fires on. Without it, any hit this creature lands. */
+    actions: z.array(sheetId).min(1).max(RULESET_CREATURE_MAX_ACTIONS).optional(),
+  })
+  .strict()
+  .superRefine(riderAmountIssue);
+
 /** Exported because an opponent may also arrive from outside a catalog: a Game Master's proposal
  *  for one fight is checked against exactly this shape before it is clamped onto the scale. */
 export const rulesetCreatureSchema = z
@@ -996,6 +1201,8 @@ export const rulesetCreatureSchema = z
     /** Points given back at the start of its own turn, spent on `signature` actions. */
     signaturePoints: z.number().int().min(1).max(20).optional(),
     actions: z.array(creatureActionSchema).min(1).max(RULESET_CREATURE_MAX_ACTIONS),
+    /** What this creature adds to the first qualifying hit of a period, all by itself. */
+    riders: z.array(creatureRiderSchema).min(1).max(RULESET_CREATURE_MAX_RIDERS).optional(),
   })
   .strict()
   .superRefine((creature, ctx) => {
@@ -1206,6 +1413,11 @@ const combatAttackSourceSchema = z
       .object({ normal: combatDistanceSourceSchema, long: combatDistanceSourceSchema.optional() })
       .strict()
       .optional(),
+    /** How many strikes ONE spend of this list's budget buys, read off the sheet or written down.
+     *  A row taken with no strikes in hand spends the budget and puts the rest in hand; while any
+     *  are in hand every row of a list that declares this costs no budget at all. A list that says
+     *  nothing buys one strike a spend, which is what every fight did before this existed. */
+    strikes: rulesetValueRefSchema.optional(),
     toHit: z
       .object({
         /** An enum column holding an ability id. Another value adds nothing, exactly as
@@ -1242,10 +1454,6 @@ const combatAbilitySourceSchema = battleSkillsSchema.extend({
   saveDifficulty: rulesetValueRefSchema.optional(),
 });
 
-/** The generic actions the kind implements, named once so a ruleset opts into the ones it has. */
-const combatStandardActionSchema = z.enum(["dash", "disengage", "dodge", "help", "hide", "ready"]);
-export const RULESET_COMBAT_STANDARD_ACTIONS = combatStandardActionSchema.options;
-
 /** What a condition DOES, from a closed list the kind implements. A ruleset maps its own condition
  *  ids onto them, so the sheet's conditions and the fight's are one record and a poisoned character
  *  is still poisoned when the fight ends. */
@@ -1265,8 +1473,22 @@ const combatConditionEffectSchema = z.enum([
   "half-move-to-stand",
   /** Any damage ends it. */
   "ends-on-damage",
+  /** The holder's own saves, scoped by `saves` when the condition names any. */
+  "own-saves-advantage",
+  "own-saves-disadvantage",
+  /** Half of every kind of harm, whatever the hide underneath already said. */
+  "resist-all",
+  /** The holder may not point anything at whoever put this on them. */
+  "cannot-target-source",
+  /** And may not walk to a cell nearer them than the one they stand in. Read only by a fight with
+   *  a board, exactly as the three effects above it are, so a ruleset may say it either way. */
+  "cannot-approach-source",
 ]);
 export const RULESET_COMBAT_CONDITION_EFFECTS = combatConditionEffectSchema.options;
+
+/** The two effects `saves` narrows. Anything else ignores it, so naming saves without one of these
+ *  is an author saying something the fight could never read. */
+const SAVE_SCOPED_EFFECTS = ["own-saves-advantage", "own-saves-disadvantage"] as const;
 
 const combatConditionSchema = z
   .object({
@@ -1274,8 +1496,28 @@ const combatConditionSchema = z
     effects: z.array(combatConditionEffectSchema).max(12).default([]),
     /** Saves this condition fails without rolling. */
     failsSaves: z.array(sheetId).min(1).max(12).optional(),
+    /** Which saves the save effects above are about. All of them when this is left out. */
+    saves: z.array(sheetId).min(1).max(12).optional(),
+    /**
+     * Only while whoever applied this is in sight. `true` gates the whole condition; a list gates
+     * only the effects it names and leaves the rest standing, which is what a fright that stops you
+     * walking closer whether or not you can see it needs. Without a board it is always in sight: a
+     * fight that measures nothing has no line to break.
+     */
+    whileSourceInSight: z.union([z.literal(true), z.array(combatConditionEffectSchema).min(1).max(12)]).optional(),
+    /** It comes off the moment whoever applied it goes down. */
+    endsWhenSourceDown: z.boolean().optional(),
   })
-  .strict();
+  .strict()
+  .superRefine((entry, ctx) => {
+    if (entry.saves && !entry.effects.some((effect) => (SAVE_SCOPED_EFFECTS as readonly string[]).includes(effect))) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["saves"],
+        message: `"saves" narrows ${SAVE_SCOPED_EFFECTS.join(" and ")}, so it needs one of them beside it`,
+      });
+    }
+  });
 
 /** Holding an effect together while the fight goes on. The text field is where it is written down,
  *  so the sheet shows what a character is holding after the battle as well as during it. */
@@ -1386,6 +1628,21 @@ const combatSchema = z
     attacks: z.array(combatAttackSourceSchema).max(8).optional(),
     abilities: z.array(combatAbilitySourceSchema).max(8).optional(),
     standard: z.array(combatStandardActionSchema).max(6).optional(),
+    /**
+     * What a standard action does BEYOND the flag it sets, for the ones where the flag is not the
+     * whole rule. Only `dodge` has such a part today: many systems also make the dodger harder to
+     * catch with the saves that are about getting out of the way. Kept in its own block rather than
+     * on `standard`, which is a list of names every shipped ruleset already writes as strings.
+     */
+    standardEffects: z
+      .object({
+        dodge: z
+          .object({ saves: z.array(sheetId).min(1).max(12) })
+          .strict()
+          .optional(),
+      })
+      .strict()
+      .optional(),
     conditions: z.array(combatConditionSchema).max(80).optional(),
     concentration: combatConcentrationSchema.optional(),
     dying: combatDyingSchema.optional(),
@@ -2081,6 +2338,14 @@ function refineRulesetDefinition(def: RulesetDefinitionBase, ctx: z.RefinementCt
     combat.attacks?.forEach((source, index) => {
       const path = at("attacks", index);
       checkBudget(source.budget, [...path, "budget"]);
+      if (source.strikes) {
+        checkRef(source.strikes, [...path, "strikes"], derivedIds);
+        // A number written down can be read now. One that comes off a sheet is the player's, and a
+        // row that says less than one strike is read as the one strike every spend already buys.
+        if (source.strikes.const !== undefined && source.strikes.const < 1) {
+          issue([...path, "strikes", "const"], "One spend buys at least one strike");
+        }
+      }
       const list = listById.get(source.list);
       if (!list) return issue([...path, "list"], `Unknown list "${source.list}"`);
       const typeOf = (id: string) => list.columns.find((column) => column.id === id)?.type;
@@ -2140,6 +2405,16 @@ function refineRulesetDefinition(def: RulesetDefinitionBase, ctx: z.RefinementCt
       if (standard.has(action)) issue(at("standard", index), `Duplicate standard action "${action}"`);
       standard.add(action);
     });
+    // A part of a standard action nobody can take says nothing, and a save the sheet never declared
+    // cannot be rolled with advantage.
+    if (combat.standardEffects?.dodge) {
+      if (!standard.has("dodge")) {
+        issue(at("standardEffects", "dodge"), "This ruleset has no dodge for these saves to belong to");
+      }
+      combat.standardEffects.dodge.saves.forEach((save, index) => {
+        if (!saves.has(save)) issue(at("standardEffects", "dodge", "saves", index), `Unknown save "${save}"`);
+      });
+    }
 
     const mapped = new Set<string>();
     combat.conditions?.forEach((entry, index) => {
@@ -2147,9 +2422,23 @@ function refineRulesetDefinition(def: RulesetDefinitionBase, ctx: z.RefinementCt
       if (!conditions.has(entry.condition)) issue([...path, "condition"], `Unknown condition "${entry.condition}"`);
       if (mapped.has(entry.condition)) issue([...path, "condition"], `Duplicate condition "${entry.condition}"`);
       mapped.add(entry.condition);
-      entry.failsSaves?.forEach((save, saveIndex) => {
-        if (!saves.has(save)) issue([...path, "failsSaves", saveIndex], `Unknown save "${save}"`);
-      });
+      for (const key of ["failsSaves", "saves"] as const) {
+        entry[key]?.forEach((save, saveIndex) => {
+          if (!saves.has(save)) issue([...path, key, saveIndex], `Unknown save "${save}"`);
+        });
+      }
+      // Gating an effect this condition does not have says nothing, and is nearly always a typo for
+      // one it does.
+      if (Array.isArray(entry.whileSourceInSight)) {
+        entry.whileSourceInSight.forEach((effect, effectIndex) => {
+          if (!entry.effects.includes(effect)) {
+            issue(
+              [...path, "whileSourceInSight", effectIndex],
+              `This condition does not have the effect "${effect}" to gate`,
+            );
+          }
+        });
+      }
     });
 
     if (combat.concentration) {
@@ -2543,6 +2832,19 @@ function creatureIssues(
     if (action.damage?.type && damageTypes && !damageTypes.has(action.damage.type.trim().toLowerCase())) {
       add([...path, "damage", "type"], `Unknown damage type "${action.damage.type}"`);
     }
+    // Every second amount on the blow is held to the same names the first one is, and a save of its
+    // own needs a number to be rolled against: the clause's, the action's, or nothing at all.
+    action.damage?.plus?.forEach((clause, clauseIndex) => {
+      const where = [...path, "damage", "plus", clauseIndex];
+      if (clause.type && damageTypes && !damageTypes.has(clause.type.trim().toLowerCase())) {
+        add([...where, "type"], `Unknown damage type "${clause.type}"`);
+      }
+      if (!clause.save) return;
+      if (!saves.has(clause.save.save)) add([...where, "save", "save"], `Unknown save "${clause.save.save}"`);
+      if (clause.save.difficulty === undefined && !action.save && action.saveDifficulty === undefined) {
+        add([...where, "save", "difficulty"], "This clause's save has no difficulty to be rolled against");
+      }
+    });
     if (action.save && !saves.has(action.save.save)) {
       add([...path, "save", "save"], `Unknown save "${action.save.save}"`);
     }
@@ -2554,7 +2856,7 @@ function creatureIssues(
       }
     });
     action.sequence?.forEach((step, stepIndex) => {
-      const where = [...path, "sequence", stepIndex, "action"];
+      const where: (string | number)[] = [...path, "sequence", stepIndex, "action"];
       const named = byId.get(step.action);
       if (!named) return add(where, `Unknown action "${step.action}"`);
       if (named.id === action.id) return add(where, "A sequence cannot name itself");
@@ -2564,6 +2866,20 @@ function creatureIssues(
       // A signature action is bought with points while somebody else is acting. Inside a sequence it
       // would be had for a budget on the creature's own turn, which is neither.
       if (named.signature) add(where, `"${step.action}" is bought with points, so a sequence cannot name it`);
+    });
+  });
+
+  // Every rider names this block's own actions and this ruleset's own damage types.
+  const riderIds = new Set<string>();
+  creature.riders?.forEach((rider, index) => {
+    const path = [...at, "riders", index];
+    if (riderIds.has(rider.id)) add([...path, "id"], `Duplicate rider id "${rider.id}"`);
+    riderIds.add(rider.id);
+    if (rider.type && damageTypes && !damageTypes.has(rider.type.trim().toLowerCase())) {
+      add([...path, "type"], `Unknown damage type "${rider.type}"`);
+    }
+    rider.actions?.forEach((id, actionIndex) => {
+      if (!byId.has(id)) add([...path, "actions", actionIndex], `Unknown action "${id}"`);
     });
   });
 }
@@ -2663,6 +2979,25 @@ export function rulesetCatalogEntryIssues(
     if (mechanics?.save && !saves.has(mechanics.save.save)) {
       add([index, "mechanics", "save", "save"], `Unknown save "${mechanics.save.save}"`);
     }
+    // The same names the first amount is held to. A clause's damage type is checked where the
+    // ruleset says what its types are, exactly as a creature's is.
+    const declaredTypes = definition.combat?.damageTypes
+      ? new Set(definition.combat.damageTypes.map((type) => type.trim().toLowerCase()))
+      : null;
+    // The entry's OWN damage type is held to the same names its clauses are. It was not, which read
+    // as the first amount being freer than the second one on the very same blow.
+    if (mechanics?.damageType && declaredTypes && !declaredTypes.has(mechanics.damageType.trim().toLowerCase())) {
+      add([index, "mechanics", "damageType"], `Unknown damage type "${mechanics.damageType}"`);
+    }
+    mechanics?.plus?.forEach((clause, clauseIndex) => {
+      const path = [index, "mechanics", "plus", clauseIndex];
+      if (clause.type && declaredTypes && !declaredTypes.has(clause.type.trim().toLowerCase())) {
+        add([...path, "type"], `Unknown damage type "${clause.type}"`);
+      }
+      if (clause.save && !saves.has(clause.save.save)) {
+        add([...path, "save", "save"], `Unknown save "${clause.save.save}"`);
+      }
+    });
     mechanics?.cost?.forEach((cost, costIndex) => {
       if (!costTargets.has(cost.pool)) {
         add([index, "mechanics", "cost", costIndex, "pool"], `Unknown pool or pool group "${cost.pool}"`);
@@ -2683,13 +3018,20 @@ export function rulesetCatalogEntryIssues(
     // source of the list the entry lands in, so an entry that asks for a save (its own, or one that
     // ends a condition) in a list whose source declares no `saveDifficulty` would be saved against
     // nothing, and everybody would always succeed.
-    const asksForSave = !!mechanics?.save || !!mechanics?.applies?.some((applies) => applies.saveEnds);
+    const asksForSave =
+      !!mechanics?.save ||
+      !!mechanics?.applies?.some((applies) => applies.saveEnds) ||
+      !!mechanics?.plus?.some((clause) => clause.save && clause.save.difficulty === undefined);
     if (asksForSave && definition.combat) {
       const lists = new Set((entry.rows ?? []).map((row) => row.list));
       (definition.combat.abilities ?? []).forEach((source) => {
         if (lists.has(source.list) && source.saveDifficulty === undefined) {
           add(
-            [index, "mechanics", mechanics?.save ? "save" : "applies"],
+            [
+              index,
+              "mechanics",
+              mechanics?.save ? "save" : mechanics?.applies?.some((applies) => applies.saveEnds) ? "applies" : "plus",
+            ],
             `The combat abilities source for "${source.list}" declares no saveDifficulty for this save to be rolled against`,
           );
         }
@@ -2697,6 +3039,58 @@ export function rulesetCatalogEntryIssues(
     }
     if (mechanics?.budget !== undefined && budgets && !budgets.has(mechanics.budget)) {
       add([index, "mechanics", "budget"], `Unknown budget "${mechanics.budget}"`);
+    }
+    // What a use hands back, and what it lets its holder buy with another budget. Both name the
+    // combat block's own words, so both are checked against the block that declares them.
+    mechanics?.gives?.forEach((gift, giftIndex) => {
+      if (budgets && !budgets.has(gift.budget)) {
+        add([index, "mechanics", "gives", giftIndex, "budget"], `Unknown budget "${gift.budget}"`);
+      }
+    });
+    // A rider names the attack lists it comes off and, when it is choosier still, one column of
+    // their rows. Both are the combat block's own words, and a name it does not have would be a
+    // rider that silently never fired.
+    if (mechanics?.rider && definition.combat) {
+      const path = [index, "mechanics", "rider"];
+      const attackLists = new Set((definition.combat.attacks ?? []).map((source) => source.list));
+      mechanics.rider.sources?.forEach((list, listIndex) => {
+        if (!attackLists.has(list)) {
+          add([...path, "sources", listIndex], `"${list}" is not one of this ruleset's attack lists`);
+        }
+      });
+      const column = mechanics.rider.requires?.column;
+      if (column !== undefined) {
+        const named = mechanics.rider.sources ?? [...attackLists];
+        const holders = named.filter((list) => listById.get(list)?.columns.some((entry) => entry.id === column));
+        if (holders.length === 0) {
+          add([...path, "requires", "column"], `No attack list this rider reads has a column "${column}"`);
+        }
+      }
+      const types = definition.combat.damageTypes
+        ? new Set(definition.combat.damageTypes.map((type) => type.trim().toLowerCase()))
+        : null;
+      if (mechanics.rider.type && types && !types.has(mechanics.rider.type.trim().toLowerCase())) {
+        add([...path, "type"], `Unknown damage type "${mechanics.rider.type}"`);
+      }
+    }
+    if (mechanics?.standard && definition.combat) {
+      const path = [index, "mechanics", "standard"];
+      if (!budgets?.has(mechanics.standard.budget)) {
+        add([...path, "budget"], `Unknown budget "${mechanics.standard.budget}"`);
+      } else if (mechanics.standard.budget === definition.combat.economy.budgets[0]?.id) {
+        // A standard action is already bought with the first budget, so a permission naming that one
+        // grants nothing and would put the same thing on the menu twice, once at each id.
+        add(
+          [...path, "budget"],
+          `Every standard action is already taken for "${mechanics.standard.budget}", so this permission grants nothing`,
+        );
+      }
+      const declared = new Set<string>(definition.combat.standard ?? []);
+      mechanics.standard.actions.forEach((action, actionIndex) => {
+        if (!declared.has(action)) {
+          add([...path, "actions", actionIndex], `This ruleset does not have the standard action "${action}"`);
+        }
+      });
     }
     if (mechanics?.scales) {
       // A scaling amount reads the sheet exactly as a scaled column does, so any declared derived
