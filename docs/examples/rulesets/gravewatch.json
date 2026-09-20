@@ -183,7 +183,8 @@
     "sheetGuidance": "The character sheets below are authoritative. Resolve is what a warden spends to steady themselves when the dark answers back, and it only comes back when the vigil ends. A warden may spend it to steady one roll: say so on the check itself with a spend of resolve and a number of points, up to two, and never write a separate command for it or change the dice yourself. Harm is a track of four rungs rather than a number: mark it with a sheet command whose op is damage, naming the track and a kind of knock or tear, and heal it with a negative amount. The rung a warden is marked down to comes off every pool they throw, and the Engine applies it, so never take dice off yourself.",
     "sheetSummary": {
       "fields": ["post"],
-      "derived": ["resolve_max"]
+      "derived": ["resolve_max"],
+      "lists": [{ "list": "charms", "nameColumn": "name" }]
     }
   },
   "layers": [

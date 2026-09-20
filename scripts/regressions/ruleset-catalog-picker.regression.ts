@@ -330,6 +330,15 @@ assert.equal(
   "kind.debuff · targets.enemy · mechanics.attackRoll · 1d8+3 · mechanics.perStep(amount=2) · mechanics.saveNegates(save=grit) · mechanics.concentration · mechanics.reaction",
 );
 assert.equal(formatCatalogMechanics({ kind: "utility" }, d20Labels, keyed), "kind.utility");
+const checkEffect = formatCatalogMechanics(
+  { kind: "utility", check: { reroll: { upTo: 1, mode: "once" }, dice: 2, successes: 3, threshold: 8 } },
+  d20Labels,
+  t,
+);
+assert.match(checkEffect, /reroll dice ≤ 1 once/);
+assert.match(checkEffect, /\+2 dice/);
+assert.match(checkEffect, /\+3 successes/);
+assert.match(checkEffect, /success on 8\+/);
 // And what this slice added, which is the whole of what some entries do: an ability that costs no
 // action, one that hands a budget back, one that buys standard actions with another budget, and the
 // clauses beside a blow's first amount, each said on its own because each is rolled on its own.

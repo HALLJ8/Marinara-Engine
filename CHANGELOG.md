@@ -10,7 +10,7 @@ This file is the release-notes source of truth for Marinara Engine. Reuse these 
 
 - Roleplay dice commands accept an optional situational bonus or penalty and DC, combine the adjustment with the automatic attribute bonus, and show the DC on the existing dice card (#6417).
 
-- Game Mode catalog abilities can modify dice-pool checks with rerolls, bonus dice, successes or thresholds. Free abilities and paid abilities use the same check command; any costs are applied with the roll (#6411).
+- Game Mode catalog abilities can modify dice-pool checks with rerolls, bonus dice, successes or thresholds. Their effects and costs appear in the picker and character prompt. Free and paid abilities use the same check command, with costs applied once (#6411).
 
 - Ruleset combat can use wound tracks for health, applying the ruleset's damage kinds, healing and falling rules instead of subtracting hit points (#6407).
 

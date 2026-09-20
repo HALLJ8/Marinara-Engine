@@ -79,6 +79,38 @@ try {
   const full = resolveLeft(null);
   assert.ok(full >= 2, `the blank warden has Resolve to spend (${full})`);
 
+  const { renderGameRulesetSheetBlocks } =
+    await import("../../packages/server/src/services/game/ruleset-sheet-turn.service.js");
+  const { buildGmFormatReminder } = await import("../../packages/server/src/services/game/gm-prompts.js");
+  const external = parseRulesetDefinition({
+    ...gravewatch,
+    catalogs: gravewatch.catalogs?.map(({ entries: _entries, ...catalog }) => ({
+      ...catalog,
+      asset: `catalogs/${catalog.id}.json`,
+    })),
+  });
+  assert.ok(external.ok);
+  const formatContext = { hasSceneModel: true } as Parameters<typeof buildGmFormatReminder>[0];
+  assert.match(
+    buildGmFormatReminder({ ...formatContext, ruleset: external.definition }),
+    /use="Its name"/,
+    "Packaged catalog abilities must be available to the GM even when entries live in a separate asset",
+  );
+  const prompt = renderGameRulesetSheetBlocks(gravewatch, cards, null, catalogs).join("\n");
+  assert.match(prompt, /Steady Hand \(check:.*reroll.*1.*once.*successes.*1/);
+  assert.match(prompt, /cost: 1 resolve/);
+  assert.doesNotMatch(
+    renderGameRulesetSheetBlocks(
+      gravewatch,
+      [{ name: "Bram", rulesetSheet: { v: 1, build: bare } }],
+      null,
+      catalogs,
+    ).join("\n"),
+    /check:/,
+    "The GM must not be offered an unpicked catalog ability",
+  );
+  assert.doesNotMatch(renderGameRulesetSheetBlocks(gravewatch, cards, null, {}).join("\n"), /check:/);
+
   /** Roll one check and hand back the result plus whatever the purchase wrote. */
   const roll = (
     context: SkillCheckModifierContext,

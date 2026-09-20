@@ -698,7 +698,11 @@ function renderRulesetSkillCheckLine(
       }),
       // Taught whenever this ruleset has any entry that changes a check. What each one DOES is the
       // entry's own business and the Engine reads it; the Game Master only names it.
-      ...((ruleset.catalogs ?? []).some((catalog) => (catalog.entries ?? []).some((entry) => entry.mechanics?.check))
+      ...((ruleset.catalogs ?? []).some(
+        (catalog) =>
+          catalog.holds === "rows" &&
+          (catalog.asset || (catalog.entries ?? []).some((entry) => entry.mechanics?.check)),
+      )
         ? [
             `When a character uses something from their sheet to change a roll, add use="Its name" to that same check, with spend="pool:N" beside it when they are paying more for a stronger use. Do not write a separate sheet command for it: the engine pays for it and applies it on the same roll.`,
           ]

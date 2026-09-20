@@ -534,6 +534,24 @@ export function formatCatalogMechanics(
   };
   const parts: string[] = [t(KIND_KEYS[mechanics.kind])];
 
+  if (mechanics.check?.reroll) {
+    parts.push(
+      t(
+        mechanics.check.reroll.mode === "once"
+          ? "game.ruleset.catalog.mechanics.checkRerollOnce"
+          : "game.ruleset.catalog.mechanics.checkRerollUntil",
+        { value: mechanics.check.reroll.upTo },
+      ),
+    );
+  }
+  if (mechanics.check?.dice) parts.push(t("game.ruleset.catalog.mechanics.checkDice", { count: mechanics.check.dice }));
+  if (mechanics.check?.successes) {
+    parts.push(t("game.ruleset.catalog.mechanics.checkSuccesses", { count: mechanics.check.successes }));
+  }
+  if (mechanics.check?.threshold !== undefined) {
+    parts.push(t("game.ruleset.catalog.mechanics.checkThreshold", { value: mechanics.check.threshold }));
+  }
+
   if (mechanics.range !== undefined) {
     parts.push(
       mechanics.range === 0
