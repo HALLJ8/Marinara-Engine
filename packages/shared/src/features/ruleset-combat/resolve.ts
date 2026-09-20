@@ -17,15 +17,19 @@ import {
   rulesetCombatConditions,
   rulesetCombatEffects,
   rulesetCombatFailsSave,
+  rulesetCombatDamageKind,
   rulesetCombatHealth,
   rulesetCombatStanding,
   rulesetMovementAllowance,
+  rulesetSaveMode,
   writeRulesetSheet,
 } from "./encounter.js";
 import {
   rulesetAreaCells,
+  rulesetCellDistance,
   rulesetCellEnterCost,
   rulesetOpportunityAttack,
+  rulesetPositionOf,
   rulesetStepLeavesReach,
   rulesetThreateningEnemies,
 } from "./grid.js";
@@ -36,7 +40,10 @@ import {
   rulesetAreaTargets,
   rulesetCriticalFromAdjacent,
   rulesetDefenseAgainst,
+  rulesetFreeStrike,
+  rulesetGrantedStandard,
   rulesetProneCondition,
+  rulesetStandardName,
   rulesetSequenceCanHappen,
   rulesetSequencePartAvailable,
   rulesetAttackMode,
@@ -59,6 +66,8 @@ import type {
   RulesetCombatEvent,
   RulesetCombatOption,
   RulesetCombatRefusal,
+  RulesetCombatRider,
+  RulesetCombatRollMode,
   RulesetCombatRoller,
   RulesetCombatStep,
   RulesetEncounterOutcome,
@@ -162,9 +171,20 @@ interface RulesetDamageInput {
   critical?: boolean;
 }
 
-/** Damage, with the target's own hide read first: immune takes none, resistant takes half rounded
- *  down and vulnerable takes double. Temporary points go first, which is the sheet's own rule. */
-function dealDamage(ctx: RulesetCombatContext, target: RulesetCombatant, input: RulesetDamageInput): number {
+/**
+ * ONE amount off a target, with their own hide read first: immune takes none, resistant takes half
+ * rounded down and vulnerable takes double. Temporary points go first, which is the sheet's own rule.
+ *
+ * A blow may be several of these, one for the first amount and one for every clause beside it, so
+ * what follows a blow (the conditions damage ends, concentration, going down) is `afterBlow`'s, and
+ * is done once for the lot.
+ */
+function applyDamage(
+  ctx: RulesetCombatContext,
+  target: RulesetCombatant,
+  input: RulesetDamageInput,
+  deferWound = false,
+): number {
   const before = healthOf(ctx, target);
   const type = input.damageType?.trim().toLowerCase();
   let dealt = Math.max(0, Math.floor(input.amount));
@@ -181,11 +201,24 @@ function dealDamage(ctx: RulesetCombatContext, target: RulesetCombatant, input: 
       adjust = "vulnerable";
     }
   }
+  // And then what a condition says about every kind of harm at once. Read after the hide underneath
+  // and cancelling against it the way advantage and disadvantage cancel: resistant stays resistant,
+  // immune stays immune, and something both resistant to everything and open to this one kind takes
+  // it as it comes.
+  if (rulesetCombatEffects(ctx.definition, ctx.combat, target, ctx.state).has("resist-all")) {
+    if (adjust === "none") {
+      dealt = Math.floor(dealt / 2);
+      adjust = "resist";
+    } else if (adjust === "vulnerable") {
+      dealt = Math.floor(dealt / 2);
+      adjust = "none";
+    }
+  }
   const toTemp = Math.min(before.temp, dealt);
   if (dealt > 0) {
-    if (target.sheet)
-      writeRulesetSheet(ctx.definition, target, { op: "damage", pool: ctx.combat.health.pool, amount: dealt });
-    else if (target.health) {
+    if (target.sheet) {
+      if (!deferWound) writeHealthLoss(ctx, target, dealt, input.damageType);
+    } else if (target.health) {
       target.health.temp = before.temp - toTemp;
       target.health.value = Math.max(0, before.value - (dealt - toTemp));
     }
@@ -208,8 +241,26 @@ function dealDamage(ctx: RulesetCombatContext, target: RulesetCombatant, input: 
     maxHealth: after.max,
     ...(input.critical ? { critical: true } : {}),
   });
-  if (dealt <= 0) return 0;
+  return dealt;
+}
+
+/**
+ * What a whole blow does once every amount on it has landed: the conditions any damage ends, ONE
+ * check against concentration for the summed damage, and one check for going down.
+ *
+ * `before` is the health the target had before the FIRST amount of the blow, so a second clause
+ * cannot be read as a second blow at somebody who is already on the ground.
+ */
+function afterBlow(
+  ctx: RulesetCombatContext,
+  target: RulesetCombatant,
+  before: { value: number },
+  dealt: number,
+  critical: boolean,
+): void {
+  if (dealt <= 0) return;
   endConditionsOnDamage(ctx, target);
+  const after = healthOf(ctx, target);
   // A blow that leaves somebody standing tests their concentration. One that takes them to zero
   // does not: going down ends it outright (`dropToZero`), so nothing is rolled for it.
   if (after.value > 0) concentrationFromDamage(ctx, target, dealt);
@@ -217,14 +268,65 @@ function dealDamage(ctx: RulesetCombatContext, target: RulesetCombatant, input: 
     if (before.value > 0) dropToZero(ctx, target);
     else if (target.dying && !target.defeated) {
       // Already down: a blow while down costs the rule's own number of failures.
-      const rule = input.critical ? ctx.combat.dying?.criticalWhileDown : ctx.combat.dying?.damageWhileDown;
+      const rule = critical ? ctx.combat.dying?.criticalWhileDown : ctx.combat.dying?.damageWhileDown;
       // A stable member who is hurt is no longer stable: the count starts again with this blow.
       if (rule && rule !== "none") target.stable = false;
       if (rule === "one-failure") addDeathFailures(ctx, target, 1);
       else if (rule === "two-failures") addDeathFailures(ctx, target, 2);
     }
   }
-  return dealt;
+}
+
+/**
+ * What a landing blow does to the sheet's health, whichever shape it takes.
+ *
+ * A POOL loses the points, temporary buffer first, exactly as it always has.
+ *
+ * A WOUND TRACK is marked by the rule its ruleset declared in `combat.damageKinds.marks`, because
+ * the two honest answers are opposite ones. Where a damage roll counts health levels, a blow for
+ * three ticks three boxes (`per-point`), which is how the tracked systems are played and the whole
+ * reason soaking a blow down matters. Where a blow simply lands or does not, it ticks one box
+ * however hard it hit (`per-blow`). Either way the rolled amount still decides whether the blow
+ * lands AT ALL, so a miss and a blow softened to nothing mark nothing. Which KIND it marks is the
+ * same block's own answer, never a guess.
+ *
+ * Resistances, vulnerabilities and immunities are not in the picture here: they live on a stat
+ * block, and a combatant with a stat block has no sheet to mark. They still do exactly what they
+ * always did to an opponent's own numbers, above.
+ */
+function writeHealthLoss(
+  ctx: RulesetCombatContext,
+  target: RulesetCombatant,
+  dealt: number,
+  damageType: string | undefined,
+): void {
+  const health = ctx.combat.health;
+  if (!("track" in health)) {
+    writeRulesetSheet(ctx.definition, target, { op: "damage", pool: health.pool, amount: dealt });
+    return;
+  }
+  writeRulesetSheet(ctx.definition, target, {
+    op: "damage",
+    track: health.track,
+    kind: rulesetCombatDamageKind(ctx.combat, damageType),
+    amount: ctx.combat.damageKinds?.marks === "per-point" ? Math.max(1, Math.floor(dealt)) : 1,
+  });
+}
+
+/** And the other way: a pool gets the points back, a wound track has ONE mark cleared, lightest
+ *  first, by the same rule the player's own sheet clears one. */
+function writeHealthGain(ctx: RulesetCombatContext, target: RulesetCombatant, amount: number): void {
+  const health = ctx.combat.health;
+  if (!("track" in health)) {
+    writeRulesetSheet(ctx.definition, target, { op: "restore", pool: health.pool, amount });
+    return;
+  }
+  writeRulesetSheet(ctx.definition, target, {
+    op: "damage",
+    track: health.track,
+    kind: rulesetCombatDamageKind(ctx.combat, undefined),
+    amount: -1,
+  });
 }
 
 function dealHeal(
@@ -235,8 +337,7 @@ function dealHeal(
   const before = healthOf(ctx, target);
   const amount = Math.max(0, Math.floor(input.amount));
   if (amount > 0) {
-    if (target.sheet)
-      writeRulesetSheet(ctx.definition, target, { op: "restore", pool: ctx.combat.health.pool, amount });
+    if (target.sheet) writeHealthGain(ctx, target, amount);
     else if (target.health) target.health.value = Math.min(target.health.max, before.value + amount);
   }
   const after = healthOf(ctx, target);
@@ -261,8 +362,12 @@ function grantTemporary(
 ): void {
   const amount = Math.max(0, Math.floor(input.amount));
   const before = healthOf(ctx, target);
-  if (amount > before.temp) {
-    if (target.sheet) writeRulesetSheet(ctx.definition, target, { op: "temp", pool: ctx.combat.health.pool, amount });
+  // A wound track carries no buffer, and there is nothing sensible a temporary point could be on
+  // one, so a ruleset whose health is a track is refused a `temporary` at IMPORT. This branch is
+  // what makes that refusal honest at runtime too: nothing is written and nothing is invented.
+  const health = ctx.combat.health;
+  if (amount > before.temp && !("track" in health)) {
+    if (target.sheet) writeRulesetSheet(ctx.definition, target, { op: "temp", pool: health.pool, amount });
     else if (target.health) target.health.temp = amount;
   }
   ctx.events.push({
@@ -277,9 +382,26 @@ function grantTemporary(
 
 // ── Going down, and coming back ──
 
+/** The conditions this one was holding up by still being on their feet. A charm ends when whoever
+ *  cast it goes down, if the ruleset said so, wherever it landed. */
+function endConditionsFromSource(ctx: RulesetCombatContext, source: RulesetCombatant): void {
+  const ending = new Set(
+    (ctx.combat.conditions ?? []).filter((entry) => entry.endsWhenSourceDown).map((entry) => entry.condition),
+  );
+  if (ending.size === 0) return;
+  for (const combatant of ctx.state.combatants) {
+    for (const entry of [...combatant.tracked]) {
+      if (entry.source === source.id && ending.has(entry.condition)) {
+        removeCondition(ctx, combatant, entry.condition, "expired");
+      }
+    }
+  }
+}
+
 function dropToZero(ctx: RulesetCombatContext, target: RulesetCombatant): void {
   target.down = true;
   endConcentration(ctx, target, "down");
+  endConditionsFromSource(ctx, target);
   if (target.side === "enemy") {
     target.defeated = true;
     ctx.events.push({ type: "defeated", actorId: target.id });
@@ -412,7 +534,7 @@ function rollSave(
   const modifier = combatant.saves[save] ?? 0;
   // A condition that fails this save takes the roll away entirely, rather than rolling and ignoring
   // the dice, so a log never shows a number that decided nothing.
-  if (rulesetCombatFailsSave(ctx.definition, ctx.combat, combatant, save)) {
+  if (rulesetCombatFailsSave(ctx.definition, ctx.combat, combatant, save, ctx.state)) {
     ctx.events.push({
       type: "save",
       actorId: combatant.id,
@@ -428,8 +550,18 @@ function rollSave(
     });
     return false;
   }
-  const rolls = rollRulesetDice(ctx.roll, ctx.combat.attackRoll.dice.count, ctx.combat.attackRoll.dice.sides);
-  const kept = sumOf(rolls);
+  // Rolled twice and one kept when a condition says so, exactly as an attack is. A roll that leans
+  // no way says nothing about how it was made, so a fight with no such condition logs what it
+  // always logged.
+  const dice = ctx.combat.attackRoll.dice;
+  const mode = rulesetSaveMode(ctx.definition, ctx.combat, combatant, save, ctx.state);
+  const first = rollRulesetDice(ctx.roll, dice.count, dice.sides);
+  const second = mode === "normal" ? null : rollRulesetDice(ctx.roll, dice.count, dice.sides);
+  const kept = second
+    ? mode === "advantage"
+      ? Math.max(sumOf(first), sumOf(second))
+      : Math.min(sumOf(first), sumOf(second))
+    : sumOf(first);
   const total = kept + modifier;
   const success = total >= difficulty;
   ctx.events.push({
@@ -437,7 +569,8 @@ function rollSave(
     actorId: combatant.id,
     ...(sourceId ? { sourceId } : {}),
     save,
-    rolls,
+    ...(mode === "normal" ? {} : { mode }),
+    rolls: second ? [...first, ...second] : first,
     kept,
     modifier,
     total,
@@ -575,6 +708,7 @@ function refusal(
  *  the menu and the resolution can never disagree. `null` is a refusal: one target too many, one of
  *  the wrong side, or one the fight is over for. */
 function pickTargets(
+  definition: RulesetDefinition,
   state: RulesetEncounterState,
   actor: RulesetCombatant,
   option: { id: string; targets: RulesetCombatAction["targets"] },
@@ -583,7 +717,7 @@ function pickTargets(
   if (option.targets.count <= 0) return [];
   const ids = [...new Set(targetIds)];
   if (ids.length < 1 || ids.length > option.targets.count) return "bad-target";
-  const legal = new Set(rulesetOptionTargets(state, actor.id, option));
+  const legal = new Set(rulesetOptionTargets(definition, state, actor.id, option));
   const targets: RulesetCombatant[] = [];
   for (const id of ids) {
     // A target the rules would allow if only it were closer is told exactly that, rather than being
@@ -613,17 +747,38 @@ function spendAvailability(ctx: RulesetCombatContext, actor: RulesetCombatant, a
 }
 
 /** Why an option the caller named is not on the menu, as precisely as the rules can say. */
-function whyNotOffered(combat: RulesetCombat, actor: RulesetCombatant, optionId: string): RulesetCombatRefusal {
+function whyNotOffered(
+  definition: RulesetDefinition,
+  combat: RulesetCombat,
+  actor: RulesetCombatant,
+  optionId: string,
+): RulesetCombatRefusal {
   // The two a positioned fight adds. Off the menu, they are movement that cannot be paid for.
   if (optionId === RULESET_MOVE_OPTION || optionId === RULESET_STAND_OPTION) return "unreachable";
   const action = actor.actions.find((entry) => entry.id === optionId);
   if (action) {
+    // Something free, or a strike out of what a spend already bought, never fell short of a budget.
+    if (action.free || rulesetFreeStrike(actor, action)) return "insufficient";
     if ((actor.budgets[action.budget] ?? 0) < 1) return "no-budget";
     return "insufficient";
   }
-  const standard = optionId.startsWith("standard:") ? optionId.slice("standard:".length) : null;
-  if (standard && (combat.standard ?? []).some((entry) => entry === standard)) {
-    return (actor.budgets[rulesetStandardBudget(combat)] ?? 0) < 1 ? "no-budget" : "unknown-option";
+  if (optionId.startsWith("standard:")) {
+    const granted = rulesetGrantedStandard(definition, actor, optionId);
+    const standard = rulesetStandardName(optionId);
+    if ((combat.standard ?? []).some((entry) => entry === standard)) {
+      const budget = granted ? granted.budget : rulesetStandardBudget(combat);
+      if (optionId.includes("@") && !granted) {
+        // Told apart, because they are different answers: an ability that grants this really is on
+        // the sheet but has nothing left or cannot pay, versus no such permission at all.
+        const spent = actor.actions.some(
+          (entry) =>
+            entry.standard?.budget === optionId.slice(optionId.indexOf("@") + 1) &&
+            entry.standard.actions.includes(standard),
+        );
+        return spent ? "insufficient" : "unknown-option";
+      }
+      return (actor.budgets[budget] ?? 0) < 1 ? "no-budget" : "unknown-option";
+    }
   }
   return "unknown-option";
 }
@@ -662,10 +817,10 @@ export function applyRulesetCombatChoice(
 
   const option = rulesetCombatOptions(definition, state, actor.id).find((entry) => entry.id === choice.optionId);
   if (!option) {
-    if (rulesetCombatEffects(definition, combat, actor).has("cannot-act")) {
+    if (rulesetCombatEffects(definition, combat, actor, state).has("cannot-act")) {
       return refusal(state, choice.actorId, "cannot-act", choice.optionId);
     }
-    return refusal(state, choice.actorId, whyNotOffered(combat, actor, choice.optionId), choice.optionId);
+    return refusal(state, choice.actorId, whyNotOffered(definition, combat, actor, choice.optionId), choice.optionId);
   }
 
   // Walking, and getting back up: a positioned fight's own two options. Neither spends a budget.
@@ -690,7 +845,7 @@ export function applyRulesetCombatChoice(
   // Targets, checked against the side and the count the option itself declared.
   const targets = area
     ? rulesetAreaTargets(state, actor.id, option.id, choice.at!).map((id) => rulesetCombatant(state, id)!)
-    : pickTargets(state, actor, option, choice.targetIds);
+    : pickTargets(definition, state, actor, option, choice.targetIds);
   if (!Array.isArray(targets)) return refusal(state, choice.actorId, targets, option.id);
   if (choice.payWith !== undefined && !(option.payWith ?? []).includes(choice.payWith)) {
     return refusal(state, choice.actorId, "bad-pool", option.id);
@@ -708,8 +863,40 @@ export function applyRulesetCombatChoice(
   }
 
   if (option.kind === "standard") {
-    resolveStandard(ctx, working, option.id.slice("standard:".length), workingTargets[0]);
+    // A standard action an ability allowed is paid for as that ability is: the budget it named,
+    // just spent, and whatever the ability itself costs off the sheet.
+    const granted = rulesetGrantedStandard(definition, working, option.id);
+    if (granted) {
+      const price = planRulesetCombatCost(definition, working, granted.action);
+      if (!price) return refusal(state, choice.actorId, "insufficient", option.id);
+      if (price.live && working.sheet) working.sheet.live = price.live;
+      for (const entry of price.cost) {
+        ctx.events.push({
+          type: "spend",
+          actorId: working.id,
+          pool: entry.pool,
+          label: entry.label,
+          amount: entry.amount,
+        });
+      }
+      spendAvailability(ctx, working, granted.action);
+    }
+    resolveStandard(ctx, working, rulesetStandardName(option.id), workingTargets[0]);
     return finish();
+  }
+
+  // Strikes: one spend of a source that declares them buys several, and the rest wait in hand until
+  // the turn ends. Taking one with any in hand spends no budget at all, which is why this reads
+  // what the option said rather than the budget it would otherwise have named.
+  const striking = working.actions.find((entry) => entry.id === option.id);
+  const inHand = working.strikesLeft ?? 0;
+  // A spend that buys ONE strike is the spend every fight has always made, so it puts nothing in
+  // hand and says nothing: a ruleset whose list declares one strike a spend reads as it always did.
+  if (striking?.strikes !== undefined && (inHand > 0 || striking.strikes > 1)) {
+    const left = inHand > 0 ? inHand - 1 : striking.strikes - 1;
+    if (left > 0) working.strikesLeft = left;
+    else delete working.strikesLeft;
+    ctx.events.push({ type: "strikes", actorId: working.id, optionId: striking.id, label: striking.label, left });
   }
 
   if (area && choice.at) {
@@ -761,7 +948,7 @@ function applySignature(
     return refusal(state, choice.actorId, "not-your-turn", action.id);
   }
   if (!rulesetCombatStanding(actor)) return refusal(state, choice.actorId, "down", action.id);
-  if (rulesetCombatEffects(definition, combat, actor).has("cannot-act")) {
+  if (rulesetCombatEffects(definition, combat, actor, state).has("cannot-act")) {
     return refusal(state, choice.actorId, "cannot-act", action.id);
   }
   // Nothing is paid for a sequence whose parts are all spent: it would buy nothing.
@@ -773,7 +960,7 @@ function applySignature(
   ) {
     return refusal(state, choice.actorId, "insufficient", action.id);
   }
-  const targets = pickTargets(state, actor, action, choice.targetIds);
+  const targets = pickTargets(definition, state, actor, action, choice.targetIds);
   if (!Array.isArray(targets)) return refusal(state, choice.actorId, targets, action.id);
 
   const { ctx, finish } = begin(definition, combat, state, roller);
@@ -942,7 +1129,8 @@ function resolveStandard(
     actor.flags.dashed = true;
     // The same allowance again, in a fight that has cells to spend it on.
     if (actor.movement !== undefined) {
-      actor.movementLeft = (actor.movementLeft ?? 0) + rulesetMovementAllowance(ctx.definition, ctx.combat, actor);
+      actor.movementLeft =
+        (actor.movementLeft ?? 0) + rulesetMovementAllowance(ctx.definition, ctx.combat, actor, ctx.state);
     }
   } else if (action === "disengage") actor.flags.disengaged = true;
   else if (action === "hide") actor.flags.hidden = true;
@@ -997,6 +1185,78 @@ function resolveSequence(
   }
 }
 
+/**
+ * Budgets handed to somebody the moment they use the thing that hands them over.
+ *
+ * Capped where they land, at what a turn holds plus the gift, so a budget saved up over three turns
+ * and then spent all at once is not a thing this can be used to do.
+ */
+function grantBudgets(ctx: RulesetCombatContext, actor: RulesetCombatant, action: RulesetCombatAction): void {
+  for (const gift of action.gives ?? []) {
+    const declared = ctx.combat.economy.budgets.find((budget) => budget.id === gift.budget);
+    // A budget the economy no longer declares is a catalog read by a later ruleset: it hands over
+    // nothing rather than inventing a budget nothing else in the fight knows about.
+    if (!declared) continue;
+    const left = Math.min((actor.budgets[gift.budget] ?? 0) + gift.count, declared.count + gift.count);
+    actor.budgets[gift.budget] = left;
+    ctx.events.push({
+      type: "gives",
+      actorId: actor.id,
+      optionId: action.id,
+      label: action.label,
+      budget: gift.budget,
+      left,
+    });
+  }
+}
+
+/** Whether an ally of this one could help with a blow at that target: standing, able to act, and,
+ *  on a board, within one cell of the target. Without a board there is no distance to read, so any
+ *  ally still on their feet is beside them as far as the fight is concerned. */
+function allyAdjacent(ctx: RulesetCombatContext, actor: RulesetCombatant, target: RulesetCombatant): boolean {
+  const at = rulesetPositionOf(target);
+  const positioned = !!ctx.state.board?.grid && !!at;
+  return ctx.state.combatants.some((combatant) => {
+    if (combatant.id === actor.id || combatant.side !== actor.side) return false;
+    if (!rulesetCombatStanding(combatant)) return false;
+    if (rulesetCombatEffects(ctx.definition, ctx.combat, combatant, ctx.state).has("cannot-act")) return false;
+    if (!positioned) return true;
+    const cell = rulesetPositionOf(combatant);
+    return !!cell && rulesetCellDistance(cell, at!) <= 1;
+  });
+}
+
+/**
+ * The rider that adds itself to this blow, or null.
+ *
+ * The FIRST qualifying hit of the period takes it: a rider fires once, automatically, and choosing
+ * when to spend it is a window, which is a later slice. Marked as fired here, because the blow it
+ * joins is the one it fired on.
+ */
+function firingRider(
+  ctx: RulesetCombatContext,
+  actor: RulesetCombatant,
+  action: RulesetCombatAction,
+  target: RulesetCombatant,
+  mode: RulesetCombatRollMode,
+): RulesetCombatRider | null {
+  const spent = actor.ridersSpent ?? [];
+  for (const rider of actor.riders ?? []) {
+    if (rider.on !== "hit" || spent.includes(rider.id)) continue;
+    if (rider.actions && !rider.actions.includes(action.id)) continue;
+    // Any-of: one of the things it asked for being true is enough.
+    if (
+      rider.when?.length &&
+      !rider.when.some((when) => (when === "advantage" ? mode === "advantage" : allyAdjacent(ctx, actor, target)))
+    ) {
+      continue;
+    }
+    actor.ridersSpent = [...spent, rider.id];
+    return rider;
+  }
+  return null;
+}
+
 function resolveAction(
   ctx: RulesetCombatContext,
   actor: RulesetCombatant,
@@ -1005,6 +1265,7 @@ function resolveAction(
   payWith?: string,
 ): void {
   if (action.sequence) return resolveSequence(ctx, actor, action, targets);
+  if (action.gives) grantBudgets(ctx, actor, action);
   if (action.concentration) startConcentration(ctx, actor, action);
   const steps = payWith ? rulesetCostSteps(ctx.definition, action, payWith) : 0;
   const extra = action.use?.perCostStep && steps > 0 ? { amount: action.use.perCostStep, times: steps } : undefined;
@@ -1021,14 +1282,20 @@ function resolveAction(
     return perTarget ? () => rollAmount(ctx, amount, extra) : () => (rolled ??= rollAmount(ctx, amount, extra));
   };
   const damage = once(action.damage);
+  // One roller per clause, read the same way: an ability that lands on several targets without
+  // rolling to hit rolls every clause once and everybody takes those numbers.
+  const clauses = (action.damage?.plus ?? []).map((clause) => once(clause)!);
   const heal = once(action.heal);
   const temporary = once(action.temporary);
 
   for (const target of targets) {
     let landed = true;
     let critical = false;
+    // How the roll finally leaned, which is one of the things a rider may ask about. An action
+    // nobody rolls for leaned no way at all.
+    let mode: RulesetCombatRollMode = "normal";
     if (action.toHit !== undefined && !action.autoHit) {
-      const mode = rulesetAttackMode(ctx.definition, ctx.combat, actor, target, {
+      mode = rulesetAttackMode(ctx.definition, ctx.combat, actor, target, {
         state: ctx.state,
         optionId: action.id,
       });
@@ -1085,11 +1352,35 @@ function resolveAction(
     }
     const halved = saved && action.save?.onSuccess === "half";
 
+    // Everything this blow is made of: the first amount, and every clause beside it. Rolled and
+    // typed one at a time, taken off one at a time, and finished ONCE at the end: the health the
+    // target had before the FIRST of them is what decides whether the blow put them down.
+    let before: { value: number } | null = null;
+    let dealt = 0;
+    const health = ctx.combat.health;
+    const woundTrack =
+      target.sheet && "track" in health && ctx.combat.damageKinds?.marks === "per-blow"
+        ? ctx.definition.sheet.live.tracks.find((track) => track.id === health.track)
+        : undefined;
+    let woundKind: { id: string; severity: number } | undefined;
+    const blowEventStart = ctx.events.length;
+    const land = (part: RulesetDamageInput) => {
+      before ??= healthOf(ctx, target);
+      const partDealt = applyDamage(ctx, target, part, !!woundTrack);
+      dealt += partDealt;
+      // A compound hit marks once, using the most severe kind that actually landed.
+      if (woundTrack && partDealt > 0) {
+        const kind = woundTrack.kinds?.find(
+          (entry) => entry.id === rulesetCombatDamageKind(ctx.combat, part.damageType),
+        );
+        if (kind && (!woundKind || kind.severity > woundKind.severity)) woundKind = kind;
+      }
+    };
     if (damage && action.damage) {
       const rolled = damage();
       const bonus = critical ? criticalExtra(ctx, action.damage, extra) : { rolls: [], flat: 0 };
       const total = rolled.total + sumOf(bonus.rolls) + bonus.flat;
-      dealDamage(ctx, target, {
+      land({
         sourceId: actor.id,
         label: action.label,
         ...(action.damage.type ? { damageType: action.damage.type } : {}),
@@ -1099,7 +1390,56 @@ function resolveAction(
         ...(halved ? { saved: true } : {}),
         ...(critical ? { critical: true } : {}),
       });
+      (action.damage.plus ?? []).forEach((clause, index) => {
+        // A clause with a save of its own asks the TARGET for it, whatever the action already asked.
+        const own = clause.save ? rollSave(ctx, target, clause.save.save, clause.save.difficulty, actor.id) : false;
+        if (own && clause.save?.onSuccess === "none") return;
+        // Halved by its own save when it has one, and by the action's save-for-half when it does not.
+        const clauseHalved = clause.save ? own : halved;
+        const rolledClause = clauses[index]!();
+        const clauseBonus = critical ? criticalExtra(ctx, clause) : { rolls: [], flat: 0 };
+        const clauseTotal = rolledClause.total + sumOf(clauseBonus.rolls) + clauseBonus.flat;
+        land({
+          sourceId: actor.id,
+          label: action.label,
+          // A clause with no type of its own is the blow's own kind of harm.
+          ...((clause.type ?? action.damage?.type) ? { damageType: clause.type ?? action.damage?.type } : {}),
+          rolls: [...rolledClause.rolls, ...clauseBonus.rolls],
+          flat: rolledClause.flat + clauseBonus.flat,
+          amount: clauseHalved ? Math.floor(clauseTotal / 2) : clauseTotal,
+          ...(clauseHalved ? { saved: true } : {}),
+          ...(critical ? { critical: true } : {}),
+        });
+      });
     }
+    // And whatever adds itself to a hit without anybody choosing it: one more clause of this blow,
+    // doubled by a critical exactly as the rest of it is. Only a blow that DEALS something can carry
+    // one, because a rider is extra damage on a hit and an action with none never struck for any.
+    const rider = action.damage ? firingRider(ctx, actor, action, target, mode) : null;
+    if (rider) {
+      ctx.events.push({ type: "rider", actorId: actor.id, targetId: target.id, riderId: rider.id, label: rider.label });
+      const rolled = rollAmount(ctx, rider.amount);
+      const bonus = critical ? criticalExtra(ctx, rider.amount) : { rolls: [], flat: 0 };
+      const total = rolled.total + sumOf(bonus.rolls) + bonus.flat;
+      land({
+        sourceId: actor.id,
+        label: rider.label,
+        ...((rider.type ?? action.damage?.type) ? { damageType: rider.type ?? action.damage?.type } : {}),
+        rolls: [...rolled.rolls, ...bonus.rolls],
+        flat: rolled.flat + bonus.flat,
+        amount: halved ? Math.floor(total / 2) : total,
+        ...(halved ? { saved: true } : {}),
+        ...(critical ? { critical: true } : {}),
+      });
+    }
+    if (woundKind && "track" in health) {
+      writeRulesetSheet(ctx.definition, target, { op: "damage", track: health.track, kind: woundKind.id, amount: 1 });
+      const remaining = healthOf(ctx, target).value;
+      for (const event of ctx.events.slice(blowEventStart)) {
+        if (event.type === "damage" && event.targetId === target.id) event.health = remaining;
+      }
+    }
+    if (before) afterBlow(ctx, target, before, dealt, critical);
     if (heal) {
       const rolled = heal();
       dealHeal(ctx, target, { sourceId: actor.id, rolls: rolled.rolls, flat: rolled.flat, amount: rolled.total });
@@ -1132,6 +1472,16 @@ function resolveAction(
 }
 
 // ── Between turns ──
+
+/** The riders whose period has come round again. One that says "round" survives until the round
+ *  turns over; one that says "turn" is fresh at the start of every turn there is. */
+function clearSpentRiders(combatant: RulesetCombatant, freshRound: boolean): void {
+  if (!combatant.ridersSpent?.length) return;
+  const period = new Map((combatant.riders ?? []).map((rider) => [rider.id, rider.oncePer]));
+  const kept = combatant.ridersSpent.filter((id) => !freshRound && period.get(id) === "round");
+  if (kept.length > 0) combatant.ridersSpent = kept;
+  else delete combatant.ridersSpent;
+}
 
 /** The points a signature action is bought with, back to full at the start of their own turn: they
  *  are what this combatant can spend before their next one comes round. */
@@ -1191,7 +1541,11 @@ export function advanceRulesetTurn(
 
   const { ctx, finish } = begin(definition, combat, state, roller);
   const leaving = currentRulesetActor(ctx.state);
-  if (leaving) tickConditions(ctx, leaving, "turn-end");
+  if (leaving) {
+    tickConditions(ctx, leaving, "turn-end");
+    // Strikes a spend bought are for the turn it was spent on. Nothing is carried over.
+    delete leaving.strikesLeft;
+  }
 
   let turn = ctx.state.turn;
   let round = ctx.state.round;
@@ -1212,6 +1566,10 @@ export function advanceRulesetTurn(
     for (const combatant of ctx.state.combatants) refreshRulesetBudgets(combat, combatant.budgets, "round");
     ctx.events.push({ type: "round", round });
   }
+  // A rider fires once in its period. "turn" is fresh at the start of every turn, whosever it is,
+  // so a strike made while somebody else is acting can still carry one; "round" waits for the round
+  // to turn over. Everybody's, because a rider fires on its holder's blow, not on their turn.
+  for (const combatant of ctx.state.combatants) clearSpentRiders(combatant, fresh);
 
   const actor = currentRulesetActor(ctx.state);
   if (actor) {
@@ -1219,7 +1577,7 @@ export function advanceRulesetTurn(
     // A stance lasts until the actor's next turn, and that turn is now. Help was given to somebody
     // else and is spent by their own next attack, so it survives this.
     actor.flags = actor.flags.helped ? { helped: true } : {};
-    refreshRulesetMovement(definition, combat, actor);
+    refreshRulesetMovement(definition, combat, actor, ctx.state);
     ctx.events.push({ type: "turn", actorId: actor.id, round });
     refreshRulesetSignature(actor);
     rollRulesetRecharges(ctx, actor);

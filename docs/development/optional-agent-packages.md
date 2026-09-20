@@ -664,6 +664,83 @@ Desktop uses a browse list with an adjacent detail region. Mobile uses one pane 
 
 An extraction is complete only when the base production client and server bundles no longer contain the package implementation, a fresh install cannot activate it without downloading the package, an upgraded install retains it, and package install/update/uninstall passes on desktop, mobile, and Termux-compatible filesystems.
 
+### Capability API 1.30: wound tracks, spending on a check, and a fight fought on a track
+
+A ruleset's `live.tracks` entry may declare `levels` and `kinds`, which turns it from a bounded
+integer into a WOUND TRACK: a column of boxes, each with its own label and penalty, that a mark sits
+on. `levels` is 1 to 16 rungs, best first and worst last, each a `label` and an integer `penalty`.
+`kinds` is 1 to 6 sorts of harm the track may take, each an `id`, a short `label` and a distinct
+`severity`. The two go together: `kinds` without `levels` is refused, because there would be nothing
+to mark. Beside them, `resolution.penaltyFrom` names the track whose penalty rides on every roll:
+under `dice-pool` it takes that many dice off the pool and never below `pool.min`, and under
+`dice-sum` it is a flat modifier on the roll.
+
+The rest of 1.30 is everything else this slice added, and a package that ships any ONE of them
+declares 1.30:
+
+- `combat.health` may name a wound track instead of a pool, and then `combat.damageKinds` says what
+  each damage type marks: `default`, an optional `byType` map, and `marks`, which is `per-blow`
+  where a landing blow ticks one box or `per-point` where a damage roll counts health levels.
+  `damageKinds` is required with a wound track and refused with a pool.
+- `resolution.spend` (a `dice-pool` ruleset only): the pool a player may spend on a check, what one
+  payment costs, whether it buys `successes` or `dice`, and `perCheck`, the ceiling on one roll.
+- `mechanics.check` on a catalog entry: what a thing the character PICKED does to a check, as
+  `reroll` (`upTo` and `once` or `until`), `dice`, `successes` or `threshold`. Also pool-only.
+
+```json
+{
+  "capabilityApi": { "major": 1, "minor": 30 },
+  "kind": ["ruleset"],
+  "contributions": { "assets": { "paths": ["ruleset.json"] } }
+}
+```
+
+A wound track's length is its levels, so its `min` is 0 and its `max` is `levels.length`, and a file
+that says otherwise is refused rather than quietly corrected. A track named by `resolution.penaltyFrom`
+must be a wound track: a plain track carries no penalty to apply.
+
+Not a soft seam, for the same reason as 1.20 through 1.28: an Engine that cannot read `levels`,
+`kinds`, `penaltyFrom`, `damageKinds`, `resolution.spend` or `mechanics.check` refuses the whole
+ruleset file, so install reads the verified bytes of `ruleset.json` and refuses the package under an
+older declaration. No change for a ruleset whose tracks are plain numbers, whose health is a pool
+and which says nothing about spending on a check.
+
+### Capability API 1.29: what one turn of a ruleset fight can do
+
+Five additions, all optional, to the `combat` block and to the catalog entries a fight reads:
+
+- A blow may carry up to three MORE amounts beside its first. `mechanics.plus` on a catalog entry
+  and `damage.plus` on a creature action are each `{ dice?, flat?, type?, save?: { save,
+difficulty?, onSuccess: "none" | "half" } }`: rolled and typed on its own, doubled on its own by a
+  critical, saved against on its own by the target, and still one check against concentration and
+  one check for going down for the whole blow.
+- `combat.attacks[].strikes` is a value reference saying how many strikes one spend of that list's
+  budget buys. The rest wait in hand until the turn ends, and while any are in hand every row of
+  that list costs no budget.
+- `mechanics.free` costs no budget, `mechanics.gives` hands budgets back for this turn only (capped
+  where they land), and `mechanics.standard` lets its holder buy named standard actions with
+  another budget. A `utility` entry that declares `gives` or `standard` is offered rather than
+  dropped.
+- A new entry kind, `rider`, and a creature's own `riders`, add a damage clause to the first
+  qualifying hit of a turn or a round, passively and without ever being on the menu.
+- The closed condition effect list gains `own-saves-advantage`, `own-saves-disadvantage`,
+  `resist-all`, `cannot-target-source` and `cannot-approach-source`, and a condition may narrow the
+  saves it is about (`saves`), count only while its source is in sight (`whileSourceInSight`) or
+  end when its source goes down (`endsWhenSourceDown`).
+
+```json
+{
+  "capabilityApi": { "major": 1, "minor": 29 },
+  "kind": ["ruleset"],
+  "contributions": { "assets": { "paths": ["ruleset.json"] } }
+}
+```
+
+Not a soft seam, for the same reason as 1.20 through 1.28: an Engine that cannot read these keys
+refuses the whole ruleset file, or the catalog file that holds them, so install reads the verified
+bytes of `ruleset.json` and of every declared `catalogs/<id>.json` and refuses either one under an
+older declaration. No permission, and no change for a ruleset that declares none of them.
+
 ### Capability API 1.28: a ruleset fight on a board
 
 A ruleset's `combat` block may say what one cell of a battlefield is worth in its own distance
