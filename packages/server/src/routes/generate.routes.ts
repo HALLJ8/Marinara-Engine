@@ -117,6 +117,7 @@ import {
   isRoleplayCommandAllowed,
   getRoleplayCommandActivity,
   type RoleplayCommandActivity,
+  type RulesetLiveStates,
 } from "@marinara-engine/shared";
 import { prepareRoleplayRoll } from "../services/generation/roleplay-rolls.js";
 import {
@@ -138,6 +139,7 @@ import {
   loadGameRulesetSheetContext,
   loadTurnRulesetCatalogs,
   renderGameRulesetSheetBlocks,
+  sheetCommandCards,
   type GameRulesetSheetTurn,
 } from "../services/game/ruleset-sheet-turn.service.js";
 import { createCustomToolsStorage } from "../services/storage/custom-tools.storage.js";
@@ -4136,6 +4138,24 @@ export async function generateRoutes(app: FastifyInstance) {
           const pinnedGameRuleset =
             chatMeta.gameRuleset != null ? resolveGameRuleset(chatMeta, await loadRulesetRegistry()) : null;
           turnGameRuleset = pinnedGameRuleset;
+          const promptRulesetCatalogs =
+            pinnedGameRuleset?.status === "ok" &&
+            pinnedGameRuleset.definition.resolution.kind === "dice-pool" &&
+            !input.impersonate
+              ? await loadTurnRulesetCatalogs(
+                  {
+                    definition: pinnedGameRuleset.definition,
+                    packageId: pinnedGameRuleset.packageId,
+                    cards: sheetCommandCards(
+                      pinnedGameRuleset.definition,
+                      Array.isArray(chatMeta.gameCharacterCards) ? chatMeta.gameCharacterCards : [],
+                    ),
+                    playerName: gmCtx.playerName ?? null,
+                  },
+                  "",
+                  { force: true },
+                )
+              : {};
           // The pool block is rendered from the same session the readers spend out of, and
           // from the same modifier context the resolver uses, so the block and the engine
           // cannot disagree about a value or about a total.
@@ -4179,6 +4199,7 @@ export async function generateRoutes(app: FastifyInstance) {
                             pinnedGameRuleset.definition,
                             chatMeta.gameCharacterCards,
                             parseStoredRulesetLive((await selectedGameStateSnapshotPromise)?.rulesetLive),
+                            promptRulesetCatalogs,
                           ),
                         }
                       : {}),
@@ -7738,6 +7759,34 @@ export async function generateRoutes(app: FastifyInstance) {
           let contentReplaced = false;
           let gameOutcomeNarrationFailed = false;
           let gameDiceTurnNotice: GameDiceTurnNotice | null = null;
+          /** Live sheet state after any check in this turn bought something with a pool. Set by the
+           *  check pass and read by the sheet-command pass, which is the order they happened in. */
+          let checkSpendLive: RulesetLiveStates | null = null;
+          /**
+           * The live sheet state THIS TURN starts from, read once and shared by both passes.
+           *
+           * The check pass spends before the dice are thrown and the sheet pass spends after, so
+           * they have to begin from the same balance or one turn would pay twice out of two
+           * different starting points. It is the row this turn follows, or a continuation's own
+           * row; reading "the newest stored row" instead is a different balance whenever the turn
+           * does not follow the newest one, which is what a regenerate and a swipe are.
+           */
+          let turnStartLivePromise: Promise<RulesetLiveStates | null> | null = null;
+          const turnStartRulesetLive = () => {
+            turnStartLivePromise ??= (async () => {
+              const continuedRow = input.continueMessageId
+                ? await gameStateStore.getByChatAndMessage(
+                    input.chatId,
+                    input.continueMessageId,
+                    Number.isInteger(continueTargetMessage?.activeSwipeIndex)
+                      ? (continueTargetMessage.activeSwipeIndex as number)
+                      : 0,
+                  )
+                : null;
+              return parseStoredRulesetLive((continuedRow ?? baseGameStateSnapshot)?.rulesetLive);
+            })();
+            return turnStartLivePromise;
+          };
 
           // Some models inline reasoning blocks instead of using provider-native
           // thinking channels. Lift those blocks into message.extra.thinking.
@@ -8245,7 +8294,8 @@ export async function generateRoutes(app: FastifyInstance) {
             // than by a marker in the text that would change how an older turn reads.
             const dicePoolSession = await ensureGameDicePoolSession();
             const rolled = await resolveSkillCheckTagsInContent(fullResponse, {
-              loadContext: () => loadSkillCheckModifierContext(app.db, input.chatId),
+              loadContext: async () =>
+                loadSkillCheckModifierContext(app.db, input.chatId, await turnStartRulesetLive()),
               chatId: input.chatId,
               // Keyed on the pin being PRESENT, not on it resolving. A pin the install cannot
               // honour must still fail closed (the context refuses to load and the checks are
@@ -8253,7 +8303,18 @@ export async function generateRoutes(app: FastifyInstance) {
               // the Engine's own arithmetic.
               ...(chatMeta.gameRuleset != null ? { rulesetPinned: true } : {}),
               ...(dicePoolSession ? { pool: dicePoolSession } : {}),
+              // Only ever called for a check that names an entry with `use=`, so an ordinary turn
+              // reads no catalog file at all. The sheet pass below loads its own for a `[sheet:]`
+              // `use`, which is a different command in a different place.
+              loadCatalogs: async () => {
+                const context = await loadGameRulesetSheetContext(app.db, input.chatId, turnGameRuleset);
+                return context ? await loadTurnRulesetCatalogs(context, fullResponse, { force: true }) : {};
+              },
             });
+            // A check that BOUGHT something (a point of will for an automatic success) paid for it
+            // before the dice were thrown, so the points are already gone. That state is what the
+            // sheet-command pass below has to start from, or its own writes would put them back.
+            if (rolled.live) checkSpendLive = rolled.live;
             const generalRolls = resolveGameDiceRequests(
               rolled.content,
               toolDiceRollResults,
@@ -8370,22 +8431,19 @@ export async function generateRoutes(app: FastifyInstance) {
           // has. That is what keeps a swipe or a regenerated turn from spending twice.
           let rulesetSheetTurn: GameRulesetSheetTurn | null = null;
           if (chatMode === "game" && !input.impersonate && chatMeta.gameRuleset != null) {
+            // Purchases the checks above already paid for, folded onto the turn's starting state
+            // one character at a time, so a member nobody spent for is untouched.
+            const withSpends = (base: RulesetLiveStates | null) =>
+              checkSpendLive ? { ...(base ?? {}), ...checkSpendLive } : base;
             try {
               const sheetContext = await loadGameRulesetSheetContext(app.db, input.chatId, turnGameRuleset);
               if (sheetContext) {
-                const continuedRow = input.continueMessageId
-                  ? await gameStateStore.getByChatAndMessage(
-                      input.chatId,
-                      input.continueMessageId,
-                      Number.isInteger(continueTargetMessage?.activeSwipeIndex)
-                        ? (continueTargetMessage.activeSwipeIndex as number)
-                        : 0,
-                    )
-                  : null;
                 rulesetSheetTurn = applyGameRulesetSheetTurn(
                   sheetContext,
                   fullResponse,
-                  parseStoredRulesetLive((continuedRow ?? baseGameStateSnapshot)?.rulesetLive),
+                  // The same turn-start state the check pass read, with whatever it already spent
+                  // laid over it, so the two passes of one turn cannot begin from two balances.
+                  withSpends(await turnStartRulesetLive()),
                   await loadTurnRulesetCatalogs(sheetContext, fullResponse),
                 );
                 if (rulesetSheetTurn.content !== fullResponse) {
@@ -8728,7 +8786,12 @@ export async function generateRoutes(app: FastifyInstance) {
           // `create` in the game-state storage). The clone base matches the one the trackers use;
           // the live state itself is passed explicitly, because a sibling swipe's row holds what
           // THAT telling spent.
-          if (rulesetSheetTurn && savedMsg?.id) {
+          // What the turn leaves on the sheets: the sheet commands' own result when that pass ran,
+          // and otherwise just the purchases the checks already paid for. Without the second half a
+          // turn whose sheet pass was skipped or threw would keep the automatic successes a player
+          // bought and quietly give the points back, which is a free success.
+          const liveAfterTurn = rulesetSheetTurn?.live ?? checkSpendLive;
+          if (liveAfterTurn && savedMsg?.id) {
             try {
               const swipeIndex = savedSwipeIndex ?? 0;
               const siblingSwipeRow =
@@ -8739,11 +8802,11 @@ export async function generateRoutes(app: FastifyInstance) {
                 savedMsg.id,
                 swipeIndex,
                 input.chatId,
-                { rulesetLive: rulesetSheetTurn.live },
+                { rulesetLive: liveAfterTurn },
                 undefined,
                 { baseSnapshot: siblingSwipeRow ?? baseGameStateSnapshot },
               );
-              sendSseEvent(reply, { type: "game_state_patch", data: { rulesetLive: rulesetSheetTurn.live } });
+              sendSseEvent(reply, { type: "game_state_patch", data: { rulesetLive: liveAfterTurn } });
             } catch (err) {
               logger.error(err, "[game/sheet] Could not save live sheet state for chat %s", input.chatId);
             }
