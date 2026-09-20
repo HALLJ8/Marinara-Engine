@@ -1279,13 +1279,19 @@ function resolveAction(
     const halved = saved && action.save?.onSuccess === "half";
 
     // Everything this blow is made of: the first amount, and every clause beside it. Rolled and
-    // typed one at a time, taken off one at a time, and finished ONCE at the end.
-    const blow: RulesetDamageInput[] = [];
+    // typed one at a time, taken off one at a time, and finished ONCE at the end: the health the
+    // target had before the FIRST of them is what decides whether the blow put them down.
+    let before: { value: number } | null = null;
+    let dealt = 0;
+    const land = (part: RulesetDamageInput) => {
+      before ??= healthOf(ctx, target);
+      dealt += applyDamage(ctx, target, part);
+    };
     if (damage && action.damage) {
       const rolled = damage();
       const bonus = critical ? criticalExtra(ctx, action.damage, extra) : { rolls: [], flat: 0 };
       const total = rolled.total + sumOf(bonus.rolls) + bonus.flat;
-      blow.push({
+      land({
         sourceId: actor.id,
         label: action.label,
         ...(action.damage.type ? { damageType: action.damage.type } : {}),
@@ -1304,7 +1310,7 @@ function resolveAction(
         const rolledClause = clauses[index]!();
         const clauseBonus = critical ? criticalExtra(ctx, clause) : { rolls: [], flat: 0 };
         const clauseTotal = rolledClause.total + sumOf(clauseBonus.rolls) + clauseBonus.flat;
-        blow.push({
+        land({
           sourceId: actor.id,
           label: action.label,
           // A clause with no type of its own is the blow's own kind of harm.
@@ -1325,7 +1331,7 @@ function resolveAction(
       const rolled = rollAmount(ctx, rider.amount);
       const bonus = critical ? criticalExtra(ctx, rider.amount) : { rolls: [], flat: 0 };
       const total = rolled.total + sumOf(bonus.rolls) + bonus.flat;
-      blow.push({
+      land({
         sourceId: actor.id,
         label: rider.label,
         ...((rider.type ?? action.damage?.type) ? { damageType: rider.type ?? action.damage?.type } : {}),
@@ -1336,12 +1342,7 @@ function resolveAction(
         ...(critical ? { critical: true } : {}),
       });
     }
-    if (blow.length > 0) {
-      const before = healthOf(ctx, target);
-      let dealt = 0;
-      for (const part of blow) dealt += applyDamage(ctx, target, part);
-      afterBlow(ctx, target, before, dealt, critical);
-    }
+    if (before) afterBlow(ctx, target, before, dealt, critical);
     if (heal) {
       const rolled = heal();
       dealHeal(ctx, target, { sourceId: actor.id, rolls: rolled.rolls, flat: rolled.flat, amount: rolled.total });

@@ -457,10 +457,10 @@ const installedPackages = packages.map((fixture) => {
   ];
   const manifest = {
     schemaVersion: 2,
-    // 1.28, because the example ruleset carries the combat bridge's battle block, a scaled catalog
-    // row, a layer, a combat block, catalog mechanics a fight reads, a catalog of creatures and the
-    // keys that give that fight a board.
-    capabilityApi: { major: 1, minor: 28 },
+    // 1.29, because the example ruleset carries the combat bridge's battle block, a scaled catalog
+    // row, a layer, a combat block, catalog mechanics a fight reads, a catalog of creatures, the
+    // keys that give that fight a board and the ones that say what one turn of it can do.
+    capabilityApi: { major: 1, minor: 29 },
     builtAgainst: { engineVersion: "2.4.6", engineCommit: "0".repeat(40) },
     id: packageId,
     name: fixture.id,

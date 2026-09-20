@@ -741,8 +741,14 @@
                 "toHit": 2,
                 "damage": {
                   "dice": "1d6",
-                  "flat": 1,
-                  "type": "cut"
+                  "flat": 0,
+                  "type": "cut",
+                  "plus": [
+                    {
+                      "flat": 1,
+                      "type": "rust"
+                    }
+                  ]
                 },
                 "reach": 2
               },
@@ -782,7 +788,8 @@
                 ]
               }
             ]
-          }
+          },
+          "$comment": "Its bite carries a second clause: the tooth and the rust it leaves behind are rolled, typed and shrugged off one at a time, and together they are still one blow."
         },
         {
           "id": "glass-wader",

@@ -25,8 +25,10 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 import {
+  advanceRulesetTurn,
   applyRulesetCombatChoice,
   createRulesetEncounter,
+  currentRulesetActor,
   parseRulesetDefinition,
   rowsFromCatalogEntry,
   RULESET_MOVE_OPTION,
@@ -35,8 +37,10 @@ import {
   rulesetAimLegal,
   rulesetAreaCells,
   rulesetAreaTargets,
+  rulesetAttackMode,
   rulesetCellDistance,
   rulesetCombatant,
+  rulesetCombatConditions,
   rulesetCombatOptions,
   rulesetInCells,
   rulesetLineOfSight,
@@ -1677,6 +1681,138 @@ const cellsOf = (cells: Array<{ x: number; y: number }>) =>
   assert.ok(wide.length > 0 && wide.length <= 24, "and a cone that size is what of the board it faces");
   // No clock in here: a scan that ran over the shape instead of the board would be ten thousand
   // million steps, and the lane's own timeout is what says so.
+}
+
+// ── Slice C5a: the two condition effects a board gives meaning to ──
+//
+// One of them keeps somebody away from whoever put it on them, and one only counts while that
+// somebody is in sight. Both need cells, which is why they are proven here.
+{
+  /** Something that puts a condition on whoever it touches, and then stands still. */
+  const holder = (id: string, condition: string): RulesetCombatantInput => ({
+    id,
+    name: "Holder",
+    side: "enemy",
+    block: {
+      health: 30,
+      defense: 1,
+      initiativeModifier: 9,
+      speed: 30,
+      actions: [
+        {
+          id: "loom",
+          name: "Loom",
+          budget: "action",
+          autoHit: true,
+          range: 60,
+          applies: [{ condition, duration: { rounds: 9 } }],
+        },
+      ],
+    },
+  });
+
+  // A frightened character may not walk to a cell nearer to what frightened them.
+  {
+    const board = { grid: open(9, 3), placements: { brenna: { x: 4, y: 1 }, dread: { x: 8, y: 1 } } };
+    let state = fight(fiveE, [fighter(), holder("dread", "frightened")], [1, 20], board);
+    assert.equal(currentRulesetActor(state)?.id, "dread");
+    const free = rulesetReachableCells(fiveE, state, "brenna").map((cell) => `${cell.x},${cell.y}`);
+    assert.ok(free.includes("5,1"), "before anything is on them, they may walk towards it");
+    state = act(fiveE, state, { actorId: "dread", optionId: "loom", targetIds: ["brenna"] }).state;
+    state = advanceRulesetTurn(fiveE, state, dice()).state;
+    assert.equal(currentRulesetActor(state)?.id, "brenna");
+    const held = rulesetReachableCells(fiveE, state, "brenna").map((cell) => `${cell.x},${cell.y}`);
+    assert.ok(!held.includes("5,1"), "a cell nearer to what frightened them is not offered");
+    assert.ok(!held.includes("6,1"));
+    assert.ok(held.includes("3,1"), "away is still away, and so is standing still");
+    assert.ok(held.includes("4,0"), "and a step that keeps the same distance is fine");
+    // The menu is the only place legality lives, so a walk it did not offer is refused.
+    assert.deepEqual(
+      act(fiveE, state, { actorId: "brenna", optionId: RULESET_MOVE_OPTION, targetIds: [], to: { x: 5, y: 1 } }).events,
+      [{ type: "refused", actorId: "brenna", optionId: RULESET_MOVE_OPTION, reason: "unreachable" }],
+    );
+  }
+
+  // And its effects count only while the source is in sight: a wall between them and the thing
+  // that frightened them gives their own attacks back.
+  {
+    const grid = drawn("....#....", "....#....", ".........");
+    const board = { grid, placements: { brenna: { x: 2, y: 2 }, dread: { x: 6, y: 2 }, snag: { x: 3, y: 2 } } };
+    let state = fight(fiveE, [fighter(), holder("dread", "frightened"), snag()], [1, 20, 1], board);
+    state = act(fiveE, state, { actorId: "dread", optionId: "loom", targetIds: ["brenna"] }).state;
+    state = advanceRulesetTurn(fiveE, state, dice()).state;
+    assert.equal(currentRulesetActor(state)?.id, "brenna");
+    assert.ok(
+      rulesetCombatConditions(fiveE, rulesetCombatant(state, "brenna")!).includes("frightened"),
+      "the condition is on them either way",
+    );
+    const sword = rulesetCombatOptions(fiveE, state, "brenna").find((option) => option.label === "Longsword")!;
+    const modeIn = (encounter: RulesetEncounterState) =>
+      rulesetAttackMode(
+        fiveE,
+        fiveE.combat!,
+        rulesetCombatant(encounter, "brenna")!,
+        rulesetCombatant(encounter, "snag")!,
+        { state: encounter, optionId: sword.id },
+      );
+    assert.equal(modeIn(state), "disadvantage", "in plain sight of it, their own attacks are harder");
+    // The same fight with a wall between the two of them.
+    const hidden = structuredClone(state);
+    rulesetCombatant(hidden, "brenna")!.y = 0;
+    rulesetCombatant(hidden, "dread")!.y = 0;
+    assert.ok(!rulesetLineOfSight(grid, { x: 2, y: 0 }, { x: 6, y: 0 }), "the wall really is between them");
+    assert.equal(modeIn(hidden), "normal", "out of its sight, the condition counts for nothing");
+  }
+
+  // A rider that asks for a friend beside the target reads the board when there is one.
+  {
+    const feats = fiveE.catalogs!.find((catalog) => catalog.id === "feats")!.entries!;
+    const slyRows = rowsFromCatalogEntry("feats", feats.find((entry) => entry.id === "sly-strike")!);
+    const rogue = (): RulesetCombatantInput => ({
+      id: "vess",
+      name: "Vess",
+      side: "party",
+      build: build({
+        abilities: { str: 10, dex: 18, con: 14, int: 10, wis: 10, cha: 10 },
+        fields: { level: 1, ac: 15, speed: 30, hp_max: 20 },
+        lists: {
+          attacks: [
+            {
+              name: "Rapier",
+              ability: "dex",
+              proficient: true,
+              bonus: 0,
+              damage: "1d8",
+              damage_type: "piercing",
+              finesse: true,
+              reach: 5,
+              range: 0,
+              long_range: 0,
+            },
+          ],
+          features: slyRows.filter((row) => row.list === "features").map((row) => row.row),
+        },
+      }),
+      live: {},
+      catalogs: { feats },
+    });
+    // The friend is across the board, so nobody is beside the target and nothing fires.
+    const far = {
+      grid: open(9, 3),
+      placements: { vess: { x: 0, y: 1 }, brenna: { x: 8, y: 1 }, snag: { x: 1, y: 1 } },
+    };
+    const apart = fight(fiveE, [rogue(), fighter(), snag()], [20, 1, 1], far);
+    const alone = act(fiveE, apart, { actorId: "vess", optionId: "attack:0:0", targetIds: ["snag"] }, 18, 5);
+    assert.equal(eventsOf(alone.events, "rider").length, 0, "a friend eight cells away is not beside anybody");
+    // One step closer for the friend, and the blow carries it.
+    const near = {
+      grid: open(9, 3),
+      placements: { vess: { x: 0, y: 1 }, brenna: { x: 2, y: 1 }, snag: { x: 1, y: 1 } },
+    };
+    const beside = fight(fiveE, [rogue(), fighter(), snag()], [20, 1, 1], near);
+    const carried = act(fiveE, beside, { actorId: "vess", optionId: "attack:0:0", targetIds: ["snag"] }, 18, 5, 3);
+    assert.equal(eventsOf(carried.events, "rider").length, 1, "a friend in the next cell is beside them");
+  }
 }
 
 console.info("game ruleset combat grid regressions passed.");
