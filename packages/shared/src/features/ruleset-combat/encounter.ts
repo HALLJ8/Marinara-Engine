@@ -45,6 +45,7 @@ import type {
   RulesetCombatBoard,
   RulesetCombatDamageClause,
   RulesetCombatEvent,
+  RulesetCombatRider,
   RulesetCombatRoller,
   RulesetEncounterState,
   RulesetStatBlockAction,
@@ -387,6 +388,42 @@ function abilityAction(
   return action;
 }
 
+/** Whether one cell of a row says yes. A rider reads a column rather than a word, so a ruleset says
+ *  "the rows you can do this with" in its own list without the Engine knowing what a weapon is. */
+function truthyColumn(row: Record<string, unknown>, column: string): boolean {
+  const value = columnValue(row, column);
+  if (typeof value === "boolean") return value;
+  if (typeof value === "number") return Number.isFinite(value) && value !== 0;
+  return typeof value === "string" && value.trim() !== "";
+}
+
+/**
+ * The attack actions one rider fires on, resolved once when the fight begins.
+ *
+ * Undefined is "any hit at all", which is what a rider that names neither an attack list nor a
+ * column means. Naming either turns into the ids of the rows that qualify, so the resolution never
+ * reads a sheet again: the row a rider needs may have been edited by then.
+ */
+function riderActionIds(
+  combat: RulesetCombat,
+  build: RulesetSheetBuild,
+  rider: NonNullable<RulesetCatalogMechanics["rider"]>,
+): string[] | undefined {
+  if (!rider.sources && !rider.requires) return undefined;
+  const ids: string[] = [];
+  (combat.attacks ?? []).forEach((source, index) => {
+    if (rider.sources && !rider.sources.includes(source.list)) return;
+    const rows = build.lists?.[source.list];
+    if (!Array.isArray(rows)) return;
+    rows.forEach((raw, rowIndex) => {
+      if (!raw || typeof raw !== "object") return;
+      if (rider.requires && !truthyColumn(raw as Record<string, unknown>, rider.requires.column)) return;
+      ids.push(`attack:${index}:${rowIndex}`);
+    });
+  });
+  return ids;
+}
+
 /** The name a row answers to: the column the Game Master sees it under, then the entry's label. */
 function rowName(definition: RulesetDefinition, listId: string, row: Record<string, unknown>, fallback: string) {
   const list = definition.sheet.lists.find((entry) => entry.id === listId);
@@ -397,17 +434,56 @@ function rowName(definition: RulesetDefinition, listId: string, row: Record<stri
   return textFromColumn(row, column) ?? fallback;
 }
 
+/** One rider a catalog entry carries, with its dice grown by the sheet exactly as an amount's are
+ *  and the rows it fires on already worked out. */
+function riderFrom(
+  definition: RulesetDefinition,
+  combat: RulesetCombat,
+  build: RulesetSheetBuild,
+  evaluated: EvaluatedRulesetSheet,
+  id: string,
+  label: string,
+  mechanics: RulesetCatalogMechanics,
+): RulesetCombatRider | null {
+  const declared = mechanics.rider;
+  const amount = declared ? amountOf(declared.amount) : null;
+  if (!declared || !amount) return null;
+  const extra = mechanics.scales
+    ? Math.max(
+        0,
+        Math.trunc(
+          lookupStepTable(
+            mechanics.scales.table,
+            resolveRulesetValueRef(definition, build, mechanics.scales.from, evaluated),
+          ),
+        ),
+      )
+    : 0;
+  const actions = riderActionIds(combat, build, declared);
+  return {
+    id,
+    label,
+    on: declared.on,
+    ...(actions ? { actions } : {}),
+    ...(declared.when?.length ? { when: [...declared.when] } : {}),
+    oncePer: declared.oncePer,
+    amount: { ...amount, count: amount.count + (amount.count > 0 ? extra : 0) },
+    ...(declared.type ? { type: declared.type } : {}),
+  };
+}
+
 function abilityActions(
   definition: RulesetDefinition,
+  combat: RulesetCombat,
   source: RulesetCombatAbilitySource,
   index: number,
   build: RulesetSheetBuild,
   catalogs: RulesetCatalogEntriesById,
   evaluated: EvaluatedRulesetSheet,
   perCell: number | undefined,
-): RulesetCombatAction[] {
+): { actions: RulesetCombatAction[]; riders: RulesetCombatRider[] } {
   const rows = build.lists?.[source.list];
-  if (!Array.isArray(rows)) return [];
+  if (!Array.isArray(rows)) return { actions: [], riders: [] };
   const byRef = rulesetCatalogEntriesByRef(catalogs);
   /** A catalog states what its own `range` and `area.size` numbers mean; one that does not is read
    *  in the combat block's own unit. */
@@ -417,6 +493,7 @@ function abilityActions(
     return definition.catalogs?.find((catalog) => catalog.id === catalogId)?.units?.distance?.perCell ?? perCell;
   };
   const actions: RulesetCombatAction[] = [];
+  const riders: RulesetCombatRider[] = [];
   const seen = new Set<string>();
   rows.forEach((raw, rowIndex) => {
     if (!raw || typeof raw !== "object") return;
@@ -428,22 +505,29 @@ function abilityActions(
     if (!always && source.onlyWhen && columnValue(row, source.onlyWhen) !== true) return;
     const entry = byRef.get(ref);
     if (!entry) return;
-    const action = abilityAction(
-      definition,
-      source,
-      index,
-      rowIndex,
-      rowName(definition, source.list, row, entry.label),
-      entry,
-      build,
-      evaluated,
-      perCellOf(ref),
-    );
+    const name = rowName(definition, source.list, row, entry.label);
+    // A rider is passive: it never becomes an action, and it is carried by whoever holds the row.
+    if (entry.mechanics?.kind === "rider") {
+      const rider = riderFrom(
+        definition,
+        combat,
+        build,
+        evaluated,
+        `rider:${index}:${rowIndex}`,
+        name,
+        entry.mechanics,
+      );
+      if (!rider) return;
+      seen.add(ref);
+      riders.push(rider);
+      return;
+    }
+    const action = abilityAction(definition, source, index, rowIndex, name, entry, build, evaluated, perCellOf(ref));
     if (!action) return;
     seen.add(ref);
     actions.push(action);
   });
-  return actions;
+  return { actions, riders };
 }
 
 /** Only the entries this member's own rows point at, so the state stays small enough to persist
@@ -689,6 +773,7 @@ export function createRulesetEncounter(input: RulesetEncounterInput): RulesetEnc
         ...(block.signaturePoints !== undefined
           ? { signature: { points: block.signaturePoints, max: block.signaturePoints } }
           : {}),
+        ...(block.riders?.length ? { riders: block.riders.map((rider) => ({ ...rider })) } : {}),
         tracked: [],
         concentrating: null,
         flags: {},
@@ -720,14 +805,16 @@ export function createRulesetEncounter(input: RulesetEncounterInput): RulesetEnc
         ...(save.ability ? { ability: save.ability } : {}),
       });
     }
+    const abilities = (combat.abilities ?? []).map((source, index) =>
+      abilityActions(definition, combat, source, index, build, catalogs, evaluated, perCell),
+    );
     const actions = [
       ...(combat.attacks ?? []).flatMap((source, index) =>
         attackActions(definition, source, index, build, evaluated, perCell),
       ),
-      ...(combat.abilities ?? []).flatMap((source, index) =>
-        abilityActions(definition, source, index, build, catalogs, evaluated, perCell),
-      ),
+      ...abilities.flatMap((entry) => entry.actions),
     ];
+    const riders = abilities.flatMap((entry) => entry.riders);
     const combatant: RulesetCombatant = {
       id: entry.id,
       name: entry.name,
@@ -739,6 +826,7 @@ export function createRulesetEncounter(input: RulesetEncounterInput): RulesetEnc
       actions,
       uses: startingUses(actions),
       spent: [],
+      ...(riders.length > 0 ? { riders } : {}),
       tracked: [],
       concentrating: null,
       flags: {},

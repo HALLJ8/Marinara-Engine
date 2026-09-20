@@ -87,6 +87,26 @@ export interface RulesetCombatRange {
   long?: number;
 }
 
+/**
+ * Something that adds itself to the first qualifying hit of a period, with nobody choosing it.
+ *
+ * Passive and never on the menu: a rider is one more damage clause of the blow that carried it, so
+ * a critical doubles it and the blow it joined is still one concentration check and one check for
+ * going down. Which actions it fires on is resolved once, when the fight begins: `actions` is the
+ * list of them, and a rider with none fires on any hit its holder lands.
+ */
+export interface RulesetCombatRider {
+  id: string;
+  label: string;
+  on: "hit";
+  actions?: string[];
+  /** Any-of: one of them being true is enough. */
+  when?: Array<"advantage" | "ally-adjacent">;
+  oncePer: "turn" | "round";
+  amount: RulesetCombatAmount;
+  type?: string;
+}
+
 /** One thing a stat block can do. `reach` and `range` are in the ruleset's own distance unit; a
  *  positioned fight turns them into cells when it starts. */
 export interface RulesetStatBlockAction {
@@ -144,6 +164,8 @@ export interface RulesetStatBlock {
   traits?: Array<{ name: string; text: string }>;
   /** Points given back at the start of its own turn, spent on `signature` actions. */
   signaturePoints?: number;
+  /** What this creature adds to the first qualifying hit of a period, all by itself. */
+  riders?: RulesetCombatRider[];
 }
 
 /** Who is in the fight. A party member is sheet-backed and reads and writes its numbers through the
@@ -266,6 +288,11 @@ export interface RulesetCombatant {
   /** Strikes in hand: what is left of a spend that bought several. Absent when there are none, and
    *  cleared at the end of the turn they were bought on, so nothing carries into the next one. */
   strikesLeft?: number;
+  /** What this combatant adds to a qualifying hit without anybody choosing it. */
+  riders?: RulesetCombatRider[];
+  /** The riders that have already fired in their period. A "turn" rider is fresh at the start of
+   *  every turn, whosever it is; a "round" rider when the round turns over. */
+  ridersSpent?: string[];
   tracked: RulesetTrackedCondition[];
   concentrating: { actionId: string; label: string } | null;
   /** What a standard action left behind. `dodging`, `dashed`, `disengaged`, `hidden` and `ready`
@@ -445,6 +472,9 @@ export type RulesetCombatEvent =
   | { type: "strikes"; actorId: string; optionId: string; label: string; left: number }
   /** A budget something handed its user, and what they hold of it now. */
   | { type: "gives"; actorId: string; optionId: string; label: string; budget: string; left: number }
+  /** Something that added itself to this blow. The damage it dealt is its own `damage` event, as
+   *  every other clause of the blow is. */
+  | { type: "rider"; actorId: string; targetId: string; riderId: string; label: string }
   | {
       type: "concentration";
       actorId: string;

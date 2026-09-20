@@ -21,6 +21,7 @@ import type {
   RulesetCombatAmount,
   RulesetCombatDamage,
   RulesetCombatDamageClause,
+  RulesetCombatRider,
   RulesetStatBlock,
   RulesetStatBlockAction,
 } from "./types.js";
@@ -242,7 +243,29 @@ function blockFromCreature(creature: RulesetCreature, budgets: ReadonlySet<strin
     tier: creature.tier,
     ...(creature.traits ? { traits: creature.traits.map((trait) => ({ ...trait })) } : {}),
     ...(creature.signaturePoints !== undefined ? { signaturePoints: creature.signaturePoints } : {}),
+    ...(creature.riders?.length ? { riders: creature.riders.flatMap((rider) => riderOf(rider, ids)) } : {}),
   };
+}
+
+/** One rider of a block, with its amount read as dice. A rider that names only actions this block
+ *  no longer has would never fire, so it is dropped rather than carried. */
+function riderOf(rider: NonNullable<RulesetCreature["riders"]>[number], ids: ReadonlySet<string>) {
+  const amount = amountOf(rider.amount);
+  if (!amount) return [];
+  const actions = rider.actions?.filter((id) => ids.has(id));
+  if (rider.actions && (!actions || actions.length === 0)) return [];
+  return [
+    {
+      id: rider.id,
+      label: rider.name,
+      on: rider.on,
+      ...(actions?.length ? { actions } : {}),
+      ...(rider.when?.length ? { when: [...rider.when] } : {}),
+      oncePer: rider.oncePer,
+      amount,
+      ...(rider.type ? { type: rider.type } : {}),
+    } satisfies RulesetCombatRider,
+  ];
 }
 
 // ── The clamp ──
@@ -280,11 +303,28 @@ interface RulesetBestRound {
   average: number;
   action: RulesetStatBlockAction | null;
   parts: string[];
+  /** The heaviest rider this block carries, which adds itself once to that round. */
+  rider: RulesetCombatRider | null;
 }
 
-function bestRound(actions: readonly RulesetStatBlockAction[]): RulesetBestRound {
+/** The rider that says most. A rider fires once in its period, so one of them rides the best round
+ *  and the rest do not: counting them all would measure a creature nobody could play. */
+function heaviestRider(riders: readonly RulesetCombatRider[] | undefined): RulesetCombatRider | null {
+  let best: RulesetCombatRider | null = null;
+  for (const rider of riders ?? []) {
+    if (!best || rulesetAverageAmount(rider.amount) > rulesetAverageAmount(best.amount)) best = rider;
+  }
+  return best;
+}
+
+function bestRound(
+  actions: readonly RulesetStatBlockAction[],
+  riders?: readonly RulesetCombatRider[],
+): RulesetBestRound {
   const byId = new Map(actions.map((action, index) => [actionId(action, index), action]));
-  let best: RulesetBestRound = { average: 0, action: null, parts: [] };
+  const rider = heaviestRider(riders);
+  const carried = rider ? Math.max(0, rulesetAverageAmount(rider.amount)) : 0;
+  let best: RulesetBestRound = { average: 0, action: null, parts: [], rider };
   actions.forEach((action, index) => {
     const round: RulesetBestRound = action.sequence
       ? {
@@ -294,8 +334,11 @@ function bestRound(actions: readonly RulesetStatBlockAction[]): RulesetBestRound
           ),
           action,
           parts: action.sequence.map((step) => step.action),
+          rider,
         }
-      : { average: damageAverage(action), action, parts: [actionId(action, index)] };
+      : { average: damageAverage(action), action, parts: [actionId(action, index)], rider };
+    // A rider adds itself to whatever the round already was, so it is counted once on top.
+    round.average += round.average > 0 ? carried : 0;
     if (round.average > best.average) best = round;
   });
   return best;
@@ -534,16 +577,18 @@ export function clampRulesetStatBlock(
   let scaled = false;
   let fewer = false;
   while (guard++ < 500) {
-    const round = bestRound(block.actions);
+    const round = bestRound(block.actions, block.riders);
     if (round.average <= cap) break;
     // The heaviest part of the heaviest round: shaving that is what brings the round down.
     const part = round.parts
       .map((id) => byId.get(id))
       .filter((action): action is RulesetStatBlockAction => !!action?.damage)
       .sort((left, right) => damageAverage(right) - damageAverage(left))[0];
-    // The heaviest amount of the heaviest part: the first amount of a blow that carries only one,
-    // and otherwise whichever of it and its clauses says most.
-    const damage = part ? blowAmounts(part)[0] : undefined;
+    // The heaviest amount in that round: the first amount of a blow that carries only one, and
+    // otherwise whichever of it, its clauses and the rider riding the round says most.
+    const damage = [...(part ? blowAmounts(part) : []), ...(round.rider ? [round.rider.amount] : [])].sort(
+      (left, right) => rulesetAverageAmount(right) - rulesetAverageAmount(left),
+    )[0];
     const rolls = !!damage && damage.count > 0 && damage.sides > 0;
     if (damage && damage.count > 1 && damage.sides > 0) damage.count -= 1;
     else if (damage && damage.flat > (rolls ? 0 : 1)) damage.flat -= 1;
@@ -554,7 +599,7 @@ export function clampRulesetStatBlock(
   }
   if (fewer) adjusted.push("A creature of this tier does not strike that often, so the sequence lost a strike.");
   if (scaled) {
-    const left = Math.round(bestRound(block.actions).average * 100) / 100;
+    const left = Math.round(bestRound(block.actions, block.riders).average * 100) / 100;
     adjusted.push(
       left <= cap
         ? `The damage was scaled down until the best round averages ${left}, inside the ${tier.damagePerRound[0]} to ${cap} of ${tier.label}.`

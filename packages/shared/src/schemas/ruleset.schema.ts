@@ -736,12 +736,80 @@ const catalogAppliesSchema = z
     }
   });
 
+/** What a rider is, minus where it comes from. A rider is PASSIVE: nobody takes it, and it adds one
+ *  more damage clause to the first qualifying hit of its period, automatically.
+ *
+ *  `when` is any-of: one of the listed things being true is enough. "advantage" is how the attack
+ *  roll finally leaned, and "ally-adjacent" is a standing ally of the attacker who can act, within
+ *  one cell of the target on a board and anywhere at all without one. */
+const riderCoreShape = {
+  /** The one moment a rider fires. More of them arrive with the slice that builds windows. */
+  on: z.literal("hit"),
+  when: z
+    .array(z.enum(["advantage", "ally-adjacent"]))
+    .min(1)
+    .max(2)
+    .optional(),
+  oncePer: z.enum(["turn", "round"]),
+  amount: z.object(catalogAmountShape).strict(),
+  /** The kind of harm it deals. Without one it is the blow's own kind. */
+  type: promptSafeText(40).optional(),
+};
+
+const riderAmountIssue = (rider: { amount: { dice?: string; flat?: number } }, ctx: z.RefinementCtx) => {
+  if (rider.amount.dice === undefined && rider.amount.flat === undefined) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["amount"],
+      message: "A rider names dice, a flat amount, or both",
+    });
+  }
+};
+
+/** A rider a party member carries, from a catalog entry. `sources` names the attack lists it fires
+ *  on and `requires` one truthy column of those lists' rows, so a rider that only comes off certain
+ *  weapons says which without the Engine knowing one word of what a weapon is. */
+const catalogRiderSchema = z
+  .object({
+    ...riderCoreShape,
+    sources: z.array(sheetId).min(1).max(8).optional(),
+    requires: z.object({ column: sheetId }).strict().optional(),
+  })
+  .strict()
+  .superRefine(riderAmountIssue);
+
+/** The keys a passive carries nothing of: a rider is not something anybody takes, so anything that
+ *  would put it on a menu or spend something for it is refused where an author can still see it. */
+const RIDER_ENTRY_FORBIDS = [
+  "range",
+  "area",
+  "targets",
+  "friendlyFire",
+  "amount",
+  "damageType",
+  "plus",
+  "attackRoll",
+  "save",
+  "cost",
+  "perCostStep",
+  "concentration",
+  "reaction",
+  "targetCount",
+  "autoHit",
+  "applies",
+  "temporary",
+  "budget",
+  "free",
+  "gives",
+  "standard",
+] as const;
+
 /** What an entry DOES. The Engine does not act on it in this slice: it validates it and the client
  *  shows one compact line. A later combat bridge turns it into the Engine's own `CombatSkill`, so
  *  the vocabulary is closed and strict, and a typo is refused now rather than ignored then. */
 const catalogMechanicsSchema = z
   .object({
-    kind: z.enum(["attack", "heal", "buff", "debuff", "utility"]),
+    kind: z.enum(["attack", "heal", "buff", "debuff", "utility", "rider"]),
     /** In the catalog's own distance unit. 0 is self or touch. */
     range: z.number().finite().min(0).optional(),
     area: z
@@ -796,9 +864,38 @@ const catalogMechanicsSchema = z
       .object({ actions: z.array(combatStandardActionSchema).min(1).max(6), budget: sheetId })
       .strict()
       .optional(),
+    /** What this adds to the first qualifying hit of a period, all by itself. */
+    rider: catalogRiderSchema.optional(),
   })
   .strict()
   .superRefine((mechanics, ctx) => {
+    // A rider and the kind that says it is one always come together: one without the other is an
+    // entry that either does nothing or says it is passive and then asks to be taken.
+    if (mechanics.rider && mechanics.kind !== "rider") {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["kind"],
+        message: 'An entry with a rider is of the kind "rider"',
+      });
+    }
+    if (mechanics.kind === "rider") {
+      if (!mechanics.rider) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["rider"],
+          message: 'A "rider" entry says what its rider does',
+        });
+      }
+      for (const key of RIDER_ENTRY_FORBIDS) {
+        if (mechanics[key] !== undefined) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: [key],
+            message: "A rider is passive: nobody takes it, so it carries nothing that would be taken",
+          });
+        }
+      }
+    }
     // A second amount needs a first one to ride: a blow made of nothing but clauses would be an
     // amount written in the one place nothing reads it.
     if (mechanics.plus && !mechanics.amount) {
@@ -1054,6 +1151,23 @@ const creatureActionSchema = z
     }
   });
 
+/** How many riders one creature may carry. Four, for the same reason a blow carries three clauses:
+ *  past that nobody at a table could hold the creature in their head. */
+export const RULESET_CREATURE_MAX_RIDERS = 4;
+
+/** A rider a creature carries. The same shape a catalog entry's is, with the two keys that read a
+ *  character sheet's own lists swapped for the one thing a block has: its own action ids. */
+const creatureRiderSchema = z
+  .object({
+    id: sheetId,
+    name: promptSafeText(80),
+    ...riderCoreShape,
+    /** The actions of this same block it fires on. Without it, any hit this creature lands. */
+    actions: z.array(sheetId).min(1).max(RULESET_CREATURE_MAX_ACTIONS).optional(),
+  })
+  .strict()
+  .superRefine(riderAmountIssue);
+
 /** Exported because an opponent may also arrive from outside a catalog: a Game Master's proposal
  *  for one fight is checked against exactly this shape before it is clamped onto the scale. */
 export const rulesetCreatureSchema = z
@@ -1085,6 +1199,8 @@ export const rulesetCreatureSchema = z
     /** Points given back at the start of its own turn, spent on `signature` actions. */
     signaturePoints: z.number().int().min(1).max(20).optional(),
     actions: z.array(creatureActionSchema).min(1).max(RULESET_CREATURE_MAX_ACTIONS),
+    /** What this creature adds to the first qualifying hit of a period, all by itself. */
+    riders: z.array(creatureRiderSchema).min(1).max(RULESET_CREATURE_MAX_RIDERS).optional(),
   })
   .strict()
   .superRefine((creature, ctx) => {
@@ -2665,7 +2781,7 @@ function creatureIssues(
       }
     });
     action.sequence?.forEach((step, stepIndex) => {
-      const where = [...path, "sequence", stepIndex, "action"];
+      const where: (string | number)[] = [...path, "sequence", stepIndex, "action"];
       const named = byId.get(step.action);
       if (!named) return add(where, `Unknown action "${step.action}"`);
       if (named.id === action.id) return add(where, "A sequence cannot name itself");
@@ -2675,6 +2791,20 @@ function creatureIssues(
       // A signature action is bought with points while somebody else is acting. Inside a sequence it
       // would be had for a budget on the creature's own turn, which is neither.
       if (named.signature) add(where, `"${step.action}" is bought with points, so a sequence cannot name it`);
+    });
+  });
+
+  // Every rider names this block's own actions and this ruleset's own damage types.
+  const riderIds = new Set<string>();
+  creature.riders?.forEach((rider, index) => {
+    const path = [...at, "riders", index];
+    if (riderIds.has(rider.id)) add([...path, "id"], `Duplicate rider id "${rider.id}"`);
+    riderIds.add(rider.id);
+    if (rider.type && damageTypes && !damageTypes.has(rider.type.trim().toLowerCase())) {
+      add([...path, "type"], `Unknown damage type "${rider.type}"`);
+    }
+    rider.actions?.forEach((id, actionIndex) => {
+      if (!byId.has(id)) add([...path, "actions", actionIndex], `Unknown action "${id}"`);
     });
   });
 }
@@ -2837,6 +2967,32 @@ export function rulesetCatalogEntryIssues(
         add([index, "mechanics", "gives", giftIndex, "budget"], `Unknown budget "${gift.budget}"`);
       }
     });
+    // A rider names the attack lists it comes off and, when it is choosier still, one column of
+    // their rows. Both are the combat block's own words, and a name it does not have would be a
+    // rider that silently never fired.
+    if (mechanics?.rider && definition.combat) {
+      const path = [index, "mechanics", "rider"];
+      const attackLists = new Set((definition.combat.attacks ?? []).map((source) => source.list));
+      mechanics.rider.sources?.forEach((list, listIndex) => {
+        if (!attackLists.has(list)) {
+          add([...path, "sources", listIndex], `"${list}" is not one of this ruleset's attack lists`);
+        }
+      });
+      const column = mechanics.rider.requires?.column;
+      if (column !== undefined) {
+        const named = mechanics.rider.sources ?? [...attackLists];
+        const holders = named.filter((list) => listById.get(list)?.columns.some((entry) => entry.id === column));
+        if (holders.length === 0) {
+          add([...path, "requires", "column"], `No attack list this rider reads has a column "${column}"`);
+        }
+      }
+      const types = definition.combat.damageTypes
+        ? new Set(definition.combat.damageTypes.map((type) => type.trim().toLowerCase()))
+        : null;
+      if (mechanics.rider.type && types && !types.has(mechanics.rider.type.trim().toLowerCase())) {
+        add([...path, "type"], `Unknown damage type "${mechanics.rider.type}"`);
+      }
+    }
     if (mechanics?.standard && definition.combat) {
       const path = [index, "mechanics", "standard"];
       if (!budgets?.has(mechanics.standard.budget)) {

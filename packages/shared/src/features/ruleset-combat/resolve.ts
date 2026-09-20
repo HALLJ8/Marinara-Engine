@@ -24,8 +24,10 @@ import {
 } from "./encounter.js";
 import {
   rulesetAreaCells,
+  rulesetCellDistance,
   rulesetCellEnterCost,
   rulesetOpportunityAttack,
+  rulesetPositionOf,
   rulesetStepLeavesReach,
   rulesetThreateningEnemies,
 } from "./grid.js";
@@ -62,6 +64,8 @@ import type {
   RulesetCombatEvent,
   RulesetCombatOption,
   RulesetCombatRefusal,
+  RulesetCombatRider,
+  RulesetCombatRollMode,
   RulesetCombatRoller,
   RulesetCombatStep,
   RulesetEncounterOutcome,
@@ -1091,6 +1095,53 @@ function grantBudgets(ctx: RulesetCombatContext, actor: RulesetCombatant, action
   }
 }
 
+/** Whether an ally of this one could help with a blow at that target: standing, able to act, and,
+ *  on a board, within one cell of the target. Without a board there is no distance to read, so any
+ *  ally still on their feet is beside them as far as the fight is concerned. */
+function allyAdjacent(ctx: RulesetCombatContext, actor: RulesetCombatant, target: RulesetCombatant): boolean {
+  const at = rulesetPositionOf(target);
+  const positioned = !!ctx.state.board?.grid && !!at;
+  return ctx.state.combatants.some((combatant) => {
+    if (combatant.id === actor.id || combatant.side !== actor.side) return false;
+    if (!rulesetCombatStanding(combatant)) return false;
+    if (rulesetCombatEffects(ctx.definition, ctx.combat, combatant).has("cannot-act")) return false;
+    if (!positioned) return true;
+    const cell = rulesetPositionOf(combatant);
+    return !!cell && rulesetCellDistance(cell, at!) <= 1;
+  });
+}
+
+/**
+ * The rider that adds itself to this blow, or null.
+ *
+ * The FIRST qualifying hit of the period takes it: a rider fires once, automatically, and choosing
+ * when to spend it is a window, which is a later slice. Marked as fired here, because the blow it
+ * joins is the one it fired on.
+ */
+function firingRider(
+  ctx: RulesetCombatContext,
+  actor: RulesetCombatant,
+  action: RulesetCombatAction,
+  target: RulesetCombatant,
+  mode: RulesetCombatRollMode,
+): RulesetCombatRider | null {
+  const spent = actor.ridersSpent ?? [];
+  for (const rider of actor.riders ?? []) {
+    if (rider.on !== "hit" || spent.includes(rider.id)) continue;
+    if (rider.actions && !rider.actions.includes(action.id)) continue;
+    // Any-of: one of the things it asked for being true is enough.
+    if (
+      rider.when?.length &&
+      !rider.when.some((when) => (when === "advantage" ? mode === "advantage" : allyAdjacent(ctx, actor, target)))
+    ) {
+      continue;
+    }
+    actor.ridersSpent = [...spent, rider.id];
+    return rider;
+  }
+  return null;
+}
+
 function resolveAction(
   ctx: RulesetCombatContext,
   actor: RulesetCombatant,
@@ -1125,8 +1176,11 @@ function resolveAction(
   for (const target of targets) {
     let landed = true;
     let critical = false;
+    // How the roll finally leaned, which is one of the things a rider may ask about. An action
+    // nobody rolls for leaned no way at all.
+    let mode: RulesetCombatRollMode = "normal";
     if (action.toHit !== undefined && !action.autoHit) {
-      const mode = rulesetAttackMode(ctx.definition, ctx.combat, actor, target, {
+      mode = rulesetAttackMode(ctx.definition, ctx.combat, actor, target, {
         state: ctx.state,
         optionId: action.id,
       });
@@ -1222,6 +1276,25 @@ function resolveAction(
         });
       });
     }
+    // And whatever adds itself to a hit without anybody choosing it: one more clause of this blow,
+    // doubled by a critical exactly as the rest of it is.
+    const rider = firingRider(ctx, actor, action, target, mode);
+    if (rider) {
+      ctx.events.push({ type: "rider", actorId: actor.id, targetId: target.id, riderId: rider.id, label: rider.label });
+      const rolled = rollAmount(ctx, rider.amount);
+      const bonus = critical ? criticalExtra(ctx, rider.amount) : { rolls: [], flat: 0 };
+      const total = rolled.total + sumOf(bonus.rolls) + bonus.flat;
+      blow.push({
+        sourceId: actor.id,
+        label: rider.label,
+        ...((rider.type ?? action.damage?.type) ? { damageType: rider.type ?? action.damage?.type } : {}),
+        rolls: [...rolled.rolls, ...bonus.rolls],
+        flat: rolled.flat + bonus.flat,
+        amount: halved ? Math.floor(total / 2) : total,
+        ...(halved ? { saved: true } : {}),
+        ...(critical ? { critical: true } : {}),
+      });
+    }
     if (blow.length > 0) {
       const before = healthOf(ctx, target);
       let dealt = 0;
@@ -1260,6 +1333,16 @@ function resolveAction(
 }
 
 // ── Between turns ──
+
+/** The riders whose period has come round again. One that says "round" survives until the round
+ *  turns over; one that says "turn" is fresh at the start of every turn there is. */
+function clearSpentRiders(combatant: RulesetCombatant, freshRound: boolean): void {
+  if (!combatant.ridersSpent?.length) return;
+  const period = new Map((combatant.riders ?? []).map((rider) => [rider.id, rider.oncePer]));
+  const kept = combatant.ridersSpent.filter((id) => !freshRound && period.get(id) === "round");
+  if (kept.length > 0) combatant.ridersSpent = kept;
+  else delete combatant.ridersSpent;
+}
 
 /** The points a signature action is bought with, back to full at the start of their own turn: they
  *  are what this combatant can spend before their next one comes round. */
@@ -1344,6 +1427,10 @@ export function advanceRulesetTurn(
     for (const combatant of ctx.state.combatants) refreshRulesetBudgets(combat, combatant.budgets, "round");
     ctx.events.push({ type: "round", round });
   }
+  // A rider fires once in its period. "turn" is fresh at the start of every turn, whosever it is,
+  // so a strike made while somebody else is acting can still carry one; "round" waits for the round
+  // to turn over. Everybody's, because a rider fires on its holder's blow, not on their turn.
+  for (const combatant of ctx.state.combatants) clearSpentRiders(combatant, fresh);
 
   const actor = currentRulesetActor(ctx.state);
   if (actor) {
