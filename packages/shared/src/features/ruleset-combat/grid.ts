@@ -219,12 +219,14 @@ function coneCells(
 // ── Moving ──
 
 /** The best melee attack this combatant has: the one with the most damage behind it that reaches
- *  rather than carries. Null when it has nothing to strike a passer-by with. */
+ *  rather than carries. Something thrown counts, because a thrown weapon is still swung in hand.
+ *  Null when it has nothing to strike a passer-by with. */
 export function rulesetOpportunityAttack(combatant: RulesetCombatant): RulesetCombatAction | null {
   let best: RulesetCombatAction | null = null;
   let most = -1;
   for (const action of combatant.actions) {
-    if (action.range || action.area || action.signature || action.sequence || !action.damage) continue;
+    if (action.reach === undefined && action.range) continue;
+    if (action.area || action.signature || action.sequence || !action.damage) continue;
     // The same bookkeeping the menu keeps: a strike that has run out of uses, or is waiting for its
     // dice, is not one to be made in passing either. (Written out rather than imported, because the
     // menu's own module reads this one.)

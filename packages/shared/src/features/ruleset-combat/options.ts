@@ -63,6 +63,9 @@ export interface RulesetOptionReach {
   normal: number;
   /** Whether it is a shot rather than a swing, which is what the ranged rules read. */
   shot: boolean;
+  /** How far it still SWINGS, for something that both swings and is thrown: inside this it is a
+   *  swing whatever `shot` says, and the ranged rules do not read it. Zero for a pure shot. */
+  swing: number;
 }
 
 /** The actor's own action behind an option id, when the option is one of theirs. */
@@ -87,15 +90,25 @@ export function rulesetOptionReach(
   const actor = rulesetCombatant(state, actorId);
   if (!actor) return null;
   const action = actionOf(actor, optionId);
-  if (!action) return { max: 1, normal: 1, shot: false };
+  if (!action) return { max: 1, normal: 1, shot: false, swing: 1 };
   if (action.area) {
     // An area is aimed at a cell rather than at anybody, and one with no distance of its own reaches
     // as far as the shape it draws.
     const max = action.range?.long ?? action.range?.normal ?? action.area.size;
-    return { max, normal: action.range?.normal ?? max, shot: true };
+    return { max, normal: action.range?.normal ?? max, shot: true, swing: 0 };
   }
-  if (action.range) return { max: action.range.long ?? action.range.normal, normal: action.range.normal, shot: true };
-  return { max: Math.max(1, action.reach ?? 1), normal: Math.max(1, action.reach ?? 1), shot: false };
+  if (action.range) {
+    // Something that carries a reach AS WELL is a thrown weapon: a swing in hand, a shot beyond.
+    const swing = action.reach !== undefined ? Math.max(1, action.reach) : 0;
+    return {
+      max: Math.max(action.range.long ?? action.range.normal, swing),
+      normal: action.range.normal,
+      shot: true,
+      swing,
+    };
+  }
+  const reach = Math.max(1, action.reach ?? 1);
+  return { max: reach, normal: reach, shot: false, swing: reach };
 }
 
 /** Why this combatant cannot be pointed at from where the actor stands, or null when they can.
@@ -580,8 +593,10 @@ function distanceModes(
   const adjacent = away <= 1;
   const reach = rulesetOptionReach(state, actor.id, optionId);
   const ranged = combat.ranged;
-  const tooFar = !!ranged && ranged.long === "disadvantage" && !!reach?.shot && away > reach.normal;
-  const crowded = !!ranged && ranged.adjacentFoe === "disadvantage" && !!reach?.shot && foeAdjacent(state, actor, from);
+  // A thrown weapon used in hand is a swing, so neither ranged rule reads it there.
+  const thrown = !!reach?.shot && away > (reach?.swing ?? 0);
+  const tooFar = !!ranged && ranged.long === "disadvantage" && thrown && away > reach!.normal;
+  const crowded = !!ranged && ranged.adjacentFoe === "disadvantage" && thrown && foeAdjacent(state, actor, from);
   return {
     advantage: adjacent && theirs.has("attacks-against-adjacent-advantage"),
     disadvantage: tooFar || crowded || (!adjacent && theirs.has("attacks-against-far-disadvantage")),

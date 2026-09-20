@@ -795,9 +795,14 @@ ordinary sword sits in the same list as a thrown axe. A row with no reach at all
 A creature action uses its own `reach` or `range`, and a catalog ability uses `mechanics.range`
 (0 is self or touch, which is one cell when it is aimed at somebody else).
 
+A row with BOTH is a thrown weapon: inside its reach it is a swing, beyond it a shot. So the rules
+below for a shot do not touch it in somebody's hand, and it is something to strike a passer-by with,
+which a bow is not.
+
 `ranged` says what a shot costs when it is taken past its ordinary `normal` distance, or with
 somebody on the other side in the next cell. Each is `"disadvantage"` or `"normal"`; leave the block
-out and neither costs anything. A swing is never a shot, so neither rule touches it.
+out and neither costs anything. A swing is never a shot, so neither rule touches it, and neither
+does a thrown weapon used within its own reach.
 
 **Areas.** An entry's `mechanics.area` becomes a real shape on the board, aimed at a cell rather
 than at anybody, and `targetCount` says nothing about it: the shape decides how many it reaches.

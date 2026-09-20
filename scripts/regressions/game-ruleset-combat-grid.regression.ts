@@ -40,6 +40,7 @@ import {
   rulesetInCells,
   rulesetLineOfSight,
   rulesetMovementAllowance,
+  rulesetOpportunityAttack,
   rulesetOptionTargets,
   rulesetReachableCells,
   rulesetSheetBuildSchema,
@@ -591,6 +592,38 @@ const cellsOf = (cells: Array<{ x: number; y: number }>) =>
   assert.equal(firstOf(shoot(null, 5), "attack").mode, "normal", "inside the ordinary range and nobody near");
   assert.equal(firstOf(shoot(null, 12), "attack").mode, "disadvantage", "past thirty feet");
   assert.equal(firstOf(shoot({ x: 1, y: 0 }, 5), "attack").mode, "disadvantage", "a foe in the next square");
+  // A thrown weapon is a swing in the hand and a shot beyond it: the javelin carries a reach AND a
+  // range, so used on the foe in the next square neither ranged rule reads it.
+  const inHand = fight(fiveE, [fighter(), snag(), mote("far", "Far mote")], [12, 9, 3], {
+    grid: open(8, 1),
+    placements: { brenna: { x: 0, y: 0 }, snag: { x: 1, y: 0 }, far: { x: 4, y: 0 } },
+  });
+  const javelin = optionNamed(fiveE, inHand, "brenna", "Javelin");
+  assert.equal(
+    firstOf(
+      act(fiveE, inHand, { actorId: "brenna", optionId: javelin.id, targetIds: ["snag"] }, 18, 3, 4, 5, 6, 2).events,
+      "attack",
+    ).mode,
+    "normal",
+    "a javelin in the hand is swung, not thrown, so the foe holding it is not in its own way",
+  );
+  assert.equal(
+    firstOf(
+      act(fiveE, inHand, { actorId: "brenna", optionId: javelin.id, targetIds: ["far"] }, 18, 3, 4, 5, 6, 2).events,
+      "attack",
+    ).mode,
+    "disadvantage",
+    "and thrown past that same foe it is a shot with somebody at the thrower's elbow",
+  );
+  // And it is something to strike a passer-by with: somebody carrying nothing but a javelin still
+  // swings at one going by, where somebody carrying nothing but a bow has nothing to swing.
+  const carrying = (label: string) => ({
+    ...who(inHand, "brenna"),
+    actions: who(inHand, "brenna").actions.filter((action) => action.label === label),
+  });
+  assert.equal(rulesetOpportunityAttack(carrying("Javelin"))?.label, "Javelin");
+  assert.equal(rulesetOpportunityAttack(carrying("Fire Bolt")), null, "and a spell shot at range is not one");
+
   // A touch is not a shot either: an ability whose range is 0 reaches the next cell and no further,
   // and the foe it is laid on does not make it harder.
   const touching = fight(fiveE, [wizard(), snag(), mote("far", "Far mote")], [12, 9, 3], {
@@ -1161,9 +1194,12 @@ const cellsOf = (cells: Array<{ x: number; y: number }>) =>
   // easier from the next square and harder from four away.
   assert.equal(firstOf(strike("Longsword", "prone", 1, 12, 3, 4), "attack").mode, "advantage");
   assert.equal(firstOf(strike("Javelin", "prone", 4, 12, 3, 4), "attack").mode, "disadvantage");
-  // A throw at a prone target in the next square is both at once, and the two cancel, exactly as
-  // every other pair of advantage and disadvantage in this kind does.
-  assert.equal(firstOf(strike("Javelin", "prone", 1, 12, 4), "attack").mode, "normal");
+  // A javelin used on somebody in the next square is SWUNG, not thrown, so the only thing the roll
+  // reads there is the target being on the ground.
+  assert.equal(firstOf(strike("Javelin", "prone", 1, 12, 3, 4), "attack").mode, "advantage");
+  // Thrown past its ordinary range at somebody who cannot move is both at once, and the two cancel,
+  // exactly as every other pair of advantage and disadvantage in this kind does.
+  assert.equal(firstOf(strike("Javelin", "paralyzed", 8, 12, 4), "attack").mode, "normal");
   // "paralyzed" says a blow from the next square always tells. It also gives advantage, so the pair
   // of dice is rolled, and this ruleset's critical rolls the damage dice twice.
   const critical = firstOf(strike("Longsword", "paralyzed", 1, 12, 3, 4, 5), "attack");
