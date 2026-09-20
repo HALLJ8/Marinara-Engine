@@ -4,6 +4,17 @@ This file is the release-notes source of truth for Marinara Engine. Reuse these 
 
 ## [Unreleased]
 
+- Roleplay World tracker temperature and weather controls sit beside the date/time controls, with space reserved for their values on mobile and desktop (#6424).
+- Roleplay dice instructions keep optional DCs and situational modifiers inside the command or tool arguments instead of announcing them in narration (#6425).
+
+- The Inventory Tracker browser regression waits for its editing modes and disables the toolbar opening animation, avoiding missed clicks on clipped controls in CI (#6421).
+
+- Downloaded packages using the bundled Claude Agent SDK can resolve the host's installed native CLI helper, including pnpm and container installs; managed links refresh after SDK updates (#6403).
+
+- Automatic output translation finishes and saves on the server even after the page closes, including rewritten replies, individual swipes, and replies saved before a later processing error; completion alerts wait for the saved result while the next send remains available. Returning to a chat refreshes older cached translations even when its cached settings are stale, and older Game narration can still translate after unrelated server work finishes. Malformed Game command tags no longer cause repeated scans while preparing narration for translation (#6412).
+
+- Desktop chat, character, and persona drags allow normal mouse-wheel scrolling while holding an item, retain chat assignment and folder drops, and cancel with Escape. The browser regression uses the same mouse flow without hanging in native drag mode (#6413, #6399).
+
 - Roleplay dice commands accept an optional situational bonus or penalty and DC, combine the adjustment with the automatic attribute bonus, and show the DC on the existing dice card (#6417).
 
 - A Game Mode turn on a ruleset that resolves its own fights can now do what a turn at a table does. One blow may carry several kinds of harm at once, each part rolled, typed, resisted and saved against on its own while the whole blow is still one check against concentration and one check for going down. One spend of an action can buy several strikes, and while any are left the menu offers them free and says how many are in hand, so a different weapon, a different target and a walk between them all just work. An ability can cost nothing, hand a second action back for this turn only, or let its holder dash, disengage or hide with a smaller part of the turn. Something a character always does, such as extra damage on the first telling blow of a turn, adds itself without being chosen and says so in the log. And a condition can make the holder's own saves harder or easier, halve every kind of harm, keep them from turning on or walking any nearer to whoever put it on them, count only while that somebody is in sight, or lift the moment they go down. The catalog picker says what each of these does before you take it, so an ability whose whole point is that it costs nothing, or hands an action back, no longer reads as a bare word. The 5e example and Ember Roads both use the new keys; ruleset packages that carry any of them need Capability API 1.29, and a ruleset that declares none of them, or a game with no ruleset, fights exactly as it did.
