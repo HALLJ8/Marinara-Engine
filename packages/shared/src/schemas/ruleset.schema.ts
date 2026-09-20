@@ -1225,13 +1225,12 @@ const battlePoolSchema = z.object({ pool: sheetId }).strict();
  *  so every rule that already asks "is this combatant still above zero" keeps its own words. */
 const combatHealthSchema = z.union([battlePoolSchema, z.object({ track: sheetId }).strict()]);
 
-/** How a fight's damage TYPE becomes a kind of mark on a wound track. Declared rather than assumed,
- *  because only the ruleset knows whether its fire is a bruise or a wound, and `default` is what
- *  anything unmapped lands as, including a blow that carries no type at all. */
 /**
  * How a fight's damage reaches a wound track: which kind of harm it is, and how a rolled amount
- * becomes marks. `marks` has no safe default, because the two answers are opposite and each is
- * right for half the systems: where a damage roll counts health levels, a blow for three ticks
+ * becomes marks. Declared rather than assumed, because only the ruleset knows whether its fire is a
+ * bruise or a wound, and `default` is what anything unmapped lands as, including a blow that carries
+ * no type at all. `marks` has no safe default either, because the two answers are opposite and each
+ * is right for half the systems: where a damage roll counts health levels, a blow for three ticks
  * three boxes (`per-point`); where a blow either lands or does not, it ticks one however hard it
  * hit (`per-blow`). A ruleset says which, rather than the Engine guessing.
  */
@@ -2399,7 +2398,10 @@ function refineRulesetDefinition(def: RulesetDefinitionBase, ctx: z.RefinementCt
 
     const damageTypes = new Set<string>();
     combat.damageTypes?.forEach((type, index) => {
-      const key = type.toLowerCase();
+      // Trimmed as well as lowered, which is how a creature's resistances and a fight's own lookup
+      // read a type: a declaration written with a stray space would otherwise be a type nothing
+      // could name, including the block's own `damageKinds.byType`.
+      const key = type.trim().toLowerCase();
       if (damageTypes.has(key)) issue(at("damageTypes", index), `Duplicate damage type "${type}"`);
       damageTypes.add(key);
     });

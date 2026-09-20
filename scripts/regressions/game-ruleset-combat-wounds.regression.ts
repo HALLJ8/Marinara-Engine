@@ -497,6 +497,17 @@ const marksOf = (definition: RulesetDefinition, state: RulesetEncounterState, id
   refuse((doc) => {
     doc.combat.damageKinds.byType = { cut: "cut", Cut: "bruise" };
   }, /Duplicate damage type "Cut"/);
+  // And the same rule read the other way: a declared type with a stray space is the type the fight
+  // will match, so a mapping that names it plainly is not called unknown.
+  {
+    const spaced = parseRulesetDefinition(
+      trackDocument((doc) => {
+        doc.combat.damageTypes = [" Cut ", "burn", "crush"];
+        doc.combat.damageKinds.byType = { cut: "cut" };
+      }),
+    );
+    assert.ok(spaced.ok, `a padded declaration is still that type: ${spaced.ok ? "" : spaced.issues.join("; ")}`);
+  }
 
   // And the other way: a mapping with nothing to map onto.
   {
