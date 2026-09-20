@@ -104,7 +104,7 @@ function trackDocument(edit: (doc: Record<string, any>) => void = () => {}): Rec
   doc.combat.health = { track: "harm" };
   // The types this example's own creatures already deal, so the mapping is checked against a real
   // list rather than an invented one.
-  doc.combat.damageTypes = ["cut", "burn", "crush"];
+  doc.combat.damageTypes = ["cut", "burn", "crush", "coldfire", "rust"];
   doc.combat.damageKinds = { default: "bruise", byType: { cut: "cut" }, marks: "per-blow" };
   // The `battle` block still names the pool, so the two seams are proven apart before they are
   // proven together.
@@ -321,6 +321,52 @@ const marksOf = (definition: RulesetDefinition, state: RulesetEncounterState, id
   assert.equal(rulesetCombatHealth(wounded, wounded.combat!, who(after.state, "juno")).value, 0);
 }
 
+// A blow's extra clauses remain ONE wound in per-blow mode; the most severe landed kind wins.
+for (const marks of ["per-blow", "per-point"] as const) {
+  for (const reverse of [false, true]) {
+    const definition = parsedOrThrow(
+      trackDocument((doc) => (doc.combat.damageKinds.marks = marks)),
+      `multiple damage clauses with ${marks} wounds`,
+    );
+    const foe = hound("ash", "Ash-hound");
+    const state = createRulesetEncounter({
+      definition,
+      seed: 4242,
+      combatants: [
+        traveller(),
+        pell(),
+        {
+          ...foe,
+          block: {
+            ...foe.block,
+            actions: [
+              {
+                ...foe.block.actions[0]!,
+                damage: {
+                  flat: 1,
+                  type: reverse ? "cut" : "crush",
+                  plus: [{ flat: 1, type: reverse ? "crush" : "cut" }],
+                },
+              },
+            ],
+          },
+        },
+      ],
+      roller: dice(1, 1, 1, 1, 6, 6),
+    });
+    const claw = rulesetCombatOptions(definition, state, "ash").find((option) => option.label === "Claw")!;
+    const hit = applyRulesetCombatChoice(
+      definition,
+      state,
+      { actorId: "ash", optionId: claw.id, targetIds: ["juno"] },
+      dice(6, 6),
+    );
+    assert.deepEqual(marksOf(definition, hit.state, "juno").marks, marks === "per-blow" ? ["cut"] : ["cut", "bruise"]);
+    assert.equal(eventsOf(hit.events, "damage").length, 2, "both amounts remain visible in the record");
+    assert.equal(eventsOf(hit.events, "damage").at(-1)!.health, marks === "per-blow" ? 2 : 1);
+  }
+}
+
 // ── A blow that does not land marks nothing ──
 {
   // Worth saying where it is true: a hide of resistances, vulnerabilities and immunities lives on a
@@ -502,7 +548,7 @@ const marksOf = (definition: RulesetDefinition, state: RulesetEncounterState, id
   {
     const spaced = parseRulesetDefinition(
       trackDocument((doc) => {
-        doc.combat.damageTypes = [" Cut ", "burn", "crush"];
+        doc.combat.damageTypes = doc.combat.damageTypes.map((type: string) => (type === "cut" ? " Cut " : type));
         doc.combat.damageKinds.byType = { cut: "cut" };
       }),
     );

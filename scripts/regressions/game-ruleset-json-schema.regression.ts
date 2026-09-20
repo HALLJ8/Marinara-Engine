@@ -64,7 +64,12 @@ assert.equal(
     if (!node || typeof node !== "object") return;
     const object = node as { properties?: Record<string, unknown> } & Constrained;
     const keys = Object.keys(object.properties ?? {}).filter((key) => key !== "$comment");
-    if (keys.length === 3 && ["dice", "flat", "type"].every((key) => keys.includes(key))) damageNodes.push(object);
+    // A blow and every clause beside it: the three an amount always carries, plus the two a blow or
+    // a clause may carry and nothing else.
+    const damageShaped =
+      ["dice", "flat", "type"].every((key) => keys.includes(key)) &&
+      keys.every((key) => ["dice", "flat", "type", "plus", "save"].includes(key));
+    if (damageShaped) damageNodes.push(object);
     if (checkKeys.every((key) => keys.includes(key))) checkNodes.push(object);
     Object.values(node).forEach(walk);
   };

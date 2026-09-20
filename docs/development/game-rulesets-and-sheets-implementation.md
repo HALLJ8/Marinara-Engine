@@ -1,6 +1,6 @@
 # Game Mode rulesets and ruleset character sheets: implementation handoff
 
-Status: in progress. Written September 18, 2026 against `staging` at `459f8b85` (v2.4.6). Slice 1 (the shared schema, the pin, the registry and Capability API 1.20) slice 2 (the `dice-sum` resolver, `who=`, and the Game Master reminder swap) slice 3 (sheets on cards and personas) slice 4 (the Rules choice, the pin at creation, copy-at-setup and setup sharing) slice 5 (the in-game sheet, live state and the `[sheet:]` command) slice 7a (the community lanes) slice 8a (the catalog format, its route and Capability API 1.21) the combat bridge (the `battle` block, the shared helpers and Capability API 1.22) slice 8c (scaled catalog values, the `use` command, Refresh from ruleset and Capability API 1.23) slice 7b (the `dice-pool` resolution kind, the `with=`, `threshold=` and `bonus=` tag attributes and Capability API 1.24) layers L1 (variants a ruleset ships in its own file, the wizard's layer toggles, the `gm.worldGuidance` slot and Capability API 1.25) and real ruleset combat C1 (the `combat` block, the pure resolver, the mechanics additions and Capability API 1.26; shared only, nothing playable yet) are implemented, client half included where there is one; every later slice is still a proposal. § Format decisions records where the implemented format differs from the first draft and why. It complements `game-combat-rulesets-implementation.md` (the combat handoff). Where the two differ, § Relationship to the combat handoff says so and asks for sign-off rather than quietly overriding it.
+Status: in progress. Written September 18, 2026 against `staging` at `459f8b85` (v2.4.6). Slice 1 (the shared schema, the pin, the registry and Capability API 1.20) slice 2 (the `dice-sum` resolver, `who=`, and the Game Master reminder swap) slice 3 (sheets on cards and personas) slice 4 (the Rules choice, the pin at creation, copy-at-setup and setup sharing) slice 5 (the in-game sheet, live state and the `[sheet:]` command) slice 7a (the community lanes) slice 8a (the catalog format, its route and Capability API 1.21) the combat bridge (the `battle` block, the shared helpers and Capability API 1.22) slice 8c (scaled catalog values, the `use` command, Refresh from ruleset and Capability API 1.23) slice 7b (the `dice-pool` resolution kind, the `with=`, `threshold=` and `bonus=` tag attributes and Capability API 1.24) layers L1 (variants a ruleset ships in its own file, the wizard's layer toggles, the `gm.worldGuidance` slot and Capability API 1.25) and real ruleset combat C1 (the `combat` block, the pure resolver, the mechanics additions and Capability API 1.26) C2 (bestiaries, creature actions and the threat clamp, Capability API 1.27) C3a (the combat director that resolves a fight on the server's own ledger) C3b (that fight played on screen in the ruleset's own words) C4a (positions, reach and range, areas, cover and opportunity strikes, Capability API 1.28) C4b (the fight drawn on the battlefield) and C5a (what one turn can do: a second damage clause, several strikes for one budget, abilities that change the economy, riders, the new condition effects and Capability API 1.29) are implemented, client half included where there is one; the slices after C5a are still proposals. § Format decisions records where the implemented format differs from the first draft and why. It complements `game-combat-rulesets-implementation.md` (the combat handoff). Where the two differ, § Relationship to the combat handoff says so and asks for sign-off rather than quietly overriding it.
 
 Companion file: [`ruleset-5e-2014.example.json`](ruleset-5e-2014.example.json), the first ruleset definition, the precise statement of what "the whole sheet" means, and the file the slice 1 regression validates. The authority for the format is the zod schema in `packages/shared/src/schemas/ruleset.schema.ts`.
 
@@ -452,6 +452,50 @@ additions below are fields nothing outside the Engine writes.
   decision above for every combination, and the recap from a real summary) and in a third mode of
   `e2e/game-combat-director.e2e.ts` that imports Ember Roads through the real route and plays a
   fight on it.
+
+### What C5a settled
+
+C5a is what one TURN can do, on the shared and server sides. Everything in it is additive and
+optional, and a ruleset that declares none of it resolves byte for byte as it did.
+
+- **A blow may be several amounts.** `mechanics.plus` on a catalog entry and `damage.plus` on a
+  creature action are up to three clauses, each rolled and typed on its own, each answered by the
+  target's own hide on its own, each doubled by a critical on its own, and each able to ask the
+  TARGET for a save of its own (`onSuccess: "none"` leaves nothing of that clause, `"half"` leaves
+  half). The blow they make together is ONE check against concentration, with the summed damage,
+  and one check for going down. Forecasts, the threat clamp and the measured damage per round all
+  count the clauses; a save-gated clause is counted in full, because a forecast says what a blow
+  would do.
+- **Several strikes for one budget.** `combat.attacks[].strikes` is a value reference. The first
+  take spends the budget and puts the rest in `combatant.strikesLeft`; while any are in hand every
+  row of a list that declares `strikes` is offered at no budget cost, carrying `option.strikes` so
+  the menu can say what is left. Different weapons, different targets and a walk between them all
+  fall out of the menu with no special case. A list that buys one strike a spend puts nothing in
+  hand and emits no event, so today's logs are unchanged.
+- **Abilities that change the economy.** `mechanics.free` costs no budget, `mechanics.gives` adds
+  to budgets the moment it is used and caps where they land, and `mechanics.standard` offers named
+  standard actions as `standard:<id>@<budget>`, priced by the ability that granted them. A
+  `utility` entry that declares `gives` or `standard` is built as an action rather than dropped,
+  and one whose `standard` is all it has stays off the menu itself: a permission is not something
+  anybody takes.
+- **Riders.** A new catalog entry kind, `rider`, and a creature's own `riders[]`. Passive, never on
+  the menu, and one more clause of the first qualifying hit of the period. Which attacks it comes
+  off is resolved once when the fight begins, out of the attack lists it names and one truthy
+  column of their rows, so the resolution never re-reads a sheet. `oncePer: "turn"` is cleared at
+  the start of EVERY turn, whosever it is, so a strike made while somebody else is acting can carry
+  one.
+- **Condition vocabulary.** Five new effects, plus `saves` (which saves the two save effects are
+  about), `whileSourceInSight` (a gate over all of that condition's effects) and
+  `endsWhenSourceDown`. A tracked condition already recorded who applied it, so nothing new had to
+  be stored for the three source-bound ones.
+- **Proven** by the C5a block in `scripts/regressions/game-ruleset-combat-core.regression.ts` (the
+  refusals, the clauses, the strikes, the economy, the riders, the conditions, both examples, and a
+  fight compared event for event with the same fight on a ruleset carrying none of the keys) and
+  the board-only condition cases in `game-ruleset-combat-grid.regression.ts`.
+- **Left for C5b and later**: windows, so nothing interrupts a turn and a rider still fires by
+  itself; `on` has one value, `hit`. `combat.standard` stayed a closed list of plain strings,
+  because every ruleset that already ships one writes it that way; what a dodge does BEYOND being
+  harder to hit is said beside it instead, in `combat.standardEffects.dodge.saves`.
 
 ### What C4a settled
 

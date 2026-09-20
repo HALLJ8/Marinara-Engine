@@ -4,6 +4,8 @@ This file is the release-notes source of truth for Marinara Engine. Reuse these 
 
 ## [Unreleased]
 
+- Combined damage types mark one wound per hit on rulesets configured for one mark per blow, using the most severe landed kind.
+
 - Game wound sheets describe zero-penalty wounds accurately instead of calling a marked track unmarked.
 
 - Roleplay dice commands accept an optional situational bonus or penalty and DC, combine the adjustment with the automatic attribute bonus, and show the DC on the existing dice card (#6417).
@@ -18,6 +20,21 @@ This file is the release-notes source of truth for Marinara Engine. Reuse these 
 
 - A Game Mode ruleset can now have health that is a track of boxes rather than a number. A track on a character sheet can be given levels, each with its own name and its own penalty, and kinds of harm that a mark can be, such as a bruise and a cut. Marks sit on the track worst first, so a worse one takes the higher box and pushes lighter ones down; the penalty in force is the one on the lowest marked box, never the sum of them; marking a full track makes its lightest mark worse instead of adding one; and anything that still cannot land is counted and kept, so a reload does not forget it. Healing clears the lightest marks first. The sheet draws the track as its boxes, each saying what it is, what it costs and what is on it, and the player can mark and clear them by hand, with the penalty in force said once in words. That penalty now reaches the dice: a ruleset names the track it applies to, and a check takes that many dice off the pool, never below the ruleset's own minimum, or applies it as a flat modifier on a summed roll, and the result says what was applied. The Gravewatch example in the authoring guide gains a short track of its own. Ruleset packages with wound tracks need Capability API 1.30; a fight resolved by a ruleset's own combat block can point its health at such a track, which is the entry above, and rulesets whose tracks are plain numbers are unchanged.
 
+- Atlas Cloud video connections show a **Model options** section under **Video Defaults** with every input the selected model has beyond clip length, aspect ratio, and resolution, such as negative prompt, seed, audio, shot type, prompt expansion, and LoRA lists. Each option shows Atlas Cloud's description and default, stays unsent until changed, and is saved per model. Switching models hides the old controls until the selected schema loads; ordinary field names such as `prototype` are preserved and object inputs are validated. The section also lists the clip lengths and resolutions the model accepts and warns when a text-to-video model cannot use the gallery image (#6408).
+- **Fetch Models** on an Atlas Cloud image or video connection loads Atlas Cloud's current catalog instead of a fixed starter list. Video models list image-to-video first and show their starting price per second; the starter list remains the fallback when the catalog cannot be reached (#6408).
+- Atlas Cloud scene videos fit each request to the selected model's published input schema: the source illustration goes to the image field the model declares, resolution and aspect ratio become a `size` where the model requires one, clip length snaps to a length the model offers, and fields the model does not declare are left out. **Test Video** supplies a plain first frame to image-to-video models, and the server log reports when a text-to-video model cannot use the source illustration (#6408).
+- Roleplay World tracker temperature and weather controls sit beside the date/time controls, with space reserved for their values on mobile and desktop (#6424).
+- Roleplay dice instructions keep optional DCs and situational modifiers inside the command or tool arguments instead of announcing them in narration (#6425).
+
+- The Inventory Tracker browser regression waits for its editing modes and disables the toolbar opening animation, avoiding missed clicks on clipped controls in CI (#6421).
+
+- Downloaded packages using the bundled Claude Agent SDK can resolve the host's installed native CLI helper, including pnpm and container installs; managed links refresh after SDK updates (#6403).
+
+- Automatic output translation finishes and saves on the server even after the page closes, including rewritten replies, individual swipes, and replies saved before a later processing error; completion alerts wait for the saved result while the next send remains available. Returning to a chat refreshes older cached translations even when its cached settings are stale, and older Game narration can still translate after unrelated server work finishes. Malformed Game command tags no longer cause repeated scans while preparing narration for translation (#6412).
+
+- Desktop chat, character, and persona drags allow normal mouse-wheel scrolling while holding an item, retain chat assignment and folder drops, and cancel with Escape. The browser regression uses the same mouse flow without hanging in native drag mode (#6413, #6399).
+
+- Game Mode ruleset combat supports multi-strike turns, several damage types per hit, action-granting abilities, automatic damage riders and additional condition effects. Catalog previews explain these mechanics before selection. Packages using the new keys require Capability API 1.29; see the [ruleset authoring guide](docs/extending/writing-rulesets.md).
 - The Roleplay swipe media regression follows the continuation behavior shipped in #6396, so the node regression lane passes again on `staging`.
 
 - Roleplay `/continue` and `/cont` display their streamed text inside the original reply, preserving its existing content and newline preference; an empty send still creates a separate reply (#6394).

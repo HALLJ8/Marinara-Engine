@@ -29,7 +29,13 @@
 //     picks from, which is what the enemy's own turn will read.
 
 export * from "./types.js";
-export { parseRulesetCombatDice, rollRulesetDice, rulesetAverageAmount, rulesetCombatRoller } from "./dice.js";
+export {
+  parseRulesetCombatDice,
+  rollRulesetDice,
+  rulesetAverageAmount,
+  rulesetAverageDamage,
+  rulesetCombatRoller,
+} from "./dice.js";
 export {
   clampRulesetStatBlock,
   findRulesetCreature,
@@ -45,13 +51,16 @@ export {
   createRulesetEncounter,
   currentRulesetActor,
   refreshRulesetMovement,
+  rulesetActiveConditions,
   rulesetCombatant,
   rulesetCombatConditions,
   rulesetCombatEffects,
   rulesetCombatDamageKind,
+  rulesetCombatFailsSave,
   rulesetCombatHealth,
   rulesetCombatStanding,
   rulesetMovementAllowance,
+  rulesetSaveMode,
   type RulesetEncounterInput,
 } from "./encounter.js";
 export {
@@ -76,6 +85,9 @@ export {
   rulesetCostSteps,
   rulesetCriticalFromAdjacent,
   rulesetDefenseAgainst,
+  rulesetForbiddenTargets,
+  rulesetFreeStrike,
+  rulesetGrantedStandard,
   rulesetOptionReach,
   rulesetOptionTargets,
   rulesetHitChance,
@@ -84,6 +96,7 @@ export {
   rulesetSignatureOptions,
   rulesetStandCost,
   rulesetStandardBudget,
+  rulesetStandardName,
   rulesetTargetRefusal,
   RULESET_MOVE_OPTION,
   RULESET_STAND_OPTION,
