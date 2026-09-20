@@ -493,9 +493,9 @@ optional, and a ruleset that declares none of it resolves byte for byte as it di
   fight compared event for event with the same fight on a ruleset carrying none of the keys) and
   the board-only condition cases in `game-ruleset-combat-grid.regression.ts`.
 - **Left for C5b and later**: windows, so nothing interrupts a turn and a rider still fires by
-  itself; `on` has one value, `hit`. `combat.standard` stayed a closed list of plain strings, so
-  `dodge` cannot yet be told which saves it is about: giving it a shape would break every ruleset
-  that already ships one.
+  itself; `on` has one value, `hit`. `combat.standard` stayed a closed list of plain strings,
+  because every ruleset that already ships one writes it that way; what a dodge does BEYOND being
+  harder to hit is said beside it instead, in `combat.standardEffects.dodge.saves`.
 
 ### What C4a settled
 

@@ -2301,6 +2301,26 @@ const labels = (definition: RulesetDefinition, state: RulesetEncounterState, id:
       }
     }
 
+    // A permission that has run out is off the menu, and resolution has to agree: taking it through
+    // the exhausted ability is refused rather than quietly resolved through some other one.
+    {
+      const spent = structuredClone(state);
+      const holder = who(spent, "vess");
+      const permission = holder.actions.find((option) => option.standard)!;
+      holder.uses[permission.id] = 0;
+      permission.uses = { per: "encounter", count: 1 };
+      assert.equal(
+        rulesetCombatOptions(fiveE, spent, "vess").some((option) => option.id === "standard:dash@bonus"),
+        false,
+        "an ability with nothing left does not offer what it allows",
+      );
+      assert.deepEqual(
+        act(fiveE, spent, { actorId: "vess", optionId: "standard:dash@bonus", targetIds: [] }).events,
+        [{ type: "refused", actorId: "vess", optionId: "standard:dash@bonus", reason: "insufficient" }],
+        "and resolution refuses it for the same reason rather than finding another way",
+      );
+    }
+
     const step = act(fiveE, state, { actorId: "vess", optionId: "standard:dash@bonus", targetIds: [] });
     assert.deepEqual(
       step.events.map((event) => event.type),

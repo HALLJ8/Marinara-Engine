@@ -686,7 +686,12 @@ function spendAvailability(ctx: RulesetCombatContext, actor: RulesetCombatant, a
 }
 
 /** Why an option the caller named is not on the menu, as precisely as the rules can say. */
-function whyNotOffered(combat: RulesetCombat, actor: RulesetCombatant, optionId: string): RulesetCombatRefusal {
+function whyNotOffered(
+  definition: RulesetDefinition,
+  combat: RulesetCombat,
+  actor: RulesetCombatant,
+  optionId: string,
+): RulesetCombatRefusal {
   // The two a positioned fight adds. Off the menu, they are movement that cannot be paid for.
   if (optionId === RULESET_MOVE_OPTION || optionId === RULESET_STAND_OPTION) return "unreachable";
   const action = actor.actions.find((entry) => entry.id === optionId);
@@ -697,12 +702,20 @@ function whyNotOffered(combat: RulesetCombat, actor: RulesetCombatant, optionId:
     return "insufficient";
   }
   if (optionId.startsWith("standard:")) {
-    const granted = rulesetGrantedStandard(actor, optionId);
+    const granted = rulesetGrantedStandard(definition, actor, optionId);
     const standard = rulesetStandardName(optionId);
     if ((combat.standard ?? []).some((entry) => entry === standard)) {
       const budget = granted ? granted.budget : rulesetStandardBudget(combat);
-      // An `@budget` nobody's own ability grants is not a standard action this actor has at all.
-      if (optionId.includes("@") && !granted) return "unknown-option";
+      if (optionId.includes("@") && !granted) {
+        // Told apart, because they are different answers: an ability that grants this really is on
+        // the sheet but has nothing left or cannot pay, versus no such permission at all.
+        const spent = actor.actions.some(
+          (entry) =>
+            entry.standard?.budget === optionId.slice(optionId.indexOf("@") + 1) &&
+            entry.standard.actions.includes(standard),
+        );
+        return spent ? "insufficient" : "unknown-option";
+      }
       return (actor.budgets[budget] ?? 0) < 1 ? "no-budget" : "unknown-option";
     }
   }
@@ -746,7 +759,7 @@ export function applyRulesetCombatChoice(
     if (rulesetCombatEffects(definition, combat, actor, state).has("cannot-act")) {
       return refusal(state, choice.actorId, "cannot-act", choice.optionId);
     }
-    return refusal(state, choice.actorId, whyNotOffered(combat, actor, choice.optionId), choice.optionId);
+    return refusal(state, choice.actorId, whyNotOffered(definition, combat, actor, choice.optionId), choice.optionId);
   }
 
   // Walking, and getting back up: a positioned fight's own two options. Neither spends a budget.
@@ -791,7 +804,7 @@ export function applyRulesetCombatChoice(
   if (option.kind === "standard") {
     // A standard action an ability allowed is paid for as that ability is: the budget it named,
     // just spent, and whatever the ability itself costs off the sheet.
-    const granted = rulesetGrantedStandard(working, option.id);
+    const granted = rulesetGrantedStandard(definition, working, option.id);
     if (granted) {
       const price = planRulesetCombatCost(definition, working, granted.action);
       if (!price) return refusal(state, choice.actorId, "insufficient", option.id);

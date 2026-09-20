@@ -109,6 +109,7 @@ function grantedStandardOptions(
 /** The ability behind a `standard:<id>@<budget>` option, when one of the actor's own granted it.
  *  Null for an ordinary standard action, which no ability had to allow. */
 export function rulesetGrantedStandard(
+  definition: RulesetDefinition,
   actor: RulesetCombatant,
   optionId: string,
 ): { action: RulesetCombatAction; name: string; budget: string } | null {
@@ -117,8 +118,15 @@ export function rulesetGrantedStandard(
   if (at < 0) return null;
   const name = optionId.slice("standard:".length, at);
   const budget = optionId.slice(at + 1);
+  // The SAME ability the menu offered it under: one that has run out of uses, is waiting on its
+  // dice, or cannot pay its own price is not on the menu, so it must not be what resolution picks
+  // either, or a character with two permissions could take one through the other's exhausted half.
   const action = actor.actions.find(
-    (entry) => entry.standard?.budget === budget && entry.standard.actions.includes(name),
+    (entry) =>
+      entry.standard?.budget === budget &&
+      entry.standard.actions.includes(name) &&
+      rulesetActionAvailable(actor, entry) &&
+      !!planRulesetCombatCost(definition, actor, entry),
   );
   return action ? { action, name, budget } : null;
 }
