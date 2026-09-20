@@ -445,7 +445,9 @@ test("Combat director ruleset on a board: the walk, the log in paces, and the sw
   page,
   request,
 }, testInfo) => {
-  test.setTimeout(120000);
+  // Four waits run one after another here, and a walking loop between them, so the budget has to be
+  // more than their sum or a slow runner fails on arithmetic rather than on the thing being proven.
+  test.setTimeout(240000);
   // Ember Roads again, and this time positioned: it says a cell is two paces and a turn walks
   // eight of them, so four squares a turn. Nothing about this board is 5e shaped.
   const emberRoads = readFileSync(new URL("../docs/examples/rulesets/ember-roads.json", import.meta.url), "utf8");
@@ -610,7 +612,7 @@ test("Combat director ruleset on a board: the walk, the log in paces, and the sw
 
     // The board itself, one focusable square per cell, with the ruleset's own allowance beside it.
     const board = page.getByRole("group", { name: "Battlefield" });
-    await expect(board).toBeVisible({ timeout: 60000 });
+    await expect(board).toBeVisible({ timeout: 45000 });
     const token = page.locator('[data-combatant="juno"]');
     await expect(token).toBeVisible();
     const from = await token.getAttribute("data-cell");
@@ -618,7 +620,7 @@ test("Combat director ruleset on a board: the walk, the log in paces, and the sw
 
     // Walking: the menu offers it, the squares carry their cost in paces, and one of them is taken.
     const move = page.getByRole("button", { name: /^Move/ });
-    await expect(move).toBeVisible({ timeout: 60000 });
+    await expect(move).toBeVisible({ timeout: 45000 });
     await move.click();
     const reachable = board.locator('button[aria-label*="Can be walked to"]');
     await expect(reachable.first()).toBeVisible();
@@ -667,9 +669,9 @@ test("Combat director ruleset on a board: the walk, the log in paces, and the sw
       if (!stillOffered && end) await command({ type: "ruleset", optionId: end.id, targetIds: [] });
     }
     await page.reload();
-    await expect(board).toBeVisible({ timeout: 60000 });
+    await expect(board).toBeVisible({ timeout: 45000 });
     if (!s.outcome) {
-      await expect(axe).toBeVisible({ timeout: 60000 });
+      await expect(axe).toBeVisible({ timeout: 45000 });
       await axe.click();
       const target = board.locator('button[aria-label*="Can be chosen as a target"]');
       await expect(target.first()).toBeVisible();
