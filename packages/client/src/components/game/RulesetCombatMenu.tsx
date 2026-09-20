@@ -9,7 +9,7 @@
 // On a board, a step that picks a cell (walking, or aiming a shape) is drawn by the board rather
 // than listed here, so the half-made choice is HELD by the board and handed back down: one step,
 // two ways of finishing it, and the same pure rules behind both.
-import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import type { DirectedRulesetOption, DirectedRulesetView, RulesetCombatCell } from "@marinara-engine/shared";
 import { useTranslation } from "react-i18next";
 import { rulesetOptionNeedsAim, rulesetOptionNeedsCell } from "../../lib/ruleset-combat-board";
@@ -67,7 +67,14 @@ export function RulesetCombatMenu({
   const [ownStep, setOwnStep] = useState<RulesetMenuStep | null>(null);
   const held = onStepChange !== undefined;
   const step = held ? (heldStep ?? null) : ownStep;
-  const setStep: (next: RulesetMenuStep | null) => void = held ? onStepChange : setOwnStep;
+  // Stable whatever the owner passes, so the turn reset below runs when the turn moves and never
+  // because a parent handed down a fresh function.
+  const stepChange = useRef(onStepChange);
+  stepChange.current = onStepChange;
+  const setStep = useCallback((next: RulesetMenuStep | null) => {
+    if (stepChange.current) stepChange.current(next);
+    else setOwnStep(next);
+  }, []);
   const first = useRef<HTMLButtonElement>(null);
   const ownRoot = useRef<HTMLDivElement>(null);
   const root = menuRef ?? ownRoot;

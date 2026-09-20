@@ -1131,11 +1131,11 @@ function drawn(...rows: string[]): TacticalGrid {
   // What one square says, in whole sentences, out of the shipped English catalog.
   assert.equal(
     rulesetCellSentences(at(plain, 2, 1), view, t).join(" "),
-    "Wall. Solid ground nothing walks into or sees through.",
+    "Wall. Solid. Nothing can walk into it or see through it.",
   );
   assert.equal(
     rulesetCellSentences(at(plain, 0, 1), view, t).join(" "),
-    "Plains. Brenna stands here, on 0 of 0. On turn.",
+    "Plains. Brenna stands here, health 0 of 0. On turn.",
     "the numbers are the view's own, and this fixture's view carries none",
   );
   assert.equal(
@@ -1145,8 +1145,16 @@ function drawn(...rows: string[]): TacticalGrid {
   );
   assert.equal(
     rulesetCellSentences(at(targeted, 6, 1), near, t).join(" "),
-    "Plains. Thorn Lurker stands here, on 0 of 0. Can be chosen as a target.",
+    "Plains. Thorn Lurker stands here, health 0 of 0. Can be chosen as a target.",
   );
+  // Stepping back out of its reach is a walk somebody strikes at, and the square says who.
+  const back = near.options!.find((option) => option.id === RULESET_MOVE_OPTION);
+  assert.ok(back, "a square of movement is left after walking five");
+  const risky = rulesetBoardCells(near, { stage: "move", option: back, targets: [] }).find(
+    (cell) => (cell.reach?.provokes.length ?? 0) > 0,
+  );
+  assert.ok(risky, "leaving the reach of a standing opponent is marked on the square");
+  assert.match(rulesetCellSentences(risky, near, t).join(" "), /Walking here draws a strike from Thorn Lurker\.$/u);
   // Whoever is up is said out loud, so a screen reader is told where the turn is.
   const onTurn = rulesetBoardCells(near, null).find((cell) => cell.occupant?.id === "brenna")!;
   assert.ok(rulesetCellSentences(onTurn, near, t).includes("On turn."));
@@ -1165,21 +1173,22 @@ function drawn(...rows: string[]): TacticalGrid {
   const actorId = state.order[0]!;
   const view = viewOf(state, [], { definition: ember, actorId });
   assert.deepEqual(view.grid?.distance, { label: "paces", perCell: 2 });
+  // Ember Roads gives everybody the same constant movement, so whoever acts first can walk.
   const walk = view.options!.find((option) => option.id === RULESET_MOVE_OPTION);
-  if (walk) {
-    const cells = rulesetBoardCells(view, { stage: "move", option: walk, targets: [] });
-    const some = cells.find((cell) => cell.reach)!;
-    assert.match(
-      rulesetCellSentences(some, view, t).join(" "),
-      /Can be walked to for \d+ paces\.$/u,
-      "Ember Roads walks in paces, and the very same code says so",
-    );
-    // Ember Roads declares no `opportunity`, so no square on it is ever walked through a swing.
-    assert.ok(
-      cells.every((cell) => (cell.reach?.provokes.length ?? 0) === 0),
-      "a ruleset with no strike at somebody walking away marks no square as provoking one",
-    );
-  }
+  assert.ok(walk, "whoever is up on Ember Roads is offered a walk");
+  const cells = rulesetBoardCells(view, { stage: "move", option: walk, targets: [] });
+  const some = cells.find((cell) => cell.reach);
+  assert.ok(some, "and at least one square can be walked to");
+  assert.match(
+    rulesetCellSentences(some, view, t).join(" "),
+    /Can be walked to for \d+ paces\.$/u,
+    "Ember Roads walks in paces, and the very same code says so",
+  );
+  // Ember Roads declares no `opportunity`, so no square on it is ever walked through a swing.
+  assert.ok(
+    cells.every((cell) => (cell.reach?.provokes.length ?? 0) === 0),
+    "a ruleset with no strike at somebody walking away marks no square as provoking one",
+  );
 }
 
 // ── Aiming a shape: the cells are the server's, and so is everybody they catch ──

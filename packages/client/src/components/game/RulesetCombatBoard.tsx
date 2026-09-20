@@ -196,12 +196,15 @@ export function RulesetCombatBoard({
 
   // What the strip under the board says: the square being read, or, failing that, the one line a
   // fight nobody can reach has to say out loud.
-  const readingCell = reading ? byKey.get(rulesetCellKey(reading)) : undefined;
-  const hint = readingCell
-    ? rulesetCellSentences(readingCell, view, t).join(" ")
-    : rulesetNothingInReach(view)
-      ? t("game.combat.ruleset.board.nothingInReach")
-      : "";
+  // Every square's sentences, worked out once per view and step, for the square's own name and for
+  // the strip alike.
+  const sentences = useMemo(
+    () => new Map(cells.map((cell) => [rulesetCellKey(cell), rulesetCellSentences(cell, view, t).join(" ")])),
+    [cells, view, t],
+  );
+  const readingKey = reading ? rulesetCellKey(reading) : undefined;
+  const readingHint = readingKey === undefined ? undefined : sentences.get(readingKey);
+  const hint = readingHint ?? (rulesetNothingInReach(view) ? t("game.combat.ruleset.board.nothingInReach") : "");
 
   return (
     <div className="relative flex h-full min-h-0 flex-col overflow-hidden text-white">
@@ -276,7 +279,7 @@ export function RulesetCombatBoard({
                   tabIndex={isCursor ? 0 : -1}
                   aria-label={[
                     t("game.combat.ruleset.board.cell", { x: cell.x, y: cell.y }),
-                    ...rulesetCellSentences(cell, view, t),
+                    sentences.get(key) ?? "",
                   ].join(" ")}
                   onClick={() => takeCell(cell)}
                   onKeyDown={(event) => onKeyDown(event, cell)}
@@ -442,12 +445,13 @@ export function RulesetCombatBoard({
       </div>
 
       {/* One line, bounded, right above the menu: what the square under the pointer or the keyboard
-          is, or why an attack is offered nobody. */}
+          is, or why an attack is offered nobody. A square being read is hidden from the live region,
+          because the square's own name has just said the same words to a screen reader. */}
       <p
         aria-live="polite"
         className="z-10 min-h-[1.5rem] shrink-0 border-t border-white/10 bg-black/35 px-3 py-1 text-[0.65rem] leading-snug text-white/70 backdrop-blur"
       >
-        {hint}
+        {readingHint === undefined ? hint : <span aria-hidden="true">{hint}</span>}
       </p>
 
       <div className="z-10 shrink-0 border-t border-white/10 bg-black/40 backdrop-blur">
