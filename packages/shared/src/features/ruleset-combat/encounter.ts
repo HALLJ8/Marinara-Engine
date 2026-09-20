@@ -315,9 +315,12 @@ function abilityAction(
   if (mechanics.applies?.length) action.applies = mechanics.applies.map((entry2) => ({ ...entry2 }));
   if (mechanics.concentration) action.concentration = true;
   // Distance, in the unit this CATALOG declared, or the combat block's when it declared none. A
-  // range of zero is self or touch, and touching somebody else is the next cell.
+  // range of zero is self or touch, and touching somebody else is the next cell: a REACH of one,
+  // never a range, so the rules for shooting (a foe beside the shooter, long range) do not read it.
+  // A shape keeps its range even at zero, because there the number says how far off it may be aimed.
   if (perCell !== undefined) {
-    if (mechanics.range !== undefined) action.range = { normal: rulesetInCells(mechanics.range, perCell) };
+    if (mechanics.range === 0 && !mechanics.area) action.reach = 1;
+    else if (mechanics.range !== undefined) action.range = { normal: rulesetInCells(mechanics.range, perCell) };
     if (mechanics.area) {
       action.area = {
         shape: mechanics.area.shape,
@@ -414,10 +417,13 @@ function blockActions(block: RulesetStatBlockLike, perCell: number | undefined):
   const idOf = (index: number) => block.actions[index]?.id ?? `block:${index}`;
   const indexById = new Map(block.actions.map((action, index) => [action.id ?? `block:${index}`, index]));
   /** A block writes its distances in the ruleset's own unit, and a plain number is the ordinary
-   *  distance with nothing beyond it. */
+   *  distance with nothing beyond it. A range of zero is no range at all, as it is on an attack row:
+   *  the action is a swing at its reach, never a shot. */
   const rangeOf = (range: RulesetStatBlockAction["range"]) => {
     if (range === undefined || perCell === undefined) return undefined;
-    const normal = rulesetInCells(typeof range === "number" ? range : range.normal, perCell);
+    const written = typeof range === "number" ? range : range.normal;
+    if (written <= 0) return undefined;
+    const normal = rulesetInCells(written, perCell);
     const long =
       typeof range === "number" || range.long === undefined ? undefined : rulesetInCells(range.long, perCell);
     return { normal, ...(long !== undefined && long > normal ? { long } : {}) };

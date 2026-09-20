@@ -1602,11 +1602,16 @@ const labels = (definition: RulesetDefinition, state: RulesetEncounterState, id:
     const one = variant(emberText, (doc) => {
       withoutBestiary(doc);
       withoutBoard(doc);
-      doc.combat.distance = { label: "paces", perCell: 2 };
-      if (key !== "distance") {
-        doc.combat[key] =
-          key === "ranged" ? { long: "disadvantage" } : key === "cover" ? { bonus: 2 } : { budget: "act" };
-      }
+      // ONLY this key, so the refusal is its own and not the cell size's. The gate reads the raw
+      // file, so a key may stand here without the `distance` the ruleset's own checks would ask for.
+      doc.combat[key] =
+        key === "distance"
+          ? { label: "paces", perCell: 2 }
+          : key === "ranged"
+            ? { long: "disadvantage" }
+            : key === "cover"
+              ? { bonus: 2 }
+              : { budget: "act" };
     });
     assert.match(
       getCapabilityPackageInstallIssue(manifest(27), one) ?? "",
@@ -1619,7 +1624,6 @@ const labels = (definition: RulesetDefinition, state: RulesetEncounterState, id:
   const weaponRange = variant(emberText, (doc) => {
     withoutBestiary(doc);
     withoutBoard(doc);
-    doc.combat.distance = { label: "paces", perCell: 2 };
     doc.combat.attacks[0].reach = { const: 2 };
   });
   assert.match(

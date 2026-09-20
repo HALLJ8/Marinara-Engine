@@ -41,7 +41,10 @@ const { createChatsStorage } = await import("../../packages/server/src/services/
 const { createGameStateStorage } = await import("../../packages/server/src/services/storage/game-state.storage.js");
 const { createGameRulesetsStorage } =
   await import("../../packages/server/src/services/storage/game-rulesets.storage.js");
-const { combatDirectorRoutes } = await import("../../packages/server/src/routes/combat-director.routes.js");
+const { createGameEngineStateStorage } =
+  await import("../../packages/server/src/services/storage/game-engine-state.storage.js");
+const { combatDirectorRoutes, COMBAT_DIRECTOR_NAMESPACE } =
+  await import("../../packages/server/src/routes/combat-director.routes.js");
 const { buildInitPrompt, encounterBlueprintSchema, encounterRulesetBrief } =
   await import("../../packages/server/src/routes/encounter.routes.js");
 
@@ -496,6 +499,47 @@ try {
     assert.equal(restored.x, target.x);
     assert.equal(restored.y, target.y);
     assert.equal(restored.movementLeft, mover.movementLeft);
+
+    // A save the resolver could not have written is refused rather than resumed: two standing
+    // combatants on one cell, or somebody inside something solid, would make every distance wrong.
+    {
+      const engineStates = createGameEngineStateStorage(db);
+      const row = await engineStates.getByChatAndMessage(
+        boarded.chat.id,
+        boarded.anchor.id,
+        0,
+        COMBAT_DIRECTOR_NAMESPACE,
+      );
+      assert.ok(row, "the positioned fight is stored under the director's own namespace");
+      const honest = row.state;
+      const stateUrl = `/combat/state?chatId=${boarded.chat.id}&anchor=${boarded.anchor.id}`;
+      const tamper = async (change: (combatants: Array<Record<string, unknown>>, tiles: string[][]) => void) => {
+        const doc = JSON.parse(honest);
+        change(doc.rulesetFight.encounter.combatants, doc.rulesetFight.encounter.board.grid.tiles);
+        await engineStates.updateStateById(row.id, JSON.stringify(doc), undefined, boarded.chat.id);
+        return app.inject({ url: stateUrl });
+      };
+      const stacked = await tamper((combatants) => {
+        combatants[1]!.x = combatants[0]!.x;
+        combatants[1]!.y = combatants[0]!.y;
+      });
+      assert.equal(stacked.statusCode, 400, stacked.body);
+      assert.match(stacked.json().error, /Invalid saved position/);
+      const walled = await tamper((combatants, tiles) => {
+        tiles[combatants[0]!.y as number]![combatants[0]!.x as number] = "wall";
+      });
+      assert.equal(walled.statusCode, 400, walled.body);
+      assert.match(walled.json().error, /Invalid saved position/);
+      // Somebody standing over a body is ordinary, and is read back.
+      const over = await tamper((combatants) => {
+        combatants[1]!.x = combatants[0]!.x;
+        combatants[1]!.y = combatants[0]!.y;
+        combatants[1]!.defeated = true;
+      });
+      assert.equal(over.statusCode, 200, over.body);
+      await engineStates.updateStateById(row.id, honest, undefined, boarded.chat.id);
+      assert.equal((await app.inject({ url: stateUrl })).statusCode, 200, "the honest save is back");
+    }
 
     // A cell the menu did not offer is refused with its own code, and bumps nothing.
     const revisionBefore = fight.revision;

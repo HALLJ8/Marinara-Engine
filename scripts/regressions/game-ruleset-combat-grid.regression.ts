@@ -133,6 +133,13 @@ const spellEntries = [
     mechanics: { kind: "attack", attackRoll: true, amount: { dice: "1d10" }, damageType: "fire", range: 60 },
   },
   {
+    // Range 0 is self or touch: the next cell, and never a shot.
+    id: "chill-grasp",
+    label: "Chill Grasp",
+    rows: [{ list: "spells", values: { name: "Chill Grasp", level: 0, prepared: false } }],
+    mechanics: { kind: "attack", attackRoll: true, amount: { dice: "1d8" }, damageType: "cold", range: 0 },
+  },
+  {
     id: "fireball",
     label: "Fireball",
     rows: [{ list: "spells", values: { name: "Fireball", level: 3, prepared: true } }],
@@ -584,6 +591,36 @@ const cellsOf = (cells: Array<{ x: number; y: number }>) =>
   assert.equal(firstOf(shoot(null, 5), "attack").mode, "normal", "inside the ordinary range and nobody near");
   assert.equal(firstOf(shoot(null, 12), "attack").mode, "disadvantage", "past thirty feet");
   assert.equal(firstOf(shoot({ x: 1, y: 0 }, 5), "attack").mode, "disadvantage", "a foe in the next square");
+  // A touch is not a shot either: an ability whose range is 0 reaches the next cell and no further,
+  // and the foe it is laid on does not make it harder.
+  const touching = fight(fiveE, [wizard(), snag(), mote("far", "Far mote")], [12, 9, 3], {
+    grid: open(6, 1),
+    placements: { corwin: { x: 0, y: 0 }, snag: { x: 1, y: 0 }, far: { x: 3, y: 0 } },
+  });
+  const grasp = optionNamed(fiveE, touching, "corwin", "Chill Grasp");
+  assert.deepEqual(rulesetOptionTargets(touching, "corwin", grasp), ["snag"], "a touch reaches the next cell only");
+  assert.equal(
+    firstOf(
+      act(fiveE, touching, { actorId: "corwin", optionId: grasp.id, targetIds: ["snag"] }, 15, 4).events,
+      "attack",
+    ).mode,
+    "normal",
+    "laying a hand on the foe beside you is not shooting with a foe beside you",
+  );
+  // The same on a creature: a range written as 0 is no range, so its bite is a swing at its reach.
+  const biter = snag("biter", "Biter");
+  biter.block!.actions[0] = { ...biter.block!.actions[0]!, range: 0 };
+  const bitten = fight(fiveE, [fighter(), biter], [9, 12], {
+    grid: open(6, 1),
+    placements: { brenna: { x: 0, y: 0 }, biter: { x: 1, y: 0 } },
+  });
+  const bite = rulesetCombatOptions(fiveE, bitten, "biter").find((option) => option.kind === "block")!;
+  assert.equal(
+    firstOf(act(fiveE, bitten, { actorId: "biter", optionId: bite.id, targetIds: ["brenna"] }, 15, 3).events, "attack")
+      .mode,
+    "normal",
+    "a creature whose range reads 0 swings, and a foe beside it changes nothing",
+  );
   // A swing is not a shot, so neither rule touches it.
   const melee = fight(fiveE, [fighter(), snag()], [12, 9], {
     grid: open(6, 1),
