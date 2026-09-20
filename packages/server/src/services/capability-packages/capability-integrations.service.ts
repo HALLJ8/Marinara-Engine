@@ -1,5 +1,6 @@
 import type { CapabilityIntegrationHost, CapabilityIntegrationProvider } from "@marinara-engine/shared";
 import type { BaseLLMProvider } from "../llm/base-provider.js";
+import { getLocalSidecarProvider } from "../llm/local-sidecar.js";
 import { createLLMProvider } from "../llm/provider-registry.js";
 import { withConnectionFallbackProvider } from "../llm/connection-fallback-provider.js";
 import {
@@ -8,6 +9,7 @@ import {
   removeSavedImageFromDisk,
   stageImageToDisk,
   sweepStagedImages,
+  resolveNovelAiRequestSize,
 } from "../image/image-generation.js";
 import {
   generateVideo,
@@ -38,6 +40,7 @@ export function createCapabilityIntegrationHost(): CapabilityIntegrationHost {
   return Object.freeze({
     llm: Object.freeze({
       createProvider: (...args: Parameters<typeof createLLMProvider>) => expose(createLLMProvider(...args)),
+      localSidecar: () => expose(getLocalSidecarProvider()),
       withFallback(options: Parameters<CapabilityIntegrationHost["llm"]["withFallback"]>[0]) {
         const primary = providers.get(options.primary);
         if (!primary) throw new Error("Fallback requires a provider created by this package's host integrations.");
@@ -50,6 +53,7 @@ export function createCapabilityIntegrationHost(): CapabilityIntegrationHost {
       remove: removeSavedImageFromDisk,
       stage: stageImageToDisk,
       sweepStaged: sweepStagedImages,
+      resolveNovelAiRequestSize,
     }),
     videos: Object.freeze({
       generate: generateVideo,

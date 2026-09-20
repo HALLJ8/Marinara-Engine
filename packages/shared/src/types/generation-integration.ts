@@ -1,7 +1,11 @@
 // Shared request contracts for host-owned generation. Keep provider implementations on the host.
 import type { GenerationParameterSendMap } from "./prompt.js";
 import type { ImageGenerationQuality } from "./connection.js";
-import type { ImageGenerationDefaultsProfile, ComfyUiLoraSetting } from "./image-generation-defaults.js";
+import type {
+  ImageGenerationDefaultsProfile,
+  ComfyUiLoraSetting,
+  NovelAiDefaults,
+} from "./image-generation-defaults.js";
 import type { SceneIllustrationCharacterPrompt } from "./sidecar.js";
 
 export interface ChatMessage {
@@ -416,6 +420,7 @@ export interface CapabilityIntegrationHost {
       connectionId?: string,
     ): CapabilityIntegrationProvider;
     withFallback(options: CapabilityConnectionFallbackOptions): CapabilityIntegrationProvider;
+    localSidecar(): CapabilityIntegrationProvider;
   };
   images: {
     generate(
@@ -429,6 +434,7 @@ export interface CapabilityIntegrationHost {
     remove(filePath: string): void;
     stage(chatId: string, base64: string, ext: string): StagedGalleryImage;
     sweepStaged(): number;
+    resolveNovelAiRequestSize(request: ImageGenRequest, defaults?: NovelAiDefaults): { width: number; height: number };
   };
   videos: {
     generate(
