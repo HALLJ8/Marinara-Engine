@@ -15,7 +15,7 @@ Both are described in full under [Resolution kinds](#resolution-kinds).
 
 A mechanic that does not fit either shape cannot be written in a ruleset file. Taking the highest die of a pool, roll-under percentile checks, symbol dice, and opposed pools are examples. Each of those needs a new resolution kind inside the Engine, which is a code contribution with tests, not a JSON file. If your system needs one, open a feature request on the Engine repository and describe the mechanic with a few worked rolls. Those worked rolls become the tests.
 
-Combat is in between. Battles you can play today run on Marinara's own combat, in whichever Combat Preference the game was created with, and a ruleset cannot change how one of those is resolved. What it can do is lend the battle the numbers on its character sheets, with an optional `battle` block: see [Battles](#battles-lending-the-sheet-to-marinaras-combat). A ruleset may ALSO describe how a fight would be resolved by its own rules, with an optional `combat` block: see [Combat](#combat-a-fight-your-own-rules-resolve). That block is written and checked in full today, and nothing plays on it yet.
+Game Mode can resolve a fight using Marinara's own combat or your ruleset's rules. An optional `battle` block lends Marinara's combat the numbers on your character sheets: see [Battles](#battles-lending-the-sheet-to-marinaras-combat). An optional `combat` block instead defines how the ruleset resolves the fight: see [Combat](#combat-a-fight-your-own-rules-resolve). The Engine plays those rules today. The game's Combat Preference selects the Classic presentation or, when the ruleset defines distance, a Tactical battlefield.
 
 ## Quickstart
 
@@ -1159,10 +1159,10 @@ Said plainly, because a ruleset should not claim what the Engine does not do:
 - Conditions do what the closed effect list can say and no more. A condition that gives
   disadvantage on ability CHECKS, or one that gets worse in levels the way exhaustion does, is a
   plain record on the sheet today.
-- **Resistances, vulnerabilities and immunities never reach a wound track.** They live on an
+- **Creature stat-block resistances, vulnerabilities and immunities do not describe a wound track.** They live on an
   opponent's stat block, and an opponent has no sheet to mark, so a ruleset whose health is a track
   cannot soften a blow by its kind. What each kind of harm MARKS is `damageKinds`, which is a
-  different question from how much of it lands.
+  different question from how much of it lands. A condition with `resist-all` can still reduce damage before it marks a wound.
 - **A rider fires by itself.** Choosing when to spend one is a window, so the first qualifying hit
   of the period takes it. `on` has one value, `hit`; the rest of the moments arrive with reactions.
 
