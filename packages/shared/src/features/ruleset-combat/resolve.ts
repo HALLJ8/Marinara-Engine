@@ -20,6 +20,7 @@ import {
   rulesetCombatHealth,
   rulesetCombatStanding,
   rulesetMovementAllowance,
+  rulesetSaveMode,
   writeRulesetSheet,
 } from "./encounter.js";
 import {
@@ -194,6 +195,19 @@ function applyDamage(ctx: RulesetCombatContext, target: RulesetCombatant, input:
       adjust = "vulnerable";
     }
   }
+  // And then what a condition says about every kind of harm at once. Read after the hide underneath
+  // and cancelling against it the way advantage and disadvantage cancel: resistant stays resistant,
+  // immune stays immune, and something both resistant to everything and open to this one kind takes
+  // it as it comes.
+  if (rulesetCombatEffects(ctx.definition, ctx.combat, target, ctx.state).has("resist-all")) {
+    if (adjust === "none") {
+      dealt = Math.floor(dealt / 2);
+      adjust = "resist";
+    } else if (adjust === "vulnerable") {
+      dealt = Math.floor(dealt / 2);
+      adjust = "none";
+    }
+  }
   const toTemp = Math.min(before.temp, dealt);
   if (dealt > 0) {
     if (target.sheet)
@@ -307,9 +321,26 @@ function grantTemporary(
 
 // ── Going down, and coming back ──
 
+/** The conditions this one was holding up by still being on their feet. A charm ends when whoever
+ *  cast it goes down, if the ruleset said so, wherever it landed. */
+function endConditionsFromSource(ctx: RulesetCombatContext, source: RulesetCombatant): void {
+  const ending = new Set(
+    (ctx.combat.conditions ?? []).filter((entry) => entry.endsWhenSourceDown).map((entry) => entry.condition),
+  );
+  if (ending.size === 0) return;
+  for (const combatant of ctx.state.combatants) {
+    for (const entry of [...combatant.tracked]) {
+      if (entry.source === source.id && ending.has(entry.condition)) {
+        removeCondition(ctx, combatant, entry.condition, "expired");
+      }
+    }
+  }
+}
+
 function dropToZero(ctx: RulesetCombatContext, target: RulesetCombatant): void {
   target.down = true;
   endConcentration(ctx, target, "down");
+  endConditionsFromSource(ctx, target);
   if (target.side === "enemy") {
     target.defeated = true;
     ctx.events.push({ type: "defeated", actorId: target.id });
@@ -442,7 +473,7 @@ function rollSave(
   const modifier = combatant.saves[save] ?? 0;
   // A condition that fails this save takes the roll away entirely, rather than rolling and ignoring
   // the dice, so a log never shows a number that decided nothing.
-  if (rulesetCombatFailsSave(ctx.definition, ctx.combat, combatant, save)) {
+  if (rulesetCombatFailsSave(ctx.definition, ctx.combat, combatant, save, ctx.state)) {
     ctx.events.push({
       type: "save",
       actorId: combatant.id,
@@ -458,8 +489,18 @@ function rollSave(
     });
     return false;
   }
-  const rolls = rollRulesetDice(ctx.roll, ctx.combat.attackRoll.dice.count, ctx.combat.attackRoll.dice.sides);
-  const kept = sumOf(rolls);
+  // Rolled twice and one kept when a condition says so, exactly as an attack is. A roll that leans
+  // no way says nothing about how it was made, so a fight with no such condition logs what it
+  // always logged.
+  const dice = ctx.combat.attackRoll.dice;
+  const mode = rulesetSaveMode(ctx.definition, ctx.combat, combatant, save, ctx.state);
+  const first = rollRulesetDice(ctx.roll, dice.count, dice.sides);
+  const second = mode === "normal" ? null : rollRulesetDice(ctx.roll, dice.count, dice.sides);
+  const kept = second
+    ? mode === "advantage"
+      ? Math.max(sumOf(first), sumOf(second))
+      : Math.min(sumOf(first), sumOf(second))
+    : sumOf(first);
   const total = kept + modifier;
   const success = total >= difficulty;
   ctx.events.push({
@@ -467,7 +508,8 @@ function rollSave(
     actorId: combatant.id,
     ...(sourceId ? { sourceId } : {}),
     save,
-    rolls,
+    ...(mode === "normal" ? {} : { mode }),
+    rolls: second ? [...first, ...second] : first,
     kept,
     modifier,
     total,
@@ -605,6 +647,7 @@ function refusal(
  *  the menu and the resolution can never disagree. `null` is a refusal: one target too many, one of
  *  the wrong side, or one the fight is over for. */
 function pickTargets(
+  definition: RulesetDefinition,
   state: RulesetEncounterState,
   actor: RulesetCombatant,
   option: { id: string; targets: RulesetCombatAction["targets"] },
@@ -613,7 +656,7 @@ function pickTargets(
   if (option.targets.count <= 0) return [];
   const ids = [...new Set(targetIds)];
   if (ids.length < 1 || ids.length > option.targets.count) return "bad-target";
-  const legal = new Set(rulesetOptionTargets(state, actor.id, option));
+  const legal = new Set(rulesetOptionTargets(definition, state, actor.id, option));
   const targets: RulesetCombatant[] = [];
   for (const id of ids) {
     // A target the rules would allow if only it were closer is told exactly that, rather than being
@@ -700,7 +743,7 @@ export function applyRulesetCombatChoice(
 
   const option = rulesetCombatOptions(definition, state, actor.id).find((entry) => entry.id === choice.optionId);
   if (!option) {
-    if (rulesetCombatEffects(definition, combat, actor).has("cannot-act")) {
+    if (rulesetCombatEffects(definition, combat, actor, state).has("cannot-act")) {
       return refusal(state, choice.actorId, "cannot-act", choice.optionId);
     }
     return refusal(state, choice.actorId, whyNotOffered(combat, actor, choice.optionId), choice.optionId);
@@ -728,7 +771,7 @@ export function applyRulesetCombatChoice(
   // Targets, checked against the side and the count the option itself declared.
   const targets = area
     ? rulesetAreaTargets(state, actor.id, option.id, choice.at!).map((id) => rulesetCombatant(state, id)!)
-    : pickTargets(state, actor, option, choice.targetIds);
+    : pickTargets(definition, state, actor, option, choice.targetIds);
   if (!Array.isArray(targets)) return refusal(state, choice.actorId, targets, option.id);
   if (choice.payWith !== undefined && !(option.payWith ?? []).includes(choice.payWith)) {
     return refusal(state, choice.actorId, "bad-pool", option.id);
@@ -834,7 +877,7 @@ function applySignature(
     return refusal(state, choice.actorId, "not-your-turn", action.id);
   }
   if (!rulesetCombatStanding(actor)) return refusal(state, choice.actorId, "down", action.id);
-  if (rulesetCombatEffects(definition, combat, actor).has("cannot-act")) {
+  if (rulesetCombatEffects(definition, combat, actor, state).has("cannot-act")) {
     return refusal(state, choice.actorId, "cannot-act", action.id);
   }
   // Nothing is paid for a sequence whose parts are all spent: it would buy nothing.
@@ -846,7 +889,7 @@ function applySignature(
   ) {
     return refusal(state, choice.actorId, "insufficient", action.id);
   }
-  const targets = pickTargets(state, actor, action, choice.targetIds);
+  const targets = pickTargets(definition, state, actor, action, choice.targetIds);
   if (!Array.isArray(targets)) return refusal(state, choice.actorId, targets, action.id);
 
   const { ctx, finish } = begin(definition, combat, state, roller);
@@ -1015,7 +1058,8 @@ function resolveStandard(
     actor.flags.dashed = true;
     // The same allowance again, in a fight that has cells to spend it on.
     if (actor.movement !== undefined) {
-      actor.movementLeft = (actor.movementLeft ?? 0) + rulesetMovementAllowance(ctx.definition, ctx.combat, actor);
+      actor.movementLeft =
+        (actor.movementLeft ?? 0) + rulesetMovementAllowance(ctx.definition, ctx.combat, actor, ctx.state);
     }
   } else if (action === "disengage") actor.flags.disengaged = true;
   else if (action === "hide") actor.flags.hidden = true;
@@ -1104,7 +1148,7 @@ function allyAdjacent(ctx: RulesetCombatContext, actor: RulesetCombatant, target
   return ctx.state.combatants.some((combatant) => {
     if (combatant.id === actor.id || combatant.side !== actor.side) return false;
     if (!rulesetCombatStanding(combatant)) return false;
-    if (rulesetCombatEffects(ctx.definition, ctx.combat, combatant).has("cannot-act")) return false;
+    if (rulesetCombatEffects(ctx.definition, ctx.combat, combatant, ctx.state).has("cannot-act")) return false;
     if (!positioned) return true;
     const cell = rulesetPositionOf(combatant);
     return !!cell && rulesetCellDistance(cell, at!) <= 1;
@@ -1438,7 +1482,7 @@ export function advanceRulesetTurn(
     // A stance lasts until the actor's next turn, and that turn is now. Help was given to somebody
     // else and is spent by their own next attack, so it survives this.
     actor.flags = actor.flags.helped ? { helped: true } : {};
-    refreshRulesetMovement(definition, combat, actor);
+    refreshRulesetMovement(definition, combat, actor, ctx.state);
     ctx.events.push({ type: "turn", actorId: actor.id, round });
     refreshRulesetSignature(actor);
     rollRulesetRecharges(ctx, actor);

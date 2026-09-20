@@ -545,7 +545,7 @@ const cellsOf = (cells: Array<{ x: number; y: number }>) =>
   const state = fight(fiveE, [fighter(), snag(), pikeman(), mote()], [12, 9, 9, 8, 7], board);
   const targetsOf = (label: string) => {
     const option = optionNamed(fiveE, state, "brenna", label);
-    return rulesetOptionTargets(state, "brenna", option);
+    return rulesetOptionTargets(fiveE, state, "brenna", option);
   };
   // A sword reaches one cell, a pike two, and a javelin twenty-four (120 feet) with disadvantage
   // past six (30 feet).
@@ -558,7 +558,7 @@ const cellsOf = (cells: Array<{ x: number; y: number }>) =>
     grid: open(30, 1),
     placements: { brenna: { x: 0, y: 0 }, mote: { x: 25, y: 0 } },
   });
-  assert.deepEqual(rulesetOptionTargets(far, "brenna", optionNamed(fiveE, far, "brenna", "Javelin")), []);
+  assert.deepEqual(rulesetOptionTargets(fiveE, far, "brenna", optionNamed(fiveE, far, "brenna", "Javelin")), []);
   // And the refusal says which rule it broke, not merely that the target was wrong.
   const refused = act(fiveE, far, {
     actorId: "brenna",
@@ -574,7 +574,7 @@ const cellsOf = (cells: Array<{ x: number; y: number }>) =>
     placements: { juno: { x: 0, y: 0 }, ash: { x: 1, y: 0 }, dust: { x: 3, y: 0 } },
   });
   const axe = optionNamed(ember, rough, "juno", "Road axe");
-  assert.deepEqual(rulesetOptionTargets(rough, "juno", axe), ["ash"], "two paces is one cell");
+  assert.deepEqual(rulesetOptionTargets(ember, rough, "juno", axe), ["ash"], "two paces is one cell");
 }
 
 // ── Long range and a foe at your elbow both make the shot harder ──
@@ -652,7 +652,11 @@ const cellsOf = (cells: Array<{ x: number; y: number }>) =>
     placements: { corwin: { x: 0, y: 0 }, snag: { x: 1, y: 0 }, far: { x: 3, y: 0 } },
   });
   const grasp = optionNamed(fiveE, touching, "corwin", "Chill Grasp");
-  assert.deepEqual(rulesetOptionTargets(touching, "corwin", grasp), ["snag"], "a touch reaches the next cell only");
+  assert.deepEqual(
+    rulesetOptionTargets(fiveE, touching, "corwin", grasp),
+    ["snag"],
+    "a touch reaches the next cell only",
+  );
   assert.equal(
     firstOf(
       act(fiveE, touching, { actorId: "corwin", optionId: grasp.id, targetIds: ["snag"] }, 15, 4).events,
@@ -731,7 +735,7 @@ const cellsOf = (cells: Array<{ x: number; y: number }>) =>
     placements: { brenna: { x: 0, y: 0 }, mote: { x: 2, y: 0 } },
   });
   const javelin = optionNamed(fiveE, state, "brenna", "Javelin");
-  assert.deepEqual(rulesetOptionTargets(state, "brenna", javelin), [], "there is a wall in the way");
+  assert.deepEqual(rulesetOptionTargets(fiveE, state, "brenna", javelin), [], "there is a wall in the way");
   const refused = act(fiveE, state, { actorId: "brenna", optionId: javelin.id, targetIds: ["mote"] });
   assert.equal(firstOf(refused.events, "refused").reason, "no-line-of-sight");
   assert.deepEqual(refused.state, state);
@@ -808,7 +812,7 @@ const cellsOf = (cells: Array<{ x: number; y: number }>) =>
   const fireball = optionNamed(fiveE, state, "corwin", "Fireball");
   // Twenty feet is four cells, a hundred and fifty is thirty, and the menu carries both in cells.
   assert.deepEqual(fireball.area, { shape: "burst", size: 4, range: 30 });
-  assert.deepEqual(rulesetOptionTargets(state, "corwin", fireball), [], "a shape names nobody");
+  assert.deepEqual(rulesetOptionTargets(fiveE, state, "corwin", fireball), [], "a shape names nobody");
   // Aimed at the far end of the row it catches every one of the five, though its own targetCount
   // says three and two of them are on the caster's own side.
   assert.deepEqual(rulesetAreaTargets(state, "corwin", fireball.id, { x: 4, y: 1 }).sort(), [
@@ -1440,7 +1444,7 @@ const cellsOf = (cells: Array<{ x: number; y: number }>) =>
       events,
       state: now,
       menu: rulesetCombatOptions(definition, state, "brenna"),
-      targets: rulesetOptionTargets(state, "brenna", sword),
+      targets: rulesetOptionTargets(fiveE, state, "brenna", sword),
     };
   };
   const withKeys = run(fiveE);

@@ -1471,8 +1471,21 @@ const combatConditionEffectSchema = z.enum([
   "half-move-to-stand",
   /** Any damage ends it. */
   "ends-on-damage",
+  /** The holder's own saves, scoped by `saves` when the condition names any. */
+  "own-saves-advantage",
+  "own-saves-disadvantage",
+  /** Half of every kind of harm, whatever the hide underneath already said. */
+  "resist-all",
+  /** The holder may not point anything at whoever put this on them. */
+  "cannot-target-source",
+  /** And may not walk to a cell nearer them than the one they stand in. Board only. */
+  "cannot-approach-source",
 ]);
 export const RULESET_COMBAT_CONDITION_EFFECTS = combatConditionEffectSchema.options;
+
+/** The two effects `saves` narrows. Anything else ignores it, so naming saves without one of these
+ *  is an author saying something the fight could never read. */
+const SAVE_SCOPED_EFFECTS = ["own-saves-advantage", "own-saves-disadvantage"] as const;
 
 const combatConditionSchema = z
   .object({
@@ -1480,8 +1493,24 @@ const combatConditionSchema = z
     effects: z.array(combatConditionEffectSchema).max(12).default([]),
     /** Saves this condition fails without rolling. */
     failsSaves: z.array(sheetId).min(1).max(12).optional(),
+    /** Which saves the save effects above are about. All of them when this is left out. */
+    saves: z.array(sheetId).min(1).max(12).optional(),
+    /** Its effects count only while whoever applied it is in sight. Without a board, always: a
+     *  fight that measures nothing has no line to break. */
+    whileSourceInSight: z.boolean().optional(),
+    /** It comes off the moment whoever applied it goes down. */
+    endsWhenSourceDown: z.boolean().optional(),
   })
-  .strict();
+  .strict()
+  .superRefine((entry, ctx) => {
+    if (entry.saves && !entry.effects.some((effect) => (SAVE_SCOPED_EFFECTS as readonly string[]).includes(effect))) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["saves"],
+        message: `"saves" narrows ${SAVE_SCOPED_EFFECTS.join(" and ")}, so it needs one of them beside it`,
+      });
+    }
+  });
 
 /** Holding an effect together while the fight goes on. The text field is where it is written down,
  *  so the sheet shows what a character is holding after the battle as well as during it. */
@@ -2361,9 +2390,18 @@ function refineRulesetDefinition(def: RulesetDefinitionBase, ctx: z.RefinementCt
       if (!conditions.has(entry.condition)) issue([...path, "condition"], `Unknown condition "${entry.condition}"`);
       if (mapped.has(entry.condition)) issue([...path, "condition"], `Duplicate condition "${entry.condition}"`);
       mapped.add(entry.condition);
-      entry.failsSaves?.forEach((save, saveIndex) => {
-        if (!saves.has(save)) issue([...path, "failsSaves", saveIndex], `Unknown save "${save}"`);
-      });
+      for (const key of ["failsSaves", "saves"] as const) {
+        entry[key]?.forEach((save, saveIndex) => {
+          if (!saves.has(save)) issue([...path, key, saveIndex], `Unknown save "${save}"`);
+        });
+      }
+      // Walking away from somebody is measured in cells, so it needs a board to be measured on.
+      if (!combat.distance && entry.effects.includes("cannot-approach-source")) {
+        issue(
+          [...path, "effects"],
+          '"cannot-approach-source" is measured in cells, so the block declares "distance" too',
+        );
+      }
     });
 
     if (combat.concentration) {

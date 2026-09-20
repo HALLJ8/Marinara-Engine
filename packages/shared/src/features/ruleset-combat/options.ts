@@ -12,6 +12,7 @@ import {
 import { rulesetAverageDamage } from "./dice.js";
 import {
   currentRulesetActor,
+  rulesetActiveConditions,
   rulesetCombatant,
   rulesetCombatConditions,
   rulesetCombatEffects,
@@ -468,8 +469,31 @@ export function rulesetHitChance(
 // ── The menu ──
 
 /** Whether the actor's own conditions stop them doing anything at all. */
-function blocked(definition: RulesetDefinition, combat: RulesetCombat, actor: RulesetCombatant): boolean {
-  return rulesetCombatEffects(definition, combat, actor).has("cannot-act");
+function blocked(
+  definition: RulesetDefinition,
+  combat: RulesetCombat,
+  state: RulesetEncounterState,
+  actor: RulesetCombatant,
+): boolean {
+  return rulesetCombatEffects(definition, combat, actor, state).has("cannot-act");
+}
+
+/** Whoever this combatant may not point anything at: the source of a condition on them that says
+ *  so. A charm keeps a character from turning on whoever charmed them, in the ruleset's own words. */
+export function rulesetForbiddenTargets(
+  definition: RulesetDefinition,
+  state: RulesetEncounterState,
+  actor: RulesetCombatant,
+): Set<string> {
+  const combat = definition.combat;
+  const forbidden = new Set<string>();
+  if (!combat) return forbidden;
+  for (const entry of rulesetActiveConditions(definition, combat, actor, state)) {
+    if (!entry.effects.includes("cannot-target-source")) continue;
+    const source = actor.tracked.find((tracked) => tracked.condition === entry.condition)?.source;
+    if (source) forbidden.add(source);
+  }
+  return forbidden;
 }
 
 /**
@@ -482,6 +506,7 @@ function blocked(definition: RulesetDefinition, combat: RulesetCombat, actor: Ru
  * the fight is over for is off the table.
  */
 export function rulesetOptionTargets(
+  definition: RulesetDefinition,
   state: RulesetEncounterState,
   actorId: string,
   option: { id: string; targets: RulesetCombatAction["targets"] },
@@ -491,10 +516,13 @@ export function rulesetOptionTargets(
   // An area is aimed at a CELL, so nobody is named: which combatants it catches follows from where
   // it lands, and `rulesetAreaTargets` is the one place that answers it.
   if (positioned(state) && actionOf(actor, option.id)?.area) return [];
+  const forbidden = rulesetForbiddenTargets(definition, state, actor);
   return (
     state.combatants
       .filter((combatant) => {
         if (combatant.defeated) return false;
+        // Whoever put a condition on this actor that says they may not be pointed at.
+        if (forbidden.has(combatant.id)) return false;
         // Helping yourself is not help.
         if (option.id === "standard:help" && combatant.id === actor.id) return false;
         if (option.targets.side === "self") return combatant.id === actor.id;
@@ -508,8 +536,13 @@ export function rulesetOptionTargets(
   );
 }
 
-function firstTarget(state: RulesetEncounterState, actor: RulesetCombatant, action: RulesetCombatAction) {
-  const id = rulesetOptionTargets(state, actor.id, { id: action.id, targets: action.targets })[0];
+function firstTarget(
+  definition: RulesetDefinition,
+  state: RulesetEncounterState,
+  actor: RulesetCombatant,
+  action: RulesetCombatAction,
+) {
+  const id = rulesetOptionTargets(definition, state, actor.id, { id: action.id, targets: action.targets })[0];
   return id === undefined ? undefined : rulesetCombatant(state, id);
 }
 
@@ -585,7 +618,7 @@ function forecastFor(
     if (total > 0) forecast.averageDamage = Math.round(total * 100) / 100;
     return forecast.averageDamage === undefined ? undefined : forecast;
   }
-  const target = firstTarget(state, actor, action) ?? firstAreaTarget(state, actor, action);
+  const target = firstTarget(definition, state, actor, action) ?? firstAreaTarget(state, actor, action);
   if (action.toHit !== undefined && target) {
     // The same number the roll will be made against: the target's own defense plus whatever the
     // ground they stand on is worth, and the same roll mode the distance between them asks for.
@@ -669,8 +702,8 @@ export function rulesetAttackMode(
   where?: { state: RulesetEncounterState; optionId: string },
 ): RulesetCombatRollMode {
   if (!combat.attackRoll.advantage) return "normal";
-  const own = rulesetCombatEffects(definition, combat, actor);
-  const theirs = rulesetCombatEffects(definition, combat, target);
+  const own = rulesetCombatEffects(definition, combat, actor, where?.state);
+  const theirs = rulesetCombatEffects(definition, combat, target, where?.state);
   const distance = where ? distanceModes(combat, where.state, where.optionId, actor, target, theirs) : null;
   const advantage =
     own.has("own-attacks-advantage") ||
@@ -735,7 +768,7 @@ export function rulesetCriticalFromAdjacent(
   const from = rulesetPositionOf(actor);
   const to = rulesetPositionOf(target);
   if (!positioned(state) || !from || !to || rulesetCellDistance(from, to) > 1) return false;
-  return rulesetCombatEffects(definition, combat, target).has("attacks-from-adjacent-critical");
+  return rulesetCombatEffects(definition, combat, target, state).has("attacks-from-adjacent-critical");
 }
 
 /** What getting back up costs, in cells: half the whole allowance, rounded up, so half of one is
@@ -772,7 +805,7 @@ function movementOptions(
   if (!positioned(state) || !rulesetPositionOf(actor)) return [];
   // A condition that pins somebody takes their movement away the moment it lands, not at the start
   // of their next turn.
-  if (rulesetCombatEffects(definition, combat, actor).has("speed-zero")) return [];
+  if (rulesetCombatEffects(definition, combat, actor, state).has("speed-zero")) return [];
   const left = Math.max(0, Math.floor(actor.movementLeft ?? 0));
   const prone = rulesetProneCondition(definition, combat, actor);
   if (prone) {
@@ -813,7 +846,7 @@ export function rulesetCombatOptions(
     label: "End turn",
     targets: { side: "self", count: 0 },
   };
-  if (!rulesetCombatStanding(actor) || blocked(definition, combat, actor)) return [endTurn];
+  if (!rulesetCombatStanding(actor) || blocked(definition, combat, state, actor)) return [endTurn];
 
   const options: RulesetCombatOption[] = [];
   options.push(...movementOptions(definition, combat, state, actor));
@@ -857,7 +890,7 @@ export function rulesetSignatureOptions(
   const points = actor?.signature?.points;
   if (!combat || !actor || points === undefined) return [];
   if (currentRulesetActor(state)?.id === actorId) return [];
-  if (!rulesetCombatStanding(actor) || blocked(definition, combat, actor)) return [];
+  if (!rulesetCombatStanding(actor) || blocked(definition, combat, state, actor)) return [];
   const options: RulesetCombatOption[] = [];
   for (const action of actor.actions) {
     if (!action.signature || action.signature.cost > points) continue;

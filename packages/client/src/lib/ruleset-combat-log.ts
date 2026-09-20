@@ -237,6 +237,25 @@ export function rulesetCombatEventLine(
         cost: event.cost,
         left: event.left,
       });
+    case "strikes":
+      return key(event.left > 0 ? "strikes" : "strikesLast", {
+        actor: names.combatant(event.actorId),
+        label: event.label,
+        left: event.left,
+      });
+    case "gives":
+      return key("gives", {
+        actor: names.combatant(event.actorId),
+        label: event.label,
+        budget: names.budget(event.budget),
+        left: event.left,
+      });
+    case "rider":
+      return key("rider", {
+        actor: names.combatant(event.actorId),
+        target: names.combatant(event.targetId),
+        label: event.label,
+      });
     case "concentration":
       if (event.state === "ended") {
         return key(

@@ -36,7 +36,7 @@ import {
 } from "../rulesets/sheet-math.js";
 import { findRulesetCreatureEntry, rulesetCreatureBlock } from "./creatures.js";
 import { parseRulesetCombatDice, rollRulesetDice, rulesetCombatRoller, sumOf } from "./dice.js";
-import { rulesetInCells } from "./grid.js";
+import { rulesetInCells, rulesetLineOfSight, rulesetPositionOf } from "./grid.js";
 import type {
   RulesetCombatAction,
   RulesetCombatAmount,
@@ -120,16 +120,56 @@ export function rulesetCombatConditions(definition: RulesetDefinition, combatant
   return [...ids];
 }
 
+/**
+ * Whether whoever put this condition on somebody is still in their sight.
+ *
+ * A condition nobody applied, one whose source has left the fight, and every fight with no board at
+ * all all read as "yes": a fight that measures nothing has no line for anything to break.
+ */
+function sourceInSight(
+  combatant: RulesetCombatant,
+  condition: string,
+  state: RulesetEncounterState | undefined,
+): boolean {
+  const sourceId = combatant.tracked.find((entry) => entry.condition === condition)?.source;
+  const grid = state?.board?.grid;
+  if (!sourceId || !state || !grid) return true;
+  const source = rulesetCombatant(state, sourceId);
+  const from = rulesetPositionOf(combatant);
+  const to = rulesetPositionOf(source);
+  if (!source || !from || !to) return true;
+  return rulesetLineOfSight(grid, from, to);
+}
+
+/**
+ * The condition entries that are ON this combatant right now, with their gates read.
+ *
+ * One place, because everything a condition does reads it: what it stops, what it makes harder, and
+ * which saves it is about. `state` is what a gate that measures anything needs; without it a gated
+ * condition simply counts, which is what it does in a fight with no board anyway.
+ */
+export function rulesetActiveConditions(
+  definition: RulesetDefinition,
+  combat: RulesetCombat,
+  combatant: RulesetCombatant,
+  state?: RulesetEncounterState,
+): Array<NonNullable<RulesetCombat["conditions"]>[number]> {
+  const active = new Set(rulesetCombatConditions(definition, combatant));
+  return (combat.conditions ?? []).filter((entry) => {
+    if (!active.has(entry.condition)) return false;
+    return !entry.whileSourceInSight || sourceInSight(combatant, entry.condition, state);
+  });
+}
+
 /** What those conditions DO, as the closed effect list. */
 export function rulesetCombatEffects(
   definition: RulesetDefinition,
   combat: RulesetCombat,
   combatant: RulesetCombatant,
+  state?: RulesetEncounterState,
 ): Set<string> {
   const effects = new Set<string>();
-  const active = new Set(rulesetCombatConditions(definition, combatant));
-  for (const entry of combat.conditions ?? []) {
-    if (!active.has(entry.condition)) continue;
+  for (const entry of rulesetActiveConditions(definition, combat, combatant, state)) {
     for (const effect of entry.effects) effects.add(effect);
   }
   return effects;
@@ -141,11 +181,33 @@ export function rulesetCombatFailsSave(
   combat: RulesetCombat,
   combatant: RulesetCombatant,
   save: string,
+  state?: RulesetEncounterState,
 ): boolean {
-  const active = new Set(rulesetCombatConditions(definition, combatant));
-  return (combat.conditions ?? []).some(
-    (entry) => active.has(entry.condition) && entry.failsSaves?.includes(save) === true,
+  return rulesetActiveConditions(definition, combat, combatant, state).some(
+    (entry) => entry.failsSaves?.includes(save) === true,
   );
+}
+
+/** How this combatant's own saves are rolled: the conditions on them, narrowed to the ones that
+ *  are about THIS save, with advantage and disadvantage cancelling each other out exactly as they
+ *  do on an attack. A ruleset that never rolls twice keeps its single roll. */
+export function rulesetSaveMode(
+  definition: RulesetDefinition,
+  combat: RulesetCombat,
+  combatant: RulesetCombatant,
+  save: string,
+  state?: RulesetEncounterState,
+): "normal" | "advantage" | "disadvantage" {
+  if (!combat.attackRoll.advantage) return "normal";
+  let advantage = false;
+  let disadvantage = false;
+  for (const entry of rulesetActiveConditions(definition, combat, combatant, state)) {
+    if (entry.saves && !entry.saves.includes(save)) continue;
+    if (entry.effects.includes("own-saves-advantage")) advantage = true;
+    if (entry.effects.includes("own-saves-disadvantage")) disadvantage = true;
+  }
+  if (advantage === disadvantage) return "normal";
+  return advantage ? "advantage" : "disadvantage";
 }
 
 /** A combatant who can still be acted on and still take a turn. */
@@ -661,10 +723,11 @@ export function rulesetMovementAllowance(
   definition: RulesetDefinition,
   combat: RulesetCombat,
   combatant: RulesetCombatant,
+  state?: RulesetEncounterState,
 ): number {
   const perCell = combat.distance?.perCell;
   if (perCell === undefined || !(perCell > 0)) return 0;
-  if (rulesetCombatEffects(definition, combat, combatant).has("speed-zero")) return 0;
+  if (rulesetCombatEffects(definition, combat, combatant, state).has("speed-zero")) return 0;
   const speed = combatant.speed;
   if (!Number.isFinite(speed) || speed <= 0) return 0;
   return Math.max(1, Math.floor(speed / perCell));
@@ -675,9 +738,10 @@ export function refreshRulesetMovement(
   definition: RulesetDefinition,
   combat: RulesetCombat,
   combatant: RulesetCombatant,
+  state?: RulesetEncounterState,
 ): void {
   if (combatant.movement === undefined) return;
-  const allowance = rulesetMovementAllowance(definition, combat, combatant);
+  const allowance = rulesetMovementAllowance(definition, combat, combatant, state);
   combatant.movement = allowance;
   combatant.movementLeft = allowance;
 }

@@ -51,12 +51,14 @@ export {
   createRulesetEncounter,
   currentRulesetActor,
   refreshRulesetMovement,
+  rulesetActiveConditions,
   rulesetCombatant,
   rulesetCombatConditions,
   rulesetCombatEffects,
   rulesetCombatHealth,
   rulesetCombatStanding,
   rulesetMovementAllowance,
+  rulesetSaveMode,
   type RulesetEncounterInput,
 } from "./encounter.js";
 export {
@@ -81,6 +83,7 @@ export {
   rulesetCostSteps,
   rulesetCriticalFromAdjacent,
   rulesetDefenseAgainst,
+  rulesetForbiddenTargets,
   rulesetFreeStrike,
   rulesetGrantedStandard,
   rulesetOptionReach,

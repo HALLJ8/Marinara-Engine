@@ -407,6 +407,8 @@ export type RulesetCombatEvent =
       /** Who forced it, when somebody did. */
       sourceId?: string;
       save: string;
+      /** How it was rolled, when a condition made it more or less than one throw. */
+      mode?: RulesetCombatRollMode;
       rolls: number[];
       kept: number;
       modifier: number;

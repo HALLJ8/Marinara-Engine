@@ -5364,7 +5364,12 @@
                     "cannot-react",
                     "speed-zero",
                     "half-move-to-stand",
-                    "ends-on-damage"
+                    "ends-on-damage",
+                    "own-saves-advantage",
+                    "own-saves-disadvantage",
+                    "resist-all",
+                    "cannot-target-source",
+                    "cannot-approach-source"
                   ]
                 },
                 "maxItems": 12,
@@ -5379,6 +5384,22 @@
                 },
                 "minItems": 1,
                 "maxItems": 12
+              },
+              "saves": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "maxLength": 40,
+                  "pattern": "^[a-z][a-z0-9_]*$"
+                },
+                "minItems": 1,
+                "maxItems": 12
+              },
+              "whileSourceInSight": {
+                "type": "boolean"
+              },
+              "endsWhenSourceDown": {
+                "type": "boolean"
               },
               "$comment": {}
             },

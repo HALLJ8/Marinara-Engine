@@ -10,7 +10,7 @@
 
 import { TERRAIN_DATA, type TacticalGrid } from "../tactical-combat/types.js";
 import type { RulesetCombat, RulesetDefinition } from "../../schemas/ruleset.schema.js";
-import { rulesetCombatant, rulesetCombatEffects, rulesetCombatStanding } from "./encounter.js";
+import { rulesetActiveConditions, rulesetCombatant, rulesetCombatEffects, rulesetCombatStanding } from "./encounter.js";
 import type {
   RulesetCombatAction,
   RulesetCombatant,
@@ -263,7 +263,7 @@ export function rulesetThreateningEnemies(
   for (const combatant of state.combatants) {
     if (combatant.side === mover.side || !rulesetCombatStanding(combatant)) continue;
     if ((combatant.budgets[opportunity.budget] ?? 0) < 1) continue;
-    const effects = rulesetCombatEffects(definition, combat, combatant);
+    const effects = rulesetCombatEffects(definition, combat, combatant, state);
     if (effects.has("cannot-act") || effects.has("cannot-react")) continue;
     const at = rulesetPositionOf(combatant);
     const strike = rulesetOpportunityAttack(combatant);
@@ -302,6 +302,16 @@ export function rulesetReachableCells(
     if (!at) continue;
     occupied.add(`${at.x},${at.y}`);
     if (combatant.side !== actor.side) blockers.add(`${at.x},${at.y}`);
+  }
+
+  // Whoever this combatant may not get any nearer to, and how near they stand right now. A cell
+  // closer than that is not offered at all, so the menu stays the one place legality lives.
+  const held: Array<{ at: RulesetCombatCell; away: number }> = [];
+  for (const entry of rulesetActiveConditions(definition, combat, actor, state)) {
+    if (!entry.effects.includes("cannot-approach-source")) continue;
+    const sourceId = actor.tracked.find((tracked) => tracked.condition === entry.condition)?.source;
+    const at = sourceId ? rulesetPositionOf(rulesetCombatant(state, sourceId)) : null;
+    if (at) held.push({ at, away: rulesetCellDistance(from, at) });
   }
 
   const threats = rulesetThreateningEnemies(definition, combat, state, actor);
@@ -346,6 +356,8 @@ export function rulesetReachableCells(
       // A friend can be walked past and not stood on, so their cell is searched through and never
       // offered as somewhere to stop.
       if (occupied.has(next)) continue;
+      // And a cell nearer to somebody this combatant may not approach is not offered either.
+      if (held.some((source) => rulesetCellDistance({ x, y }, source.at) < source.away)) continue;
       const path = pathTo(cameFrom, from, { x, y });
       cells.set(next, { x, y, cost, path, provokes: provokedBy(threats, from, path) });
     }
