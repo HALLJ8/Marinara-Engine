@@ -94,6 +94,8 @@ export interface SkillCheckTagExtras {
   use?: string;
   /** `rerolled="3"` — how many dice a bought re-throw replaced. */
   rerolled?: number;
+  /** The wound penalty already applied by the Engine. */
+  penalty?: number;
 }
 
 function serializeSkillCheckExtras(extras: SkillCheckTagExtras | undefined): string {
@@ -112,6 +114,9 @@ function serializeSkillCheckExtras(extras: SkillCheckTagExtras | undefined): str
   if (extras.use) parts.push(`use="${serializeSkillCheckAttribute(extras.use)}"`);
   if (extras.rerolled != null && Number.isFinite(extras.rerolled) && extras.rerolled > 0) {
     parts.push(`rerolled="${extras.rerolled}"`);
+  }
+  if (extras.penalty != null && Number.isFinite(extras.penalty) && extras.penalty < 0) {
+    parts.push(`penalty="${extras.penalty}"`);
   }
   return parts.length > 0 ? ` ${parts.join(" ")}` : "";
 }
@@ -151,6 +156,7 @@ export function serializeResolvedSkillCheckTag(result: SkillCheckResult, extras?
     ...(result.autoSuccesses ? { auto: result.autoSuccesses } : {}),
     ...(result.used ? { use: result.used } : {}),
     ...(result.rerolled ? { rerolled: result.rerolled } : {}),
+    ...(result.penalty != null ? { penalty: result.penalty } : {}),
     // An extra a caller left undefined is absent, not an instruction to erase what the result says.
     ...Object.fromEntries(Object.entries(extras ?? {}).filter(([, value]) => value !== undefined)),
   };

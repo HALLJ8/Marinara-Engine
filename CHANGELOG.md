@@ -6,7 +6,7 @@ This file is the release-notes source of truth for Marinara Engine. Reuse these 
 
 - Combined damage types mark one wound per hit on rulesets configured for one mark per blow, using the most severe landed kind.
 
-- Game wound sheets describe zero-penalty wounds accurately instead of calling a marked track unmarked.
+- Game wound sheets describe zero-penalty wounds accurately, and saved dice cards retain the applied wound penalty after reloading.
 
 - Roleplay dice commands accept an optional situational bonus or penalty and DC, combine the adjustment with the automatic attribute bonus, and show the DC on the existing dice card (#6417).
 
