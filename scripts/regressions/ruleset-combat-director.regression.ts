@@ -1088,6 +1088,49 @@ for (const setup of [
     assert.ok(hurt(rising), "and still fought on the same turn");
   }
 
+  // ── With nobody it can reach this turn, it sprints closer rather than spending its action idly ──
+  for (const seed of [2, 5, 8, 13, 21, 34]) {
+    const state = started({
+      definition: fiveE,
+      cards: fiveECards,
+      partyCatalogs: spellCatalogs,
+      party: [fiveEParty[0]!],
+      enemies: [{ id: "lurker", name: "Thorn Lurker" }],
+      seed,
+      positioned: true,
+    });
+    const encounter = state.rulesetFight!.encounter;
+    const grid = encounter.board!.grid;
+    grid.tiles = grid.tiles.map((row) => row.map(() => "plains" as (typeof row)[number]));
+    Object.assign(rulesetCombatant(encounter, "brenna")!, { x: 0, y: 0 });
+    Object.assign(rulesetCombatant(encounter, "lurker")!, { x: grid.width - 1, y: 0 });
+    const allowance = rulesetCombatant(encounter, "lurker")!.movement!;
+    assert.ok(grid.width - 1 > allowance * 2 + 1, "the field is wider than a sprint, so nothing is in reach this turn");
+    for (let guard = 0; guard < 4; guard++) {
+      const now = state.rulesetFight!.encounter;
+      if (now.order[now.turn] === "lurker") break;
+      assert.ok(
+        commandRulesetCombatDirector(fiveE, state, { type: "ruleset", optionId: "end-turn", targetIds: [] }).ok,
+      );
+    }
+    const seen = state.rulesetFight!.eventSeq;
+    assert.ok(commandRulesetCombatDirector(fiveE, state, { type: "continue" }).ok);
+    const turn = state.rulesetFight!.events.filter((entry) => entry.seq > seen).map((entry) => entry.event);
+    const standards = turn.flatMap((event) =>
+      event.type === "standard" && event.actorId === "lurker" ? [event.action] : [],
+    );
+    assert.deepEqual(
+      standards,
+      ["dash"],
+      `seed ${seed}: the only standard action of a creature out of reach is the sprint`,
+    );
+    const walked = turn.reduce(
+      (sum, event) => sum + (event.type === "move" && event.actorId === "lurker" ? event.cost : 0),
+      0,
+    );
+    assert.equal(walked, allowance * 2, `seed ${seed}: and it walked its allowance twice over`);
+  }
+
   // Seeded fights to the end, on both rulesets, on a board and off it.
   for (const seed of [3, 11, 29, 47, 101]) {
     runToTheEnd(

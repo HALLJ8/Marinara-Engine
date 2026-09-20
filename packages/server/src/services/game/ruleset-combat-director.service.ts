@@ -913,6 +913,11 @@ function playRulesetTurn(
       if (!walkTowardsTrouble(definition, state, fight, actorId)) break;
       continue;
     }
+    // A standard action is only ever picked when nothing it has can hurt or help anybody from
+    // anywhere it can get to. On a board that means it is out of reach, and the action is worth
+    // more as a sprint towards the fight than as a dodge nobody is swinging at; the standard is
+    // what is left once there is nowhere better to stand.
+    if (picked.option.kind === "standard" && walkTowardsTrouble(definition, state, fight, actorId)) continue;
     if (picked.to && !stepBefore(definition, state, fight, actorId, picked.to)) break;
     // A refusal here would be an Engine bug rather than a player's mistake, so the turn ends
     // instead of asking again with the same state and looping.
