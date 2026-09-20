@@ -188,7 +188,9 @@ export function rulesetAimCells(
   const boxes =
     shape?.shape === "burst"
       ? state.combatants
-          .filter((combatant) => rulesetCombatStanding(combatant) && rulesetPositionOf(combatant))
+          // Anybody still in the fight, on their feet or on the ground: a shape that MENDS is set
+          // down on the ally who fell, and that cell has to be offered.
+          .filter((combatant) => !combatant.defeated && rulesetPositionOf(combatant))
           .map((combatant) => box(rulesetPositionOf(combatant)!, shape.size))
       : [box(from, reach.max)];
   // And a ceiling on the cells looked at, whatever `limit` says: the largest board a save may hold

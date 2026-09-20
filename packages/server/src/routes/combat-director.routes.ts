@@ -13,7 +13,6 @@ import {
   normalizeCharacterLookupName,
   rulesetCatalogIdsForBuild,
   rulesetCellBlocked,
-  rulesetCombatStanding,
   rulesetSheetBuildsByName,
   type Combatant,
   type DirectedCombatView,
@@ -352,16 +351,12 @@ export async function combatDirectorRoutes(
         )
           throw new Error("Invalid saved position.");
       }
-      // The resolver never puts anybody inside something solid and never stops two standing
-      // combatants on one cell (somebody standing over a fallen body is ordinary), so a save that
-      // says otherwise was not written by it, and every distance read off it would be wrong.
-      const standingOn = new Set<string>();
+      // The resolver never puts anybody inside something solid, so a save that says otherwise was
+      // not written by it and every distance read off it would be wrong. Two on one cell is NOT
+      // refused: a walk may end on a fallen body, and healing that body stands two people on one
+      // square, which is the resolver's own doing.
       for (const combatant of placed) {
         if (rulesetCellBlocked(grid, combatant.x!, combatant.y!)) throw new Error("Invalid saved position.");
-        if (!rulesetCombatStanding(combatant)) continue;
-        const cell = `${combatant.x},${combatant.y}`;
-        if (standingOn.has(cell)) throw new Error("Invalid saved position.");
-        standingOn.add(cell);
       }
     } else if (state.rulesetFight?.encounter.combatants.some((combatant) => typeof combatant.x === "number")) {
       throw new Error("Invalid saved position.");

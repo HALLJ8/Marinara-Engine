@@ -519,24 +519,24 @@ try {
         await engineStates.updateStateById(row.id, JSON.stringify(doc), undefined, boarded.chat.id);
         return app.inject({ url: stateUrl });
       };
+      // Two of them standing on one square is NOT refused: a walk may end on a fallen ally, and
+      // healing that ally stands two people on one square, which the resolver itself does.
       const stacked = await tamper((combatants) => {
         combatants[1]!.x = combatants[0]!.x;
         combatants[1]!.y = combatants[0]!.y;
       });
-      assert.equal(stacked.statusCode, 400, stacked.body);
-      assert.match(stacked.json().error, /Invalid saved position/);
+      assert.equal(stacked.statusCode, 200, stacked.body);
       const walled = await tamper((combatants, tiles) => {
         tiles[combatants[0]!.y as number]![combatants[0]!.x as number] = "wall";
       });
       assert.equal(walled.statusCode, 400, walled.body);
       assert.match(walled.json().error, /Invalid saved position/);
-      // Somebody standing over a body is ordinary, and is read back.
-      const over = await tamper((combatants) => {
-        combatants[1]!.x = combatants[0]!.x;
-        combatants[1]!.y = combatants[0]!.y;
-        combatants[1]!.defeated = true;
+      // Off the board altogether is still refused.
+      const outside = await tamper((combatants, tiles) => {
+        combatants[1]!.x = tiles[0]!.length + 5;
       });
-      assert.equal(over.statusCode, 200, over.body);
+      assert.equal(outside.statusCode, 400, outside.body);
+      assert.match(outside.json().error, /Invalid saved position/);
       await engineStates.updateStateById(row.id, honest, undefined, boarded.chat.id);
       assert.equal((await app.inject({ url: stateUrl })).statusCode, 200, "the honest save is back");
     }

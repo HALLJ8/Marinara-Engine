@@ -908,6 +908,21 @@ const cellsOf = (cells: Array<{ x: number; y: number }>) =>
     }
   }
   assert.deepEqual(sorted(rulesetAimCells(state, "corwin", cone.id)), sorted(slowCone));
+
+  // And somebody on the ground is still somebody a shape is set down on: a mending circle aimed at
+  // the ally who fell, far from anybody standing, is offered.
+  const fallen = fight(fiveE, [wizard(), fighter(), snag("a", "Snag")], [12, 9, 8], {
+    grid,
+    // Far enough from everybody still standing that only her own square reaches her.
+    placements: { corwin: { x: 1, y: 1 }, brenna: { x: 5, y: 5 }, a: { x: 2, y: 1 } },
+  });
+  Object.assign(who(fallen, "brenna"), { down: true, dying: true });
+  const mend = optionNamed(fiveE, fallen, "corwin", "Mending Circle");
+  const mends = rulesetAimCells(fallen, "corwin", mend.id);
+  assert.ok(
+    mends.some((cell) => cell.x === 5 && cell.y === 5 && cell.targetIds.includes("brenna")),
+    "the square the fallen one lies on is offered, and mending her is what it catches",
+  );
 }
 
 // ── A creature breathes a real shape, and spares its own pack when its entry says so ──

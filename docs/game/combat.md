@@ -47,7 +47,7 @@ Such a ruleset may also say what one square of a battlefield is worth in its own
 
 On that battlefield the ruleset's own numbers decide everything. How far a turn may walk comes from the ruleset's own movement rule or a creature's own speed; how far a weapon reaches or carries comes from its own rows; an ability's area becomes a real burst, cone or line; a wall blocks a shot; standing behind something adds what the ruleset says cover adds; and walking out of somebody's reach lets them strike at you when the ruleset says such a strike costs something. Movement runs in eight directions at one square each, which is how the tabletop grids these rules are written for are played, and it is not the four-direction model Marinara's own Tactical battles use above.
 
-The battlefield is not drawn on screen yet. Until it is, a fight on one is reachable only through the API, and every game plays as it does below. Three-quarter cover, elevation, flying over obstacles, hiding, forced movement and choosing whether to take a strike at somebody walking away are all separate future work.
+The battlefield is not drawn on screen yet. Until it is, a fight on one is reachable only through the API, so on screen a ruleset fight is still played without positions, by the ruleset's own rules, and a game with no such ruleset plays as the rest of this page describes. Three-quarter cover, elevation, flying over obstacles, hiding, forced movement and choosing whether to take a strike at somebody walking away are all separate future work.
 
 ### Games that use a ruleset
 
