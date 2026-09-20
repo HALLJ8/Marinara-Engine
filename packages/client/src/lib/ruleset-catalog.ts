@@ -407,7 +407,7 @@ export function planCatalogRefresh(
             columnId,
             label: column.label,
             current: stored === undefined ? "" : String(stored),
-            next: typeof next === "boolean" ? String(next) : String(next),
+            next: String(next),
             value: next,
             ...(isNew ? { added: true } : {}),
           });

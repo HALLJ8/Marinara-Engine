@@ -8680,7 +8680,12 @@ export async function generateRoutes(app: FastifyInstance) {
           // `create` in the game-state storage). The clone base matches the one the trackers use;
           // the live state itself is passed explicitly, because a sibling swipe's row holds what
           // THAT telling spent.
-          if (rulesetSheetTurn && savedMsg?.id) {
+          // What the turn leaves on the sheets: the sheet commands' own result when that pass ran,
+          // and otherwise just the purchases the checks already paid for. Without the second half a
+          // turn whose sheet pass was skipped or threw would keep the automatic successes a player
+          // bought and quietly give the points back, which is a free success.
+          const liveAfterTurn = rulesetSheetTurn?.live ?? checkSpendLive;
+          if (liveAfterTurn && savedMsg?.id) {
             try {
               const swipeIndex = savedSwipeIndex ?? 0;
               const siblingSwipeRow =
@@ -8691,11 +8696,11 @@ export async function generateRoutes(app: FastifyInstance) {
                 savedMsg.id,
                 swipeIndex,
                 input.chatId,
-                { rulesetLive: rulesetSheetTurn.live },
+                { rulesetLive: liveAfterTurn },
                 undefined,
                 { baseSnapshot: siblingSwipeRow ?? baseGameStateSnapshot },
               );
-              sendSseEvent(reply, { type: "game_state_patch", data: { rulesetLive: rulesetSheetTurn.live } });
+              sendSseEvent(reply, { type: "game_state_patch", data: { rulesetLive: liveAfterTurn } });
             } catch (err) {
               logger.error(err, "[game/sheet] Could not save live sheet state for chat %s", input.chatId);
             }
