@@ -229,8 +229,8 @@ vocabulary plus the package's data, not from a file that can name one system's w
 and recharge, the threat clamp, and the 5e package's own creatures and enriched spells. C3
 the director's `ruleset` style, split into C3a (session, routes, persistence, enemy choices over the
 menu) and C3b (the Classic shell on real numbers, `coverage.combat` true). C4 the board, split into C4a (the format,
-positions, movement, reach and ranges, areas, cover, opportunity attacks, the picker and the view) and C4b (the Tactical
-shell that draws it). C5 reactions through the director's windows, legendary
+positions, movement, reach and ranges, areas, cover, opportunity attacks, the picker and the view) and C4b (the board on
+screen, out of the Tactical style's own look). C5 reactions through the director's windows, legendary
 actions, contests and the remaining conditions.
 
 ### What C1 settled
@@ -495,9 +495,40 @@ C4a is the board, on the shared and server sides. C4b is the screen that draws i
 - **Proven** in `scripts/regressions/game-ruleset-combat-grid.regression.ts` (hand-drawn boards,
   scripted dice, both example rulesets, and the byte-for-byte comparison), plus positioned cases in
   `ruleset-combat-director.regression.ts` and `ruleset-combat-director-route.regression.ts`.
-- **Left for C4b and C5**: the board on screen (the log lines for the four new events already ship
-  here, because the screen's drift guard asks for a line per event); reaction windows, three-quarter and total cover, elevation, flying over obstacles, squeezing,
-  hiding and forced movement.
+- **Left for C5**: reaction windows, three-quarter and total cover, elevation, flying over
+  obstacles, squeezing, hiding and forced movement.
+
+### What C4b settled
+
+C4b is the board on screen. It draws what C4a resolves and decides nothing of its own.
+
+- **The screen follows the VIEW, not the preference.** `DirectedCombatUI` mounts the board when the
+  ruleset view carries a `grid`, and keeps the Classic stage when it does not. The client sends
+  `positioned: true` on `/start` exactly when the fight is the ruleset's own, the game's combat
+  preference is Tactical and the resolved ruleset declares `combat.distance`; the server still
+  decides whether a board can be drawn at all.
+- **One new presentational component**, `RulesetCombatBoard.tsx`. `TacticalCombatUI` was not
+  restructured: its palettes, textures, terrain icons, tile shadow, keyframes and token helpers
+  moved unchanged into `lib/tactical-board-look.ts`, which both boards import, so the two look like
+  one product and a new terrain theme cannot drift between them.
+- **The client computes nothing.** Reachable squares and their cost, the path, who a step provokes,
+  who may be targeted and where a shape may be aimed with everybody it would catch all come off the
+  view. `lib/ruleset-combat-board.ts` indexes them by square; the one number it derives is the
+  ruleset's own distance, cells times `perCell`, which is what the whole screen is said in.
+- **One focusable thing per square.** Tiles are buttons with a roving tabindex and arrow-key
+  movement; tokens are drawn over them with `pointer-events-none`, so clicking a token is clicking
+  its square and the keyboard means one thing. Escape leaves a half-made choice and hands the
+  keyboard back to the menu, which is the C3 rule: focus returns only when the PLAYER closed it.
+- **The half-made choice lives on the board**, which hands it back down to `RulesetCombatMenu`
+  through an optional controlled `step`. Without that pair the menu keeps its own state and the C3
+  screen is byte for byte the screen it was.
+- **The board keeps a floor of its own height**, and the menu, the hint line and the log each bound
+  themselves. Measured at 1366x850 and at 375x812 with a fight in progress and a log of 17 lines:
+  no horizontal page scroll, no overlapping tokens, the whole board visible at both sizes.
+- **Proven** in `scripts/regressions/ruleset-combat-screen-client.regression.ts` (the squares, the
+  walk, the path, the target, the aims, the sentences, the "nothing in reach" rule, the distance
+  formatter and the four refusals, on both example rulesets) and in a fourth mode of
+  `e2e/game-combat-director.e2e.ts` that plays a positioned Ember Roads fight in a real browser.
 
 ## Architecture
 
