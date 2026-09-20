@@ -85,7 +85,7 @@ const definition = parsed.definition;
 const catalog = definition.catalogs?.[0];
 assert.ok(catalog, "the example ruleset ships a catalog");
 const entries = catalog.entries ?? [];
-assert.equal(entries.length, 6);
+assert.equal(entries.length, 7);
 
 const emptyBuild = (lists: RulesetSheetBuild["lists"] = {}, fields: RulesetSheetBuild["fields"] = {}) =>
   ({ abilities: {}, skills: {}, saves: {}, bonuses: {}, fields, lists }) satisfies RulesetSheetBuild;
@@ -158,7 +158,7 @@ assert.deepEqual(
 // A tags filter matches one tag out of the list.
 assert.deepEqual(
   filterCatalogEntries(entries, blankViews, "", { callings: "Scout" }).map((entry) => entry.id),
-  ["road-sense", "hold-the-line"],
+  ["road-sense", "hold-the-line", "second-breath"],
 );
 // Search reads the summary as well as the label.
 assert.deepEqual(

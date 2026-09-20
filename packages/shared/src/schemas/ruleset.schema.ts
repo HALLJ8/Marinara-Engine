@@ -1478,7 +1478,8 @@ const combatConditionEffectSchema = z.enum([
   "resist-all",
   /** The holder may not point anything at whoever put this on them. */
   "cannot-target-source",
-  /** And may not walk to a cell nearer them than the one they stand in. Board only. */
+  /** And may not walk to a cell nearer them than the one they stand in. Read only by a fight with
+   *  a board, exactly as the three effects above it are, so a ruleset may say it either way. */
   "cannot-approach-source",
 ]);
 export const RULESET_COMBAT_CONDITION_EFFECTS = combatConditionEffectSchema.options;
@@ -2394,13 +2395,6 @@ function refineRulesetDefinition(def: RulesetDefinitionBase, ctx: z.RefinementCt
         entry[key]?.forEach((save, saveIndex) => {
           if (!saves.has(save)) issue([...path, key, saveIndex], `Unknown save "${save}"`);
         });
-      }
-      // Walking away from somebody is measured in cells, so it needs a board to be measured on.
-      if (!combat.distance && entry.effects.includes("cannot-approach-source")) {
-        issue(
-          [...path, "effects"],
-          '"cannot-approach-source" is measured in cells, so the block declares "distance" too',
-        );
       }
     });
 

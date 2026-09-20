@@ -1336,9 +1336,28 @@ const traveller = (live: unknown = {}): RulesetCombatantInput => ({
       delete source.reach;
       delete source.range;
     }
+    // And the keys that say what one turn can do, a release later still: a case about the bestiary
+    // gate has to leave the gate above it nothing to fire on.
+    for (const source of doc.combat?.attacks ?? []) delete source.strikes;
+    for (const entry of doc.combat?.conditions ?? []) {
+      for (const key of ["saves", "whileSourceInSight", "endsWhenSourceDown"]) delete entry[key];
+      entry.effects = (entry.effects ?? []).filter(
+        (effect: string) =>
+          !effect.startsWith("own-saves-") &&
+          effect !== "resist-all" &&
+          !effect.startsWith("cannot-target-") &&
+          !effect.startsWith("cannot-approach-"),
+      );
+    }
     for (const catalog of doc.catalogs ?? []) {
-      for (const entry of catalog.entries ?? []) {
+      catalog.entries = (catalog.entries ?? []).filter(
+        (entry: Record<string, any>) => entry.mechanics?.kind !== "rider",
+      );
+      for (const entry of catalog.entries) {
+        for (const key of ["plus", "free", "gives", "standard", "rider"]) delete entry.mechanics?.[key];
+        delete entry.creature?.riders;
         for (const action of entry.creature?.actions ?? []) {
+          delete action.damage?.plus;
           if (action.range && typeof action.range === "object") action.range = action.range.normal;
           delete action.area;
         }

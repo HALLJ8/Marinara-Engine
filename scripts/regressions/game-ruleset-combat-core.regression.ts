@@ -1526,6 +1526,31 @@ const labels = (definition: RulesetDefinition, state: RulesetEncounterState, id:
       delete source.reach;
       delete source.range;
     }
+    withoutTurnEconomy(doc);
+  };
+  /** And the keys that say what one turn can do, a release later still, for the same reason. */
+  const withoutTurnEconomy = (doc: Record<string, any>) => {
+    for (const source of doc.combat?.attacks ?? []) delete source.strikes;
+    for (const entry of doc.combat?.conditions ?? []) {
+      for (const key of ["saves", "whileSourceInSight", "endsWhenSourceDown"]) delete entry[key];
+      entry.effects = (entry.effects ?? []).filter(
+        (effect: string) =>
+          !effect.startsWith("own-saves-") &&
+          effect !== "resist-all" &&
+          !effect.startsWith("cannot-target-") &&
+          !effect.startsWith("cannot-approach-"),
+      );
+    }
+    for (const catalog of doc.catalogs ?? []) {
+      catalog.entries = (catalog.entries ?? []).filter(
+        (entry: Record<string, any>) => entry.mechanics?.kind !== "rider",
+      );
+      for (const entry of catalog.entries) {
+        for (const key of ["plus", "free", "gives", "standard", "rider"]) delete entry.mechanics?.[key];
+        delete entry.creature?.riders;
+        for (const action of entry.creature?.actions ?? []) delete action.damage?.plus;
+      }
+    }
   };
   const combatOnly = variant(emberText, (doc) => {
     delete doc.catalogs;

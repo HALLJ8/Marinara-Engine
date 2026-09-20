@@ -815,17 +815,14 @@ export function applyRulesetCombatChoice(
   // the turn ends. Taking one with any in hand spends no budget at all, which is why this reads
   // what the option said rather than the budget it would otherwise have named.
   const striking = working.actions.find((entry) => entry.id === option.id);
-  if (striking?.strikes !== undefined) {
-    const left = (working.strikesLeft ?? 0) > 0 ? working.strikesLeft! - 1 : Math.max(0, striking.strikes - 1);
+  const inHand = working.strikesLeft ?? 0;
+  // A spend that buys ONE strike is the spend every fight has always made, so it puts nothing in
+  // hand and says nothing: a ruleset whose list declares one strike a spend reads as it always did.
+  if (striking?.strikes !== undefined && (inHand > 0 || striking.strikes > 1)) {
+    const left = inHand > 0 ? inHand - 1 : striking.strikes - 1;
     if (left > 0) working.strikesLeft = left;
     else delete working.strikesLeft;
-    ctx.events.push({
-      type: "strikes",
-      actorId: working.id,
-      optionId: striking.id,
-      label: striking.label,
-      left,
-    });
+    ctx.events.push({ type: "strikes", actorId: working.id, optionId: striking.id, label: striking.label, left });
   }
 
   if (area && choice.at) {

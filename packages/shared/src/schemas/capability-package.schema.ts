@@ -286,7 +286,17 @@ const capabilityPackageManifestBaseSchema = z
 //        1.20 through 1.27: an Engine that cannot read these keys refuses the whole ruleset file,
 //        or the catalog file that holds them, so a package that ships any of them declares 1.28.
 //        No permission.
-export const supportedCapabilityApi = Object.freeze({ major: 1, minor: 28 } as const);
+// 1.29: what one turn of a ruleset fight can do. A blow may carry a second damage clause
+//        (`plus`), an attack list may say how many strikes one spend of its budget buys
+//        (`strikes`), a catalog entry may be free of the economy, hand budgets back or let its
+//        holder buy a standard action with another budget (`free`, `gives`, `standard`), a new
+//        entry kind `rider` and a creature's own `riders` add damage to a qualifying hit, and a
+//        condition may narrow the saves it is about, count only while its source is in sight or
+//        end when its source goes down. Not a soft seam, for the same reason as 1.20 through
+//        1.28: an Engine that cannot read these keys refuses the whole ruleset file, or the
+//        catalog file that holds them, so a package that ships any of them declares 1.29.
+//        No permission.
+export const supportedCapabilityApi = Object.freeze({ major: 1, minor: 29 } as const);
 
 const capabilityApiVersionSchema = z
   .object({
