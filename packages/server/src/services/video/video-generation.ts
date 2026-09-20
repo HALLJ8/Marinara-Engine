@@ -12,6 +12,7 @@ import {
   numberedComfyReferencePlaceholder,
 } from "../image/comfyui-reference-placeholders.js";
 import { buildAtlasCloudVideoRequest, runAtlasCloudPrediction } from "../media/atlas-cloud.js";
+import { adaptAtlasCloudVideoRequest, fetchAtlasCloudModelSchema } from "../media/atlas-cloud-video-schema.js";
 import { buildComfyUiLoraWorkflowReplacements } from "@marinara-engine/shared";
 
 import type {
@@ -172,6 +173,7 @@ async function generateVideoUnqueued(
       model: fallback.model,
       comfyWorkflow: fallback.comfyWorkflow,
       comfyLoras: fallback.comfyLoras,
+      atlasModelOptions: fallback.atlasModelOptions,
       fps: fallback.fps,
       connectionKey: fallback.connectionId,
     });
@@ -1395,14 +1397,28 @@ async function generateAtlasCloudVideo(
   const referenceImageDataUrl = request.referenceImage
     ? `data:${request.referenceImage.mimeType};base64,${stripDataUrl(request.referenceImage.base64)}`
     : undefined;
-  const body = buildAtlasCloudVideoRequest({
+  const requestInput = {
     model: request.model?.trim() || DEFAULT_ATLAS_CLOUD_VIDEO_MODEL,
     prompt: request.prompt,
     durationSeconds: request.durationSeconds,
     aspectRatio: request.aspectRatio,
     resolution: request.resolution,
     referenceImageDataUrl,
-  });
+    modelOptions: request.atlasModelOptions,
+  };
+  // Atlas Cloud models do not share one input shape; fit the request to the model's published schema when it has one.
+  const schema = await fetchAtlasCloudModelSchema(requestInput.model, request.signal);
+  const adapted = schema ? adaptAtlasCloudVideoRequest(requestInput, schema) : null;
+  // Without a schema there is nothing to check the user's options against, so they are sent as chosen.
+  const body = adapted?.body ?? { ...request.atlasModelOptions, ...buildAtlasCloudVideoRequest(requestInput) };
+  if (adapted && adapted.adjustments.length > 0) {
+    // A dropped illustration changes what the user gets back, so it is a warning rather than routine fitting.
+    logger[adapted.referenceImageDropped ? "warn" : "info"](
+      "[video-gen/atlas-cloud] fitted request to %s: %s",
+      requestInput.model,
+      adapted.adjustments.join("; "),
+    );
+  }
   logDebugOverride(
     request.debugMode === true,
     "[video-gen/atlas-cloud] final request payload:\n%s",
