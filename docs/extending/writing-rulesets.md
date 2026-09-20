@@ -626,8 +626,9 @@ same keys for a d20 system:
   rolled, and they cancel each other out. `resist-all` halves every kind of harm on top of whatever
   the target's own hide said, and cancels against a vulnerability the same way.
   `cannot-target-source` keeps the holder from pointing anything at whoever put it on them, and
-  `cannot-approach-source` keeps them from walking to a cell nearer that somebody than the one they
-  stand in.
+  `cannot-approach-source` keeps them from walking any nearer to that somebody than the cell they
+  stand in, the route included: a way round to a cell just as far off is still offered, and one
+  that would dip past them and come out the other side is not.
 
   ```json
   { "condition": "restrained", "effects": ["own-saves-disadvantage"], "saves": ["dex_save"] }

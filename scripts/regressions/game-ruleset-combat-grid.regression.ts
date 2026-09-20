@@ -1733,6 +1733,25 @@ const cellsOf = (cells: Array<{ x: number; y: number }>) =>
     );
   }
 
+  // And the ROUTE counts, not only where it ends. A cell far enough off on the other side of what
+  // frightened them could only be walked to by going straight past it, which is the same "closer"
+  // the condition forbids, and the board would draw that walk.
+  {
+    const board = { grid: open(9, 3), placements: { brenna: { x: 0, y: 1 }, dread: { x: 2, y: 1 } } };
+    let state = fight(fiveE, [fighter(), holder("dread", "frightened")], [1, 20], board);
+    state = act(fiveE, state, { actorId: "dread", optionId: "loom", targetIds: ["brenna"] }).state;
+    state = advanceRulesetTurn(fiveE, state, dice()).state;
+    assert.equal(currentRulesetActor(state)?.id, "brenna");
+    const held = rulesetReachableCells(fiveE, state, "brenna").map((cell) => `${cell.x},${cell.y}`);
+    assert.ok(!held.includes("1,1"), "the step that would start the walk past them is not offered");
+    assert.ok(!held.includes("4,1"), "and neither is a cell just as far off that nothing but that walk could reach");
+    assert.ok(held.includes("0,0"), "a step that keeps the same distance is still fine");
+    assert.deepEqual(
+      act(fiveE, state, { actorId: "brenna", optionId: RULESET_MOVE_OPTION, targetIds: [], to: { x: 4, y: 1 } }).events,
+      [{ type: "refused", actorId: "brenna", optionId: RULESET_MOVE_OPTION, reason: "unreachable" }],
+    );
+  }
+
   // And its effects count only while the source is in sight: a wall between them and the thing
   // that frightened them gives their own attacks back.
   {

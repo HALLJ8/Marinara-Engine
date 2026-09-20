@@ -1183,6 +1183,53 @@ const traveller = (live: unknown = {}): RulesetCombatantInput => ({
   assert.equal(unknown.block.tier, "cr_0");
   assert.ok(unknown.adjusted[0]!.startsWith('The tier "cr_30" is not on this ruleset\'s scale'), unknown.adjusted[0]);
 
+  // A rider carries a damage type of its own, and a fight matches resistance by name, so it is held
+  // to the same declared names the first amount of a blow and its clauses are.
+  {
+    const riderly: RulesetStatBlock = {
+      health: 20,
+      defense: 13,
+      initiativeModifier: 2,
+      tier: "cr_1",
+      actions: [
+        {
+          id: "bite",
+          name: "Bite",
+          budget: "action",
+          toHit: 4,
+          damage: { count: 1, sides: 6, flat: 1, type: "piercing" },
+        },
+      ],
+      riders: [
+        {
+          id: "ember",
+          label: "Ember",
+          on: "hit",
+          oncePer: "turn",
+          amount: { count: 1, sides: 4, flat: 0 },
+          type: "starfire",
+        },
+        {
+          id: "cinder",
+          label: "Cinder",
+          on: "hit",
+          oncePer: "round",
+          amount: { count: 1, sides: 4, flat: 0 },
+          type: "fire",
+        },
+      ],
+    };
+    const held = clampRulesetStatBlock(fiveE, riderly, "cr_1");
+    assert.equal(held.block.riders![0]!.type, undefined, "a type this ruleset does not have is dropped from a rider");
+    assert.equal(held.block.riders![1]!.type, "fire", "and one it does have is left alone");
+    assert.ok(
+      held.adjusted.some((line) =>
+        /The damage type "starfire" is not one this ruleset has, so "Ember" deals untyped damage\./.test(line),
+      ),
+      held.adjusted.join(" | "),
+    );
+  }
+
   // A block already in scale is left exactly as it was.
   const hound = rulesetCreatureBlock(fiveE, entryOf(fiveE, "creatures", "cinder-hound"))!;
   const kept = clampRulesetStatBlock(fiveE, hound, "cr_1");

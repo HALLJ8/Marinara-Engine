@@ -340,6 +340,12 @@ export function rulesetReachableCells(
       const y = at.y + dy;
       const next = `${x},${y}`;
       if (rulesetCellBlocked(grid, x, y) || blockers.has(next)) continue;
+      // Somebody this combatant may not approach is not walked PAST either. A route that dips
+      // inside the ring and comes out the far side is still getting nearer, which is the thing the
+      // condition forbids, and the board DRAWS that route. So the step is refused rather than only
+      // the place it would have ended, and a cell far enough away is still offered whenever there
+      // is a way round.
+      if (held.some((source) => rulesetCellDistance({ x, y }, source.at) < source.away)) continue;
       // No squeezing between two solid corners: a step corner-wise needs one of its two sides open.
       if (
         dx !== 0 &&
@@ -356,8 +362,6 @@ export function rulesetReachableCells(
       // A friend can be walked past and not stood on, so their cell is searched through and never
       // offered as somewhere to stop.
       if (occupied.has(next)) continue;
-      // And a cell nearer to somebody this combatant may not approach is not offered either.
-      if (held.some((source) => rulesetCellDistance({ x, y }, source.at) < source.away)) continue;
       const path = pathTo(cameFrom, from, { x, y });
       cells.set(next, { x, y, cost, path, provokes: provokedBy(threats, from, path) });
     }

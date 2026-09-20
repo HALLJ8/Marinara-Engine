@@ -442,6 +442,17 @@ export function clampRulesetStatBlock(
     if (Object.keys(kept).length > 0) block.saves = kept;
     else delete block.saves;
   }
+  // A rider carries a damage type of its own, and a fight reads resistance off the NAME, so a type
+  // this ruleset never declared is a word nothing could act on: held to the same names an action's
+  // first amount and its clauses are.
+  for (const rider of block.riders ?? []) {
+    if (rider.type && types && !types.has(rider.type.trim().toLowerCase())) {
+      adjusted.push(
+        `The damage type "${rider.type}" is not one this ruleset has, so "${rider.label}" deals untyped damage.`,
+      );
+      delete rider.type;
+    }
+  }
   if (block.abilities) {
     const kept = Object.fromEntries(Object.entries(block.abilities).filter(([id]) => abilities.has(id)));
     if (Object.keys(kept).length < Object.keys(block.abilities).length) {
