@@ -1624,7 +1624,7 @@
           "$comment": "A rider: passive, never on the menu, and it adds itself to the first hit of a turn that qualifies. It only comes off weapons whose finesse column is set, and only when the roll leaned the right way or a friend is beside the target.",
           "id": "sly-strike",
           "label": "Sly Strike",
-          "summary": "Once a turn, a telling blow with a light weapon hurts more.",
+          "summary": "Once a turn, a telling blow with a finesse or ranged weapon hurts more.",
           "filters": {
             "level": 1
           },

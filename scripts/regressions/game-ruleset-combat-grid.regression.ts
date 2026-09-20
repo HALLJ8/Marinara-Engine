@@ -41,6 +41,7 @@ import {
   rulesetCellDistance,
   rulesetCombatant,
   rulesetCombatConditions,
+  rulesetCombatFailsSave,
   rulesetCombatOptions,
   rulesetInCells,
   rulesetLineOfSight,
@@ -1786,6 +1787,31 @@ const cellsOf = (cells: Array<{ x: number; y: number }>) =>
     const nearer = rulesetReachableCells(fiveE, hidden, "brenna").map((cell) => `${cell.x},${cell.y}`);
     assert.ok(nearer.length > 0, "there is somewhere to walk at all");
     assert.ok(!nearer.includes("3,0"), "and it is still not a cell nearer to what frightened them");
+
+    // And when the gate names EVERY effect the condition has, the condition itself still stands:
+    // `failsSaves` and `saves` are not effects and the gate never named them, so a fright you fail
+    // a save against whether or not you can see it keeps failing that save behind the wall.
+    const gatedWhole = structuredClone(fiveE);
+    const fright = gatedWhole.combat!.conditions!.find((entry) => entry.condition === "frightened")!;
+    fright.effects = ["own-attacks-disadvantage"];
+    fright.failsSaves = ["dex_save"];
+    fright.whileSourceInSight = ["own-attacks-disadvantage"];
+    const seen = rulesetCombatFailsSave(
+      gatedWhole,
+      gatedWhole.combat!,
+      rulesetCombatant(state, "brenna")!,
+      "dex_save",
+      state,
+    );
+    const unseen = rulesetCombatFailsSave(
+      gatedWhole,
+      gatedWhole.combat!,
+      rulesetCombatant(hidden, "brenna")!,
+      "dex_save",
+      hidden,
+    );
+    assert.equal(seen, true, "in sight, the condition fails that save without rolling");
+    assert.equal(unseen, true, "and out of sight it still does, because the gate named no save");
   }
 
   // Three strikes for one spend, with a walk between them: the walk is the board's own option and

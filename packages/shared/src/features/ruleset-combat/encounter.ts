@@ -162,8 +162,10 @@ export function rulesetActiveConditions(
     // Out of sight: `true` takes the whole condition off, and a list takes off only what it names,
     // so an effect nobody has to see to suffer stays.
     if (gate === true) return [];
-    const effects = entry.effects.filter((effect) => !gate.includes(effect));
-    return effects.length > 0 ? [{ ...entry, effects }] : [];
+    // A list gates the effects it NAMES and nothing else. `failsSaves` and `saves` are not effects
+    // and were never named, so the entry stays even when the gate took every effect it had: a
+    // fright you fail a save against whether or not you can see it is exactly what the list is for.
+    return [{ ...entry, effects: entry.effects.filter((effect) => !gate.includes(effect)) }];
   });
 }
 

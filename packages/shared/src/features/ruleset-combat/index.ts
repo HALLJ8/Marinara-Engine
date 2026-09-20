@@ -55,6 +55,7 @@ export {
   rulesetCombatant,
   rulesetCombatConditions,
   rulesetCombatEffects,
+  rulesetCombatFailsSave,
   rulesetCombatHealth,
   rulesetCombatStanding,
   rulesetMovementAllowance,

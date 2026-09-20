@@ -569,9 +569,11 @@ same keys for a d20 system:
   added. A row with no readable dice is not an attack, so rope in the same list is just rope.
   `strikes` is an optional value reference saying how many strikes ONE spend of this list's budget
   buys: taking a row with none in hand spends the budget and puts the rest in hand, and while any
-  are in hand every row of the list costs no budget at all, so a different weapon, a different
-  target and a walk between them all fall out of the menu on their own. They are cleared at the end
-  of the turn that bought them. A list that says nothing buys one strike a spend, which is what
+  are in hand every row that declares `strikes` costs no budget at all, so a different weapon, a
+  different target and a walk between them all fall out of the menu on their own. The strikes in
+  hand are the COMBATANT's, not one list's: a character whose two weapon lists both declare
+  `strikes` spends from the same handful whichever row they swing. They are cleared at the end of
+  the turn that bought them. A list that says nothing buys one strike a spend, which is what
   every fight did before this existed.
 
   ```json
