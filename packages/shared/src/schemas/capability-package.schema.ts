@@ -286,7 +286,8 @@ const capabilityPackageManifestBaseSchema = z
 //        1.20 through 1.27: an Engine that cannot read these keys refuses the whole ruleset file,
 //        or the catalog file that holds them, so a package that ships any of them declares 1.28.
 //        No permission.
-export const supportedCapabilityApi = Object.freeze({ major: 1, minor: 28 } as const);
+// 1.31: live host LLM, image and video integrations for downloadable packages.
+export const supportedCapabilityApi = Object.freeze({ major: 1, minor: 31 } as const);
 
 const capabilityApiVersionSchema = z
   .object({

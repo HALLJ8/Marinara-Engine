@@ -28,7 +28,6 @@ import {
   type Automatic1111Defaults,
   type ComfyUiDefaults,
   type ImageGenerationDefaultsProfile,
-  type ImageGenerationQuality,
   type NovelAiDefaults,
   type SceneIllustrationCharacterPrompt,
 } from "@marinara-engine/shared";
@@ -48,13 +47,12 @@ import {
   validateOutboundUrl,
   type SafeFetchOptions,
 } from "../../utils/security.js";
-import { notifyGenerationFallback, type GenerationFallbackNotifier } from "../generation/fallback-notification.js";
+import { notifyGenerationFallback } from "../generation/fallback-notification.js";
 import {
   isConnectionAdmissionFailure,
   splitConnectionAttemptAcrossFallback,
   type ConnectionAttemptOutcome,
   withConnectionAdmission,
-  type ConnectionAdmissionMode,
 } from "../generation/connection-admission.js";
 import {
   COMFYUI_MAX_REFERENCE_IMAGES,
@@ -114,81 +112,8 @@ function sanitizeErrorText(text: string): string {
     .slice(0, 300);
 }
 
-export interface ImageGenRequest {
-  prompt: string;
-  /** OpenAI GPT Image generation quality. Ignored by unsupported services and models. */
-  quality?: ImageGenerationQuality;
-  negativePrompt?: string;
-  width?: number;
-  height?: number;
-  model?: string;
-  /** For endpoint-based image services (e.g. RunPod): the endpoint/instance ID. */
-  imageEndpointId?: string;
-  /** Optional ComfyUI workflow JSON. Placeholders like %prompt%, %width%, %height%, %seed% will be replaced. */
-  comfyWorkflow?: string;
-  /** Optional connection-scoped generation defaults and API request parameters. */
-  imageDefaults?: ImageGenerationDefaultsProfile | null;
-  /** Allow this explicit image-generation connection to call local/private URLs. */
-  allowLocalUrls?: boolean;
-  /** Internal exact provider origin allowed to serve a private generated-image result. */
-  privateImageResultOrigin?: string;
-  /** Optional base64-encoded reference image for img2img / character consistency. */
-  referenceImage?: string;
-  /** Optional array of base64-encoded reference images (avatars). Providers that support multiple refs use all; others use the first. */
-  referenceImages?: string[];
-  /** Optional structured per-character prompts. NovelAI V4/V4.5 maps these to native character captions. */
-  characterPrompts?: SceneIllustrationCharacterPrompt[];
-  /** Request a transparent image background when the provider/model supports it. */
-  transparentBackground?: boolean;
-  /** Optional caller-owned abort signal for cancelling long image requests. */
-  signal?: AbortSignal;
-  /** Emit the final provider request even when the global log level is above debug. */
-  debugMode?: boolean;
-  /** Defaults to foreground: the caller is servicing a user-visible request. */
-  admissionMode?: ConnectionAdmissionMode;
-  /** Called immediately before a configured fallback connection is attempted. */
-  onFallback?: GenerationFallbackNotifier;
-  /** Optional one-shot backup connection used only when the primary image request fails. */
-  fallback?: {
-    connectionId: string;
-    connectionName: string;
-    provider: string;
-    source: string;
-    baseUrl: string;
-    apiKey: string;
-    serviceHint: string;
-    model: string;
-    imageEndpointId?: string;
-    comfyWorkflow?: string;
-    imageDefaults?: ImageGenerationDefaultsProfile | null;
-    quality?: ImageGenerationQuality;
-    imageGenerationSource?: string;
-    imageService?: string;
-    /** Prompt compiled for this fallback connection's provider and defaults. */
-    prompt?: string;
-    /** `null` explicitly removes the primary connection's negative prompt. */
-    negativePrompt?: string | null;
-  };
-}
-
-export interface ImageGenResult {
-  /** Base64-encoded image data */
-  base64: string;
-  /** MIME type (e.g. "image/png") */
-  mimeType: string;
-  /** File extension without dot */
-  ext: string;
-  /** The provider-specific prompt used when a fallback connection rendered the image. */
-  effectivePrompt?: string;
-  effectiveNegativePrompt?: string;
-  /** Present when a configured fallback connection produced the image. */
-  effectiveConnection?: {
-    connectionId: string;
-    connectionName: string;
-    provider: string;
-    model: string;
-  };
-}
+import type { ImageGenRequest, ImageGenResult } from "@marinara-engine/shared";
+export type { ImageGenRequest, ImageGenResult } from "@marinara-engine/shared";
 
 const EXPLICIT_IMAGE_SOURCES = new Set([
   "openai",
@@ -455,13 +380,8 @@ async function generateImageUncapped(
   }
 }
 
-export type SaveImageToDiskOptions = {
-  /**
-   * Store one canonical file for images referenced by more than one gallery.
-   * Gallery metadata remains responsible for deciding where the image appears.
-   */
-  shared?: boolean;
-};
+import type { SaveImageToDiskOptions } from "@marinara-engine/shared";
+export type { SaveImageToDiskOptions } from "@marinara-engine/shared";
 
 /**
  * Save a generated image to the gallery directory on disk.
@@ -504,11 +424,8 @@ export function removeSavedImageFromDisk(filePath: string): void {
   }
 }
 
-export type StagedGalleryImage = {
-  filePath: string;
-  promote: () => void;
-  compensate: () => void;
-};
+import type { StagedGalleryImage } from "@marinara-engine/shared";
+export type { StagedGalleryImage } from "@marinara-engine/shared";
 
 /**
  * Staged files are named for the writing process and only survive it if that process was killed
