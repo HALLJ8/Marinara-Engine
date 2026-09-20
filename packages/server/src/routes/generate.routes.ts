@@ -652,6 +652,7 @@ import {
   buildCharacterMacroProfilesById,
   injectIdentityFallbackMessages,
   loadCharacterPromptInfo,
+  normalizeCharacterRpgStats,
 } from "../services/generation/character-prompt-context.js";
 import { injectSceneContextMessages } from "../services/generation/scene-context-runtime.js";
 import { injectCommittedTrackerContext } from "../services/generation/committed-tracker-context.js";
@@ -3704,6 +3705,16 @@ export async function generateRoutes(app: FastifyInstance) {
         }
 
         const charInfo = await loadCharacterPromptInfo({ chars, characterIds, chatMode });
+        const roleplayRollParticipants = identity
+          ? [
+              ...charInfo.filter((character) => character.id !== identity.id),
+              {
+                id: identity.id,
+                name: identity.name,
+                rpgStats: normalizeCharacterRpgStats(parseExtra(identity.personaStats).rpgStats),
+              },
+            ]
+          : charInfo;
         for (const character of charInfo) {
           const resolveCharacterPromptText = (value: string): string =>
             resolveHistoryMessageMacros([{ content: value, characterId: character.id }])[0]?.content ?? value;
@@ -6863,7 +6874,7 @@ export async function generateRoutes(app: FastifyInstance) {
                                 ...(tool.function.parameters.properties as Record<string, unknown>),
                                 character: {
                                   type: "string",
-                                  enum: charInfo.map((character) => character.name),
+                                  enum: roleplayRollParticipants.map((character) => character.name),
                                   description: "The chat participant whose action is being rolled.",
                                 },
                                 attribute: {
@@ -7361,7 +7372,7 @@ export async function generateRoutes(app: FastifyInstance) {
                 ...(chatMode === "roleplay"
                   ? {
                       prepareDiceRoll: (args: Record<string, unknown>) =>
-                        prepareRoleplayRoll(args, charInfo, roleplayCallerId),
+                        prepareRoleplayRoll(args, roleplayRollParticipants, roleplayCallerId),
                     }
                   : {}),
                 applyGameStateUpdate: async ({ type, value }) => {

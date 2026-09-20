@@ -354,7 +354,7 @@ export function buildRoleplayCommandsReminder(args: {
     );
   if (enabled("roll"))
     lines.push(
-      '- [roll: character="character name" notation="1d20" attribute="Strength" reason="action and success rule"] requests a real roll; use roll_dice with the same fields when available. Attribute is optional; the engine adds the assigned attribute modifier, so do not add it yourself. Set the stakes first, stop after the command, and wait for the result before narrating the outcome. Never invent results or reroll an action.',
+      '- [roll: character="participant name" notation="1d20" attribute="Strength" reason="action and success rule"] requests a real roll; use roll_dice with the same fields when available. You may target any chat participant, including the user\'s persona by name. Attribute is optional; the engine adds the assigned attribute modifier, so do not add it yourself. Set the stakes first, stop after the command, and wait for the result before narrating the outcome. Never invent results or reroll an action.',
     );
   if (enabled("combat") && args.availableAgentIds.has("combat"))
     lines.push("- [combat] asks the Combat agent to start an encounter when the scene turns to combat.");

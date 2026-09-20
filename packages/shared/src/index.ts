@@ -147,6 +147,7 @@ export * from "./utils/chat-summary-entries.js";
 export * from "./utils/chat-summary-prompt-settings.js";
 export * from "./utils/translator-defaults.js";
 export * from "./utils/chat-persona.js";
+export * from "./utils/message-continuation.js";
 export * from "./utils/quest-state.js";
 export * from "./utils/quote-format.js";
 export * from "./utils/image-prompt-compiler.js";

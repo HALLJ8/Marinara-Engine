@@ -23,6 +23,7 @@ import { ROLEPLAY_TTS_PARAGRAPH_EVENT, type RoleplayTTSParagraphDetail } from ".
 import { ttsService } from "../../lib/tts-service";
 import { usePageActivity } from "../../hooks/use-page-activity";
 import {
+  appendContinuationMessageContent,
   normalizeChatSummaryEntries,
   isLongTermMemoryChatSummaryPromptAllowed,
   STORYBOARD_AGENT_ID,
@@ -357,13 +358,16 @@ function RoleplayLiveStreamText({
 
   useLayoutEffect(() => {
     let frame: number | null = null;
-    const readBuffer = () => {
-      const state = useChatStore.getState();
-      return state.streamBuffers.get(chatId) ?? (state.activeChatId === chatId ? state.streamBuffer : "");
+    const readBuffer = (state: ReturnType<typeof useChatStore.getState>) => {
+      const buffer = state.streamBuffers.get(chatId) ?? (state.activeChatId === chatId ? state.streamBuffer : "");
+      const continuation = state.continuationStreams.get(chatId);
+      return continuation
+        ? appendContinuationMessageContent(continuation.content, buffer, continuation.addNewline)
+        : buffer;
     };
     const apply = () => {
       frame = null;
-      const buffer = readBuffer();
+      const buffer = readBuffer(useChatStore.getState());
       let next = buffer;
       if (completedParagraphOnly) {
         const paragraphs = splitRoleplayParagraphs(buffer, true);
@@ -390,10 +394,7 @@ function RoleplayLiveStreamText({
     };
 
     apply();
-    const unsubscribe = useChatStore.subscribe(
-      (state) => state.streamBuffers.get(chatId) ?? (state.activeChatId === chatId ? state.streamBuffer : ""),
-      schedule,
-    );
+    const unsubscribe = useChatStore.subscribe(readBuffer, schedule);
     return () => {
       if (frame !== null) cancelAnimationFrame(frame);
       unsubscribe();
@@ -496,28 +497,30 @@ function RegeneratingMessageContent({
 } & Omit<ComponentProps<typeof ChatMessage>, "message" | "isStreaming">) {
   const { t } = useTranslation();
   const thinkingBuffer = useChatStore((s) => s.thinkingBuffer);
+  const isContinuation = useChatStore((s) => s.continuationStreams.get(msg.chatId)?.messageId === msg.id);
   const streamingOutputStarted = useChatStore((s) =>
     hasVisibleStreamText(s.streamBuffers.get(msg.chatId) ?? (s.activeChatId === msg.chatId ? s.streamBuffer : "")),
   );
-  // Strip old-swipe attachments so a previous illustration doesn't linger
-  // while the new swipe's text is streaming in. The same applies to old
-  // reasoning: expose the action only after this swipe receives its first
-  // reasoning chunk.
+  // A new swipe replaces the old media and reasoning; a continuation retains them.
   const parsedExtra = typeof msg.extra === "string" ? JSON.parse(msg.extra) : (msg.extra ?? {});
   const cleanExtra = {
     ...parsedExtra,
-    attachments: null,
-    roleplayDocuments: null,
-    roleplayCommandActivity: null,
-    roleplayPrivateCommands: null,
-    diceRollResult: null,
-    thinking: thinkingBuffer || null,
+    ...(!isContinuation
+      ? {
+          attachments: null,
+          roleplayDocuments: null,
+          roleplayCommandActivity: null,
+          roleplayPrivateCommands: null,
+          diceRollResult: null,
+        }
+      : {}),
+    thinking: thinkingBuffer || (isContinuation ? parsedExtra.thinking : null),
   };
   return (
     <ChatMessage
       message={{ ...msg, extra: cleanExtra, content: "" }}
       isStreaming
-      streamingOutputStarted={streamingOutputStarted}
+      streamingOutputStarted={isContinuation || streamingOutputStarted}
       visualNovelParagraphIndex={visualNovelParagraphIndex}
       onVisualNovelParagraphCount={onVisualNovelParagraphCount}
       streamingContent={(renderText) => (
@@ -531,8 +534,8 @@ function RegeneratingMessageContent({
         />
       )}
       {...rest}
-      storyboard={null}
-      storyboardGenerating={false}
+      storyboard={isContinuation ? rest.storyboard : null}
+      storyboardGenerating={isContinuation ? rest.storyboardGenerating : false}
     />
   );
 }
@@ -1464,6 +1467,8 @@ export function ChatRoleplaySurface({
   onSelectAllBelowSelection,
   isGrouped,
 }: RoleplaySurfaceProps) {
+  const continuationMessageId = useChatStore((s) => s.continuationStreams.get(activeChatId)?.messageId);
+  const inlineStreamingMessageId = regenerateMessageId ?? continuationMessageId ?? null;
   const { t: localizeUi } = useUiTranslation();
   const { t } = useTranslation();
   const { data: installedCapabilities = [] } = useInstalledCapabilityPackages();
@@ -1770,6 +1775,10 @@ export function ChatRoleplaySurface({
   }, [activeChatId]);
 
   const [transcriptWindowStart, setTranscriptWindowStart] = useState<number | null>(null);
+  useLayoutEffect(() => {
+    // /continue targets the latest reply, even when the reader was browsing an older window.
+    if (continuationMessageId) setTranscriptWindowStart(null);
+  }, [continuationMessageId]);
   const pendingLoadMoreRevealRef = useRef<{
     previousLength: number;
     previousStartIndex: number;
@@ -2589,7 +2598,7 @@ export function ChatRoleplaySurface({
                   if (
                     isMessageShadowedByLiveStream({
                       hasLiveStream,
-                      regenerateMessageId,
+                      regenerateMessageId: inlineStreamingMessageId,
                       streamedMessageId,
                       messageId: msg.id,
                     })
@@ -2599,7 +2608,7 @@ export function ChatRoleplaySurface({
                   const sourceIndex = transcriptWindow.startIndex + i;
                   const messageDepth = (messages?.length ?? 0) - 1 - sourceIndex;
                   const messageOrderIndex = loadedMessageOffset + sourceIndex;
-                  const isRegenerating = hasLiveStream && regenerateMessageId === msg.id;
+                  const isRegenerating = hasLiveStream && inlineStreamingMessageId === msg.id;
                   const inlineStoryboard =
                     roleplayStoryboardByTurn.get(`${msg.id}:${msg.activeSwipeIndex ?? 0}`) ?? null;
                   const inlineStoryboardGenerating =
@@ -2697,7 +2706,7 @@ export function ChatRoleplaySurface({
 
                 {showHistory && !isStreaming && <CyoaChoices messages={messages} />}
 
-                {showHistory && hasLiveStream && !regenerateMessageId && (
+                {showHistory && hasLiveStream && !inlineStreamingMessageId && (
                   <StreamingIndicator
                     activeChatId={activeChatId}
                     chatCharIds={chatCharIds}
@@ -2754,9 +2763,10 @@ export function ChatRoleplaySurface({
                     {!vnHistoryOpen && (
                       <div className="rounded-xl border border-[var(--border)] bg-[var(--marinara-chat-chrome-panel-bg)] shadow-lg">
                         {hasLiveStream ? (
-                          regenerateMessageId && messages?.find((message) => message.id === regenerateMessageId) ? (
+                          inlineStreamingMessageId &&
+                          messages?.find((message) => message.id === inlineStreamingMessageId) ? (
                             <RegeneratingMessageContent
-                              msg={messages.find((message) => message.id === regenerateMessageId)!}
+                              msg={messages.find((message) => message.id === inlineStreamingMessageId)!}
                               visualNovel
                               visualNovelMediaTarget={vnMediaTarget}
                               visualNovelParagraphIndex={vnParagraphIndex ?? undefined}
