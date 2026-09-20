@@ -1958,6 +1958,62 @@ const labels = (definition: RulesetDefinition, state: RulesetEncounterState, id:
   }
 
   {
+    // The ACTION's own save-for-half covers the first amount and every clause that asked for no
+    // save of its own; a clause with one follows its own roll instead.
+    const wide = [
+      {
+        id: "ash-fall",
+        label: "Ash Fall",
+        rows: [{ list: "spells", values: { name: "Ash Fall", level: 1, prepared: true } }],
+        mechanics: {
+          kind: "attack",
+          amount: { dice: "1d6" },
+          damageType: "piercing",
+          save: { save: "dex_save", onSuccess: "half" },
+          plus: [
+            { dice: "1d4", type: "fire" },
+            { flat: 8, type: "poison", save: { save: "con_save", difficulty: 12, onSuccess: "half" } },
+          ],
+        },
+      },
+    ] as unknown as RulesetCatalogEntry[];
+    const thrower = (): RulesetCombatantInput => ({
+      id: "wren",
+      name: "Wren",
+      side: "party",
+      build: build({
+        abilities: { str: 8, dex: 12, con: 12, int: 18, wis: 12, cha: 10 },
+        fields: { level: 7, ac: 12, speed: 30, hp_max: 38, spellcasting_ability: "int" },
+        lists: { spells: wide.flatMap((entry) => rowsFromCatalogEntry("wide", entry).map((row) => row.row)) },
+      }),
+      live: {},
+      catalogs: { wide: wide },
+    });
+    const state = fight(fiveE, [thrower(), clawed("hide")], 20, 1);
+    const option = rulesetCombatOptions(fiveE, state, "wren").find((entry) => entry.label === "Ash Fall")!;
+    // The target passes the action's save and fails the clause's own.
+    const step = act(fiveE, state, { actorId: "wren", optionId: option.id, targetIds: ["hide"] }, 20, 6, 4, 3);
+    const saves = eventsOf(step.events, "save");
+    assert.deepEqual(
+      saves.map((event) => [event.save, event.success]),
+      [
+        ["dex_save", true],
+        ["con_save", false],
+      ],
+      "the action's save first, then the clause's own",
+    );
+    assert.deepEqual(
+      eventsOf(step.events, "damage").map((event) => [event.damageType, event.amount, !!event.saved]),
+      [
+        ["piercing", 3, true],
+        ["fire", 2, true],
+        ["poison", 8, false],
+      ],
+      "halved by the action's save, except the clause that asked for a save of its own",
+    );
+  }
+
+  {
     // A critical doubles every clause's dice, by the same rule the ruleset declared for the first.
     const state = fight(fiveE, [caster(), clawed("hide")], 20, 1);
     const crit = act(

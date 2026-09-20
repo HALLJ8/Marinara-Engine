@@ -1764,6 +1764,64 @@ const cellsOf = (cells: Array<{ x: number; y: number }>) =>
     assert.equal(modeIn(hidden), "normal", "out of its sight, the condition counts for nothing");
   }
 
+  // Three strikes for one spend, with a walk between them: the walk is the board's own option and
+  // costs the allowance, and the budget is still spent exactly once.
+  {
+    const striker = (): RulesetCombatantInput => ({
+      id: "vess",
+      name: "Vess",
+      side: "party",
+      build: build({
+        abilities: { str: 10, dex: 18, con: 14, int: 10, wis: 10, cha: 10 },
+        fields: { level: 1, ac: 15, speed: 30, hp_max: 20, attacks_per_action: 3 },
+        lists: {
+          attacks: [
+            {
+              name: "Rapier",
+              ability: "dex",
+              proficient: true,
+              bonus: 0,
+              damage: "1d8",
+              damage_type: "piercing",
+              finesse: false,
+              reach: 5,
+              range: 0,
+              long_range: 0,
+            },
+          ],
+        },
+      }),
+      live: {},
+      catalogs: {},
+    });
+    const board = {
+      grid: open(9, 3),
+      placements: { vess: { x: 1, y: 1 }, snag: { x: 0, y: 1 }, pike: { x: 4, y: 1 } },
+    };
+    let state = fight(fiveE, [striker(), snag(), pikeman()], [20, 1, 1], board);
+    let step = act(fiveE, state, { actorId: "vess", optionId: "attack:0:0", targetIds: ["snag"] }, 18, 5);
+    assert.equal(firstOf(step.events, "strikes").left, 2);
+    state = step.state;
+    assert.equal(rulesetCombatant(state, "vess")!.budgets.action, 0, "one spend, and the walk is still free");
+    // Two cells towards the pikeman, which the board offers as its own option.
+    const walk = rulesetCombatOptions(fiveE, state, "vess").find((option) => option.id === RULESET_MOVE_OPTION)!;
+    assert.ok(walk.cells?.some((cell) => cell.x === 3 && cell.y === 1));
+    // Snag is standing next to them, so the walk is struck at on the way, as any walk would be.
+    step = act(fiveE, state, { actorId: "vess", optionId: RULESET_MOVE_OPTION, targetIds: [], to: { x: 3, y: 1 } }, 1);
+    assert.equal(eventsOf(step.events, "opportunity").length, 1, "a walk between strikes is still a walk");
+    assert.equal(firstOf(step.events, "move").stopped, undefined);
+    state = step.state;
+    assert.equal(rulesetCombatant(state, "vess")!.movementLeft, 4, "the walk cost the allowance and nothing else");
+    assert.equal(rulesetCombatant(state, "vess")!.strikesLeft, 2, "and left the strikes alone");
+    // And the next strike, at somebody else, is still free.
+    const next = rulesetCombatOptions(fiveE, state, "vess").find((option) => option.id === "attack:0:0")!;
+    assert.equal(next.budget, undefined);
+    assert.deepEqual(rulesetOptionTargets(fiveE, state, "vess", next), ["pike"], "only what is in reach from here");
+    step = act(fiveE, state, { actorId: "vess", optionId: "attack:0:0", targetIds: ["pike"] }, 18, 6);
+    assert.equal(firstOf(step.events, "strikes").left, 1);
+    assert.equal(rulesetCombatant(step.state, "vess")!.budgets.action, 0, "the budget was spent once for all of it");
+  }
+
   // A rider that asks for a friend beside the target reads the board when there is one.
   {
     const feats = fiveE.catalogs!.find((catalog) => catalog.id === "feats")!.entries!;
