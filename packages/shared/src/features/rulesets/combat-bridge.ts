@@ -236,9 +236,10 @@ function combatSkillFromEntry(
   perCell: number,
 ): CombatSkill | null {
   const mechanics = entry.mechanics;
-  // `utility` has no Engine action behind it, and a reaction is a timing window the combat handoff's
-  // adapters own. Both are better absent than mapped to something they are not.
-  if (!mechanics || mechanics.kind === "utility" || mechanics.reaction) return null;
+  // `utility` has no Engine action behind it, a `rider` is passive and nobody takes it, and a
+  // reaction is a timing window the combat handoff's adapters own. All three are better absent than
+  // mapped to something they are not.
+  if (!mechanics || mechanics.kind === "utility" || mechanics.kind === "rider" || mechanics.reaction) return null;
 
   let mpCost = 0;
   let slotLevel: number | undefined;

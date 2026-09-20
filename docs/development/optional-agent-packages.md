@@ -664,6 +664,42 @@ Desktop uses a browse list with an adjacent detail region. Mobile uses one pane 
 
 An extraction is complete only when the base production client and server bundles no longer contain the package implementation, a fresh install cannot activate it without downloading the package, an upgraded install retains it, and package install/update/uninstall passes on desktop, mobile, and Termux-compatible filesystems.
 
+### Capability API 1.29: what one turn of a ruleset fight can do
+
+Five additions, all optional, to the `combat` block and to the catalog entries a fight reads:
+
+- A blow may carry up to three MORE amounts beside its first. `mechanics.plus` on a catalog entry
+  and `damage.plus` on a creature action are each `{ dice?, flat?, type?, save?: { save,
+difficulty?, onSuccess: "none" | "half" } }`: rolled and typed on its own, doubled on its own by a
+  critical, saved against on its own by the target, and still one check against concentration and
+  one check for going down for the whole blow.
+- `combat.attacks[].strikes` is a value reference saying how many strikes one spend of that list's
+  budget buys. The rest wait in hand until the turn ends, and while any are in hand every row of
+  that list costs no budget.
+- `mechanics.free` costs no budget, `mechanics.gives` hands budgets back for this turn only (capped
+  where they land), and `mechanics.standard` lets its holder buy named standard actions with
+  another budget. A `utility` entry that declares `gives` or `standard` is offered rather than
+  dropped.
+- A new entry kind, `rider`, and a creature's own `riders`, add a damage clause to the first
+  qualifying hit of a turn or a round, passively and without ever being on the menu.
+- The closed condition effect list gains `own-saves-advantage`, `own-saves-disadvantage`,
+  `resist-all`, `cannot-target-source` and `cannot-approach-source`, and a condition may narrow the
+  saves it is about (`saves`), count only while its source is in sight (`whileSourceInSight`) or
+  end when its source goes down (`endsWhenSourceDown`).
+
+```json
+{
+  "capabilityApi": { "major": 1, "minor": 29 },
+  "kind": ["ruleset"],
+  "contributions": { "assets": { "paths": ["ruleset.json"] } }
+}
+```
+
+Not a soft seam, for the same reason as 1.20 through 1.28: an Engine that cannot read these keys
+refuses the whole ruleset file, or the catalog file that holds them, so install reads the verified
+bytes of `ruleset.json` and of every declared `catalogs/<id>.json` and refuses either one under an
+older declaration. No permission, and no change for a ruleset that declares none of them.
+
 ### Capability API 1.28: a ruleset fight on a board
 
 A ruleset's `combat` block may say what one cell of a battlefield is worth in its own distance

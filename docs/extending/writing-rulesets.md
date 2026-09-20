@@ -567,6 +567,25 @@ same keys for a d20 system:
   An `ability` column is an `enum` holding one of your ability ids; a value that is not one adds
   nothing. A `proficiency` column is a `boolean`, and where it is set your proficiency bonus is
   added. A row with no readable dice is not an attack, so rope in the same list is just rope.
+  `strikes` is an optional value reference saying how many strikes ONE spend of this list's budget
+  buys: taking a row with none in hand spends the budget and puts the rest in hand, and while any
+  are in hand every row that declares `strikes` costs no budget at all, so a different weapon, a
+  different target and a walk between them all fall out of the menu on their own. The strikes in
+  hand are the COMBATANT's, not one list's: a character whose two weapon lists both declare
+  `strikes` spends from the same handful whichever row they swing. They are cleared at the end of
+  the turn that bought them. A list that says nothing buys one strike a spend, which is what
+  every fight did before this existed.
+
+  ```json
+  {
+    "list": "attacks",
+    "budget": "action",
+    "name": "name",
+    "strikes": { "field": "attacks_per_action" },
+    "damage": { "dice": { "column": "damage" } }
+  }
+  ```
+
 - `abilities`: optional. Sheet lists whose catalog-marked rows are abilities, filtered exactly as
   `battle.skills` are with `onlyWhen` and `alwaysWhen`. What each one does is that entry's own
   `mechanics`; the block says which `budget` they spend by default, the `toHit` an entry that rolls
@@ -578,17 +597,45 @@ same keys for a d20 system:
   ally's next attack is rolled twice and the better kept) are always resolved. `dash` (the same
   movement allowance again) and `disengage` (nobody strikes at you for walking away this turn) are
   resolved on a board and recorded off one. `hide` and `ready` are accepted and do nothing yet.
+- `standardEffects`: optional, for the part of a standard action its flag does not carry. Only
+  `dodge` has one today: `{ "dodge": { "saves": ["dex_save"] } }` says which of your saves a dodger
+  rolls twice, keeping the better, for as long as the dodge lasts. Name only saves your sheet
+  declares, and only when your `standard` list has `dodge`. Leave it out and dodging is exactly what
+  it was: harder to hit, and nothing else.
 - `conditions`: optional. Maps YOUR condition ids onto what they do, so the sheet's conditions and
   the fight's are one record and a poisoned character is still poisoned afterwards. The effects are
   a closed list: `own-attacks-advantage`, `own-attacks-disadvantage`, `attacks-against-advantage`,
   `attacks-against-disadvantage`, `attacks-against-adjacent-advantage`,
   `attacks-against-far-disadvantage`, `attacks-from-adjacent-critical`, `cannot-act`,
-  `cannot-react`, `speed-zero`, `half-move-to-stand` and `ends-on-damage`. `failsSaves` names saves
-  the condition fails without rolling. The five that need distance or movement
-  (`attacks-against-adjacent-advantage`, `attacks-against-far-disadvantage`,
-  `attacks-from-adjacent-critical`, `speed-zero`, `half-move-to-stand`) are read by a fight on a
-  board and say nothing in one without (see Positions). `cannot-react` is read only for a strike at
-  somebody walking away; the reaction window it will also gate is a later release.
+  `cannot-react`, `speed-zero`, `half-move-to-stand`, `ends-on-damage`, `own-saves-advantage`,
+  `own-saves-disadvantage`, `resist-all`, `cannot-target-source` and `cannot-approach-source`.
+  `failsSaves` names saves the condition fails without rolling. The six that need distance or
+  movement (`attacks-against-adjacent-advantage`, `attacks-against-far-disadvantage`,
+  `attacks-from-adjacent-critical`, `speed-zero`, `half-move-to-stand`, `cannot-approach-source`)
+  are read by a fight on a board and say nothing in one without (see Positions). `cannot-react` is
+  read only for a strike at somebody walking away; the reaction window it will also gate is a later
+  release. Three more keys sit beside the effects:
+  - `saves`: which of your saves the two save effects are about. All of them when it is left out,
+    and naming it without one of those two effects is refused.
+  - `whileSourceInSight`: what counts only while whoever applied it is in the holder's line of
+    sight. `true` gates the whole condition; a list of its own effects gates only those and leaves
+    the rest standing, which is what a fright that stops you walking any nearer whether or not you
+    can see it needs. Naming an effect the condition does not have is refused. Without a board there
+    is no line to break, so everything counts either way.
+  - `endsWhenSourceDown`: it comes off the moment whoever applied it goes down.
+
+  `own-saves-advantage` and its opposite roll the save twice and keep one, exactly as an attack is
+  rolled, and they cancel each other out. `resist-all` halves every kind of harm on top of whatever
+  the target's own hide said, and cancels against a vulnerability the same way.
+  `cannot-target-source` keeps the holder from pointing anything at whoever put it on them, and
+  `cannot-approach-source` keeps them from walking any nearer to that somebody than the cell they
+  stand in, the route included: a way round to a cell just as far off is still offered, and one
+  that would dip past them and come out the other side is not.
+
+  ```json
+  { "condition": "restrained", "effects": ["own-saves-disadvantage"], "saves": ["dex_save"] }
+  ```
+
 - `concentration`: optional. The live `text` field that records what is being held, the `save` that
   damage forces, the `floor` under that difficulty, and `fromDamage`, the share of the damage taken
   that sets it when it is higher. Starting a second ability that concentrates ends the first, and
@@ -607,8 +654,9 @@ same keys for a d20 system:
 
 ### What a fight reads from `mechanics`
 
-`kind` decides whether the `amount` is damage or healing; `utility` entries and anything marked
-`reaction` are left off the menu. `attackRoll` makes it roll against the target's defense with the
+`kind` decides whether the `amount` is damage or healing; anything marked `reaction` is left off the
+menu, and so is a `utility` entry unless it changes what the turn itself may hold (see below).
+`attackRoll` makes it roll against the target's defense with the
 list's `toHit`; `autoHit` skips that entirely. `save` rolls the target's own save against the list's
 `saveDifficulty`, and `onSuccess` decides whether a success takes half or nothing. `targetCount` is
 how many it may be pointed at. An ability that rolls no attack (an area everyone saves against,
@@ -620,6 +668,74 @@ off), `until-save` (which needs `saveEnds` beside it) or `{ "rounds": n }`, and 
 grants temporary points on the health pool, and they never stack: the bigger buffer stands.
 `scales` grows the amount by the extra DICE its table gives for the value it reads. `cost` is paid
 through the sheet's own `use` command, and `budget` overrides which part of the economy it spends.
+
+`plus` is up to three MORE amounts on the same blow, beside `amount`, each one rolled and typed on
+its own ("and 2d6 fire"). A clause is `{ "dice": "2d6", "flat": 1, "type": "fire" }` and may carry a
+`save` of its own, `{ "save": "con_save", "difficulty": 13, "onSuccess": "none" | "half" }`, which
+the TARGET rolls whatever the action already asked them for: `none` leaves nothing of that clause on
+a success and `half` leaves half of it, and the rest of the blow is untouched either way. Without a
+`difficulty` it falls back to the number the action's own save uses, and then to the list's
+`saveDifficulty`. A critical doubles every clause's dice by the same rule it doubles the first
+amount's, a clause with no `type` is the blow's own kind of harm, and the whole blow is still ONE
+check against concentration, with the summed damage, and one check for going down. A clause needs an
+`amount` to ride, and a `heal` carries none.
+
+```json
+{
+  "kind": "attack",
+  "attackRoll": true,
+  "amount": { "dice": "1d8" },
+  "damageType": "piercing",
+  "plus": [{ "dice": "2d6", "type": "fire" }]
+}
+```
+
+Three keys say what an entry does to the turn's own economy, and a `utility` entry that declares any
+of them is offered rather than dropped:
+
+- `free`: it costs no budget at all. It still pays whatever `cost` it names, and it may not also
+  name a `budget`.
+- `gives`: `[{ "budget": "action", "count": 1 }]`, up to four. Using it adds to those budgets the
+  moment it is used, capped where they land at what a turn holds plus the gift, so nothing can be
+  saved up for a later turn.
+- `standard`: `{ "actions": ["dash", "disengage", "hide"], "budget": "bonus" }`. Its holder may take
+  those standard actions for THAT budget. They are offered beside the ordinary ones as
+  `standard:<id>@<budget>`, and the entry itself stays off the menu when that permission is all it
+  is, because a permission is not something anybody takes.
+
+An entry of the new `kind: "rider"` is PASSIVE: nobody takes it, it is never on the menu, and it
+adds one more damage clause to the first qualifying hit of a period, automatically. It carries
+`rider` and nothing else that would be taken:
+
+```json
+{
+  "kind": "rider",
+  "rider": {
+    "on": "hit",
+    "sources": ["attacks"],
+    "requires": { "column": "finesse" },
+    "when": ["advantage", "ally-adjacent"],
+    "oncePer": "turn",
+    "amount": { "dice": "1d6" }
+  },
+  "scales": {
+    "from": { "field": "level" },
+    "table": [
+      [1, 0],
+      [3, 1]
+    ]
+  }
+}
+```
+
+`sources` names the attack lists it comes off and `requires` one truthy column of their rows, so a
+rider that only fires with certain weapons says which without the Engine knowing what a weapon is;
+naming neither means any hit its holder lands. `when` is ANY-of: `advantage` is how the attack roll
+finally leaned, and `ally-adjacent` is a standing ally of the attacker who can act, within one cell
+of the target on a board and anywhere at all without one. `oncePer` is `turn` (fresh at the start of
+every turn there is, so a strike made while somebody else acts can still carry one) or `round`.
+`amount` grows with the entry's own `scales`, and `type` is the kind of harm, defaulting to the
+blow's own.
 
 ### Creatures: a bestiary a fight reads
 
@@ -692,6 +808,11 @@ is filed under one of your own tiers.
 - `traits`: short name and text pairs the Game Master is shown. They are never resolved, so
   anything with numbers in it belongs in an action.
 - `signaturePoints`: points given back at the start of its own turn, spent on `signature` actions.
+- `riders`: up to four, the same thing a catalog entry's `rider` is, written on the block. Each one
+  is `{ "id": "pack", "name": "Pack", "on": "hit", "oncePer": "turn" | "round", "amount": { "dice": "1d6" } }`,
+  with an optional `type` and an optional `actions` naming which of this block's own actions it
+  fires on. A creature has no sheet list to read, so `sources` and `requires` are the two keys it
+  does not have.
 - `actions`: up to twelve, each with an `id` of its own. An action carries what a hand-written stat
   block carries (`toHit`, `autoHit`, `damage`, `save`, `applies`, `targetCount`, `reach`, `range`, `area`)
   plus four things only a creature has. `reach` is how far it strikes, `range` how far it is thrown
@@ -710,7 +831,11 @@ is filed under one of your own tiers.
     only while somebody else is acting. Stored, priced and spent today; see Not yet below.
 - A save needs a difficulty on the action itself: `save.difficulty` for a save the action forces, or
   `saveDifficulty` for a condition that ends on a save when the action has no save of its own. A
-  stat block is not a character sheet, so there is nowhere else for that number to come from.
+  stat block is not a character sheet, so there is nowhere else for that number to come from. A
+  clause's own save may leave its `difficulty` out and fall back to that same number.
+- `damage.plus` is the same list of clauses a catalog entry's `plus` is, and reads exactly the same
+  way: `"damage": { "dice": "1d6", "flat": 2, "type": "piercing", "plus": [{ "dice": "1d4", "type": "fire" }] }`
+  is a bite that carries the heat as its own amount, resisted on its own and doubled on its own.
 
 The 5e draft's own bestiary is four hand-written creatures in
 `docs/development/ruleset-5e-2014.example.json`, covering a sequence, a recharge, a save with a
@@ -919,7 +1044,10 @@ Said plainly, because a ruleset should not claim what the Engine does not do:
   in.** The points, the options and the spending are all here; what asks a creature for one between
   one turn and the next arrives with reactions.
 - Conditions do what the closed effect list can say and no more. A condition that gives
-  disadvantage on ability checks, or resistance to everything, is a plain record on the sheet today.
+  disadvantage on ability CHECKS, or one that gets worse in levels the way exhaustion does, is a
+  plain record on the sheet today.
+- **A rider fires by itself.** Choosing when to spend one is a window, so the first qualifying hit
+  of the period takes it. `on` has one value, `hit`; the rest of the moments arrive with reactions.
 
 ## Layers: variants of your own ruleset
 

@@ -459,7 +459,7 @@ export function rulesetMenu(
     const aim = option.area ? rulesetAimCells(encounter, actorId, option.id, RULESET_AIM_LIMIT) : [];
     return {
       ...option,
-      targetIds: rulesetOptionTargets(encounter, actorId, option),
+      targetIds: rulesetOptionTargets(definition, encounter, actorId, option),
       ...(aim.length > 0 ? { aim } : {}),
     };
   });
@@ -675,7 +675,7 @@ function rulesetCandidatesFrom(
       candidates.push(...areaCandidates(definition, combat, encounter, actor, option, standing));
       continue;
     }
-    const legal = rulesetOptionTargets(encounter, actorId, option);
+    const legal = rulesetOptionTargets(definition, encounter, actorId, option);
     // An action made of other actions sends all of them at one opponent. Anything else that may
     // take several targets takes as many as it is allowed: a breath that could catch three people
     // and is pointed at one is an opponent played badly, not an opponent played kindly.
