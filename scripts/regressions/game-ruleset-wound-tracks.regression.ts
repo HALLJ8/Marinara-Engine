@@ -28,11 +28,13 @@ import {
   defaultRulesetSheetBuild,
   parseRulesetDefinition,
   parseSheetCommandTagBody,
+  parseSkillCheckTagBody,
   readRulesetLive,
   readRulesetWoundPenalty,
   renderRulesetSheetBlock,
   rulesetLiveStatesSchema,
   serializeSheetCommandTag,
+  serializeResolvedSkillCheckTag,
   type ResolvedRulesetLive,
   type RulesetDefinition,
   type RulesetLiveState,
@@ -284,6 +286,24 @@ try {
     const winded = roll(contextFor(marked("knock", 2)));
     assert.equal(winded.penalty, -1, "the record says why the pool shrank");
     assert.equal(winded.rolls.length, base - 1);
+    const recorded = serializeResolvedSkillCheckTag(winded);
+    assert.equal(parseSkillCheckTagBody(recorded.slice("[skill_check: ".length, -1))?.resolvedResult?.penalty, -1);
+    const empty = serializeResolvedSkillCheckTag({
+      ...winded,
+      rolls: [],
+      usedRoll: 0,
+      total: 0,
+      dice: "0d10",
+      success: false,
+      criticalSuccess: false,
+      criticalFailure: false,
+    });
+    assert.equal(parseSkillCheckTagBody(empty.slice("[skill_check: ".length, -1))?.resolvedResult?.penalty, -1);
+    for (const invalid of [0, 2, Number.NaN, Number.POSITIVE_INFINITY]) {
+      assert.doesNotMatch(serializeResolvedSkillCheckTag({ ...winded, penalty: invalid }), /penalty=/);
+      const body = recorded.slice("[skill_check: ".length, -1).replace(/penalty="[^"]*"/, `penalty="${invalid}"`);
+      assert.equal(parseSkillCheckTagBody(body)?.resolvedResult?.penalty, undefined);
+    }
 
     // The bottom rung is -99, which is far past the pool. `pool.min` is 1, so one die is thrown.
     const down = roll(contextFor(marked("knock", 4)));
@@ -351,6 +371,8 @@ try {
     const wounded = resolveSkillCheckWithContext(contextFor(hurt.live), { skill: "Nerve", dc: 10 }, () => 12);
     assert.equal(clean.resolution, "sum");
     assert.equal(wounded.penalty, -3, "the third rung, said in the record");
+    const recorded = serializeResolvedSkillCheckTag(wounded);
+    assert.equal(parseSkillCheckTagBody(recorded.slice("[skill_check: ".length, -1))?.resolvedResult?.penalty, -3);
     assert.equal(wounded.modifier, clean.modifier - 3, "and folded into the number the dice are added to");
     assert.equal(wounded.total, wounded.usedRoll + wounded.modifier, "the record's own arithmetic still adds up");
     assert.equal(wounded.rolls.length, clean.rolls.length, "a summed check throws the same dice either way");

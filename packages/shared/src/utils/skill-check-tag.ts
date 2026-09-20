@@ -389,6 +389,8 @@ export function parseSkillCheckTagBody(body: string): SkillCheckTag | null {
     if (poolSlots) tag.poolSlots = poolSlots;
   }
 
+  const penaltyValue = Number(values.get("penalty"));
+  const penalty = Number.isFinite(penaltyValue) && penaltyValue < 0 ? { penalty: penaltyValue } : {};
   const rollsValue = values.get("rolls");
   const modifier = Number.parseInt(values.get("modifier") ?? "", 10);
   const total = Number.parseInt(values.get("total") ?? "", 10);
@@ -424,6 +426,7 @@ export function parseSkillCheckTagBody(body: string): SkillCheckTag | null {
       rollMode: "normal",
       resolution,
       dice: declaredDice,
+      ...penalty,
     };
     return tag;
   }
@@ -534,6 +537,7 @@ export function parseSkillCheckTagBody(body: string): SkillCheckTag | null {
     rollMode: normalizedMode,
     resolution,
     dice,
+    ...penalty,
   };
 
   return tag;
