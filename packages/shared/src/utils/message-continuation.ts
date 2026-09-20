@@ -8,5 +8,5 @@ export function appendContinuationMessageContent(
   if (!existing) return continuation;
   if (!continuation) return existing;
   if (!addNewline) return `${existing}${continuation.replace(/^(?:\r?\n)+/, "")}`;
-  return `${existing.replace(/\s+$/, "")}\n\n${continuation.replace(/^\s+/, "")}`;
+  return `${existing.trimEnd()}\n\n${continuation.trimStart()}`;
 }
