@@ -595,6 +595,7 @@ export function getCapabilityPackageInstallIssue(
           resolution?: unknown;
           layers?: unknown;
           gm?: unknown;
+          sheet?: unknown;
         })
       : undefined;
   const api = manifest.schemaVersion === 2 ? manifest.capabilityApi : null;
@@ -657,7 +658,7 @@ export function getCapabilityPackageInstallIssue(
   // `dice-sum` refuses the whole file, so the package would be installed with no rules at all.
   const resolution =
     ruleset?.resolution && typeof ruleset.resolution === "object"
-      ? (ruleset.resolution as { kind?: unknown })
+      ? (ruleset.resolution as { kind?: unknown; penaltyFrom?: unknown })
       : undefined;
   if (resolution?.kind === "dice-pool" && !declaresApi(24)) {
     return "A ruleset with a dice-pool resolution requires schemaVersion 2 and capabilityApi 1.24 or newer";
@@ -693,6 +694,24 @@ export function getCapabilityPackageInstallIssue(
     if (positioned || attacks) {
       return "A ruleset whose fights are measured in cells requires schemaVersion 2 and capabilityApi 1.28 or newer";
     }
+  }
+  // Wound tracks. `levels` and `kinds` on a live track, and the track `resolution.penaltyFrom`
+  // names, are new keys in the same strict file, so the reading and the reason are the same as
+  // everything above: an Engine that does not know them refuses the whole ruleset.
+  if (!declaresApi(30)) {
+    const woundIssue = "A ruleset with wound tracks requires schemaVersion 2 and capabilityApi 1.30 or newer";
+    const sheet =
+      ruleset?.sheet && typeof ruleset.sheet === "object" ? (ruleset.sheet as { live?: unknown }) : undefined;
+    const live = sheet?.live && typeof sheet.live === "object" ? (sheet.live as { tracks?: unknown }) : undefined;
+    const marked = Array.isArray(live?.tracks)
+      ? live.tracks.some(
+          (track) =>
+            !!track &&
+            typeof track === "object" &&
+            (["levels", "kinds"] as const).some((key) => (track as Record<string, unknown>)[key] !== undefined),
+        )
+      : false;
+    if (marked || resolution?.penaltyFrom !== undefined) return woundIssue;
   }
   return null;
 }

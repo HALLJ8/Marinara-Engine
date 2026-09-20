@@ -19,7 +19,7 @@
     "summary": "A pool of ten-sided dice against a target number, three ratings, six trades and one vigil."
   },
   "resolution": {
-    "$comment": "The sheet's number for a check is the SIZE of the pool, not a bonus on top of it. A rating of 3 and a trade worth 2 throw five dice.",
+    "$comment": "The sheet's number for a check is the SIZE of the pool, not a bonus on top of it. A rating of 3 and a trade worth 2 throw five dice. penaltyFrom names the wound track whose penalty rides on every roll; under this kind that is dice OFF the pool, floored at pool.min, so even a bleeding warden throws one die.",
     "kind": "dice-pool",
     "die": { "sides": 10 },
     "abilityModifier": { "op": "identity" },
@@ -31,6 +31,7 @@
       { "id": "rating_4", "label": "Sworn", "flat": 4 },
       { "id": "rating_5", "label": "Gravewise", "flat": 5 }
     ],
+    "penaltyFrom": "harm",
     "pool": { "min": 1, "max": 15 },
     "target": { "default": 7, "min": 5, "max": 9 },
     "explode": { "from": 10 },
@@ -82,6 +83,30 @@
     ],
     "live": {
       "pools": [{ "id": "resolve", "label": "Resolve", "max": { "derived": "resolve_max" } }],
+      "tracks": [
+        {
+          "$comment": "A WOUND TRACK, because it declares levels: four rungs, marked rather than counted. The penalty on the LOWEST marked rung is the one in force, never the sum of the marked ones.",
+          "id": "harm",
+          "label": "Harm",
+          "min": 0,
+          "max": 4,
+          "levels": [
+            { "label": "Scuffed", "penalty": 0 },
+            { "label": "Winded", "penalty": -1 },
+            { "label": "Bleeding", "penalty": -3 },
+            { "label": "Down", "penalty": -99 }
+          ],
+          "kinds": [
+            {
+              "$comment": "The lighter kind. Marking a full track upgrades its lowest-severity mark one step, so a knock becomes a tear before anything spills over.",
+              "id": "knock",
+              "label": "K",
+              "severity": 0
+            },
+            { "id": "tear", "label": "T", "severity": 1 }
+          ]
+        }
+      ],
       "conditions": [
         { "id": "rattled", "label": "Rattled" },
         { "id": "marked", "label": "Marked" }
@@ -92,13 +117,20 @@
     {
       "id": "vigil",
       "label": "Stand down from the vigil",
-      "restore": [{ "pool": "resolve", "to": "max" }],
+      "restore": [
+        { "pool": "resolve", "to": "max" },
+        {
+          "$comment": "A rest can only heal a wound track, and \"to\" clears it down to that many marks, overflow and all.",
+          "track": "harm",
+          "to": "min"
+        }
+      ],
       "clear": { "conditions": ["rattled"] }
     }
   ],
   "gm": {
     "checkGuidance": "This game uses the Gravewatch rules. When a warden tries something the barrow roads could punish, call for a check with one of the trades on the sheet and pick a difficulty from the ladder. The Engine throws the warden's own pool of ten-sided dice, counts the successes and reports what happened. Never write dice or results yourself.",
-    "sheetGuidance": "The character sheets below are authoritative. Resolve is what a warden spends to steady themselves when the dark answers back, and it only comes back when the vigil ends.",
+    "sheetGuidance": "The character sheets below are authoritative. Resolve is what a warden spends to steady themselves when the dark answers back, and it only comes back when the vigil ends. Harm is a track of four rungs rather than a number: mark it with a sheet command whose op is damage, naming the track and a kind of knock or tear, and heal it with a negative amount. The rung a warden is marked down to comes off every pool they throw, and the Engine applies it, so never take dice off yourself.",
     "sheetSummary": {
       "fields": ["post"],
       "derived": ["resolve_max"]

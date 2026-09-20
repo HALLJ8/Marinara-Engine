@@ -147,7 +147,20 @@ function requireDistanceForMeasured(node) {
   ];
 }
 
+// A track's `kinds` say what a mark may BE, so they need the `levels` a mark sits on, and the other
+// way round a track with levels needs kinds. That is a cross-check the generator cannot see, so the
+// editor is told here. The node is found by its shape: `levels` beside `kinds` and `min`.
+function requireLevelsWithKinds(node) {
+  if (Array.isArray(node)) return node.forEach(requireLevelsWithKinds);
+  if (!node || typeof node !== "object") return;
+  Object.values(node).forEach(requireLevelsWithKinds);
+  const properties = node.properties;
+  if (node.type !== "object" || !properties?.levels || !properties.kinds || !properties.min) return;
+  node.dependencies = { ...(node.dependencies ?? {}), kinds: ["levels"], levels: ["kinds"] };
+}
+
 const schema = zodToJsonSchema(rulesetDefinitionSchema, { $refStrategy: "none", target: "jsonSchema7" });
+requireLevelsWithKinds(schema);
 requireOneCatalogSource(schema);
 requireOneEntryContent(schema);
 requireCatalogFeeds(schema);

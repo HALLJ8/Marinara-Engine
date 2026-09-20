@@ -282,6 +282,11 @@
               "minItems": 1,
               "maxItems": 12
             },
+            "penaltyFrom": {
+              "type": "string",
+              "maxLength": 40,
+              "pattern": "^[a-z][a-z0-9_]*$"
+            },
             "advantage": {
               "type": "boolean",
               "default": false
@@ -541,6 +546,11 @@
               },
               "minItems": 1,
               "maxItems": 12
+            },
+            "penaltyFrom": {
+              "type": "string",
+              "maxLength": 40,
+              "pattern": "^[a-z][a-z0-9_]*$"
             },
             "pool": {
               "type": "object",
@@ -2454,6 +2464,64 @@
                   "default": {
                     "type": "integer"
                   },
+                  "levels": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "label": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 80
+                        },
+                        "penalty": {
+                          "type": "integer",
+                          "minimum": -1000,
+                          "maximum": 0
+                        },
+                        "$comment": {}
+                      },
+                      "required": [
+                        "label",
+                        "penalty"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "minItems": 1,
+                    "maxItems": 16
+                  },
+                  "kinds": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "maxLength": 40,
+                          "pattern": "^[a-z][a-z0-9_]*$"
+                        },
+                        "label": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 16
+                        },
+                        "severity": {
+                          "type": "integer",
+                          "minimum": -100,
+                          "maximum": 100
+                        },
+                        "$comment": {}
+                      },
+                      "required": [
+                        "id",
+                        "label",
+                        "severity"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "minItems": 1,
+                    "maxItems": 6
+                  },
                   "$comment": {}
                 },
                 "required": [
@@ -2462,7 +2530,15 @@
                   "min",
                   "max"
                 ],
-                "additionalProperties": false
+                "additionalProperties": false,
+                "dependencies": {
+                  "kinds": [
+                    "levels"
+                  ],
+                  "levels": [
+                    "kinds"
+                  ]
+                }
               },
               "maxItems": 30,
               "default": []

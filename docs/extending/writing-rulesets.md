@@ -167,15 +167,69 @@ Two things this kind does not model are re-rolls bought with a resource and auto
 - `fields` are single values. Types: `number`, `text`, `longtext`, `boolean`, `enum` (a fixed list of choices), and `dice` (text such as `1d8`).
 - `derived` values are worked out from other values and cannot be typed over. The operations are `sum`, `min`, `max`, `scale` (multiply and round), and `stepTable` (look a value up in thresholds, the way a level gives a proficiency bonus).
 - `lists` are tables with your own columns, such as gear, spells, or features. A list with `pools` turns every row into a resource with its own maximum, for class features with limited uses.
-- `live` is what changes during play: `pools` (hit points, spell slots, Grit), `tracks` (a number on a scale, such as exhaustion), `text` (short notes such as what a character is concentrating on), and `conditions`.
+- `live` is what changes during play: `pools` (hit points, spell slots, Grit), `tracks` (a number on a scale, such as exhaustion, or a wound track of boxes you tick), `text` (short notes such as what a character is concentrating on), and `conditions`.
 
 Anything that reads a number names it with a value reference, which is an object with exactly one key: `const`, `field`, `derived`, `abilityScore`, `abilityMod`, `abilityModFromField`, `skillMod`, or `saveMod`. For example, a pool whose maximum is a derived value: `"max": { "derived": "grit_max" }`.
 
 `hideWhen` hides a field, a list, or a pool when another field has a given value. The 5e file uses it to hide spell slots from a character who does not cast spells.
 
+### Wound tracks: health that is a track, not a number
+
+Plenty of systems do not count hit points at all. They have a column of boxes, each worse than the last, and you tick one when you get hurt. Give a `live.tracks` entry `levels` and `kinds` and it stops being a number on a scale and becomes one of those:
+
+```json
+{
+  "id": "harm",
+  "label": "Harm",
+  "min": 0,
+  "max": 4,
+  "levels": [
+    { "label": "Scuffed", "penalty": 0 },
+    { "label": "Winded", "penalty": -1 },
+    { "label": "Bleeding", "penalty": -3 },
+    { "label": "Down", "penalty": -99 }
+  ],
+  "kinds": [
+    { "id": "knock", "label": "K", "severity": 0 },
+    { "id": "tear", "label": "T", "severity": 1 }
+  ]
+}
+```
+
+- `levels` is 1 to 16 rungs, best first and worst last. Each has a `label` and an integer `penalty` at or below 0. A large negative number is how these systems say "you are out of it", so `-99` is fine.
+- `kinds` is 1 to 6 sorts of harm the track can take, each with an `id`, a short `label` for the box, and a `severity`. The severities have to be distinct; the numbers themselves mean nothing beyond their order, so space them however you like.
+- The two go together. `kinds` without `levels` is refused, because there would be nothing to mark, and `levels` without `kinds` is refused, because a mark has to be of something.
+- **Keep the two words apart.** `kinds` is what your ruleset says a mark may BE. A MARK is one of those kinds sitting on the track during play. The definition holds kinds; a character's sheet holds marks.
+- A wound track's length is its levels, so its `min` is 0 and its `max` is `levels.length`. A file that says anything else is refused rather than quietly corrected, so the file can never carry two disagreeing lengths.
+
+**The rules, exactly**, because a vague reading produces the wrong track:
+
+- Marks are held sorted, **most severe first**. A track of seven levels holds at most seven marks.
+- A mark is **placed in severity order** among the marks already there, never added to the end. It takes the highest level its severity earns and pushes lighter marks down.
+- The penalty in force is the one on the **lowest marked level**, never the sum of the marked ones. Three marks on the track above read `-3`, not `0 + -1 + -3`.
+- An `amount` is a number of marks of one kind, **applied one at a time**, so a track that fills partway through is handled by the same rule as one that was already full.
+- Marking a **full** track **upgrades its lowest-severity mark by one step** instead of adding a mark. One step up your own ladder of kinds, whatever kind the new mark was.
+- A mark that would upgrade past your highest severity is kept at the highest, and the one that could not land is counted as an **overflow**. Overflow is stored, so a reload does not forget harm somebody already took.
+- **Healing is the same command with a negative amount.** It clears the lightest marks first, and it clears overflow before it clears any mark.
+
+**Marking it in play.** The Game Master writes `[sheet: op="damage" track="harm" kind="knock" amount="1"]`, and heals with a negative `amount`. The pool form of `damage`, which names `pool=` instead, is unchanged. The plain `track` command is refused on a wound track: a bare number cannot say what the new marks are. The player can also mark and clear boxes by hand on the sheet, which is what these systems expect.
+
+**A rest can heal a wound track.** A restore step naming one with `"to"` clears it down to that many marks, overflow and all; one naming it with `"by"` clears that many, overflow first. A step that would ADD marks does nothing, because a rest names no kind to mark with.
+
+### The penalty on your rolls
+
+`resolution.penaltyFrom` names the wound track whose penalty applies to every check this ruleset rolls. It is declared rather than assumed, so a ruleset that leaves it out rolls exactly as it did before wound tracks existed.
+
+What the penalty DOES is your resolution kind's business, exactly like the sheet's own number:
+
+- Under `dice-pool` it is **dice off the pool**, floored at your own `pool.min`. A `pool.min` of 1 means even somebody on the bottom rung throws one die; a `pool.min` of 0 means they throw none and fail without rolling.
+- Under `dice-sum` it is a **flat modifier on the roll**, folded into the same number your ability and training already add.
+
+The track it names has to be a wound track. A plain track carries no penalty to apply, and naming one is refused at import. The result says which penalty was applied, so a player can see why they rolled fewer dice, and the Game Master's own sheet block shows the rung and what it costs.
+
 ### Rests
 
-A rest is a list of restore steps and things to clear. Each step names one target (`pool`, `poolGroup`, `listPools`, or `track`) and either sets it (`"to": "max"`, `"to": "min"`, or a number) or changes it (`"by": { "const": 1 }`, or `"by": { "fractionOfMax": 0.5 }`).
+A rest is a list of restore steps and things to clear. Each step names one target (`pool`, `poolGroup`, `listPools`, or `track`) and either sets it (`"to": "max"`, `"to": "min"`, or a number) or changes it (`"by": { "const": 1 }`, or `"by": { "fractionOfMax": 0.5 }`). A step naming a wound track can only heal it; see above.
 
 ### Game Master text
 
@@ -546,7 +600,9 @@ same keys for a d20 system:
 
 - `kind`: `"attack-vs-defense"`. One side rolls dice against the other's defense; a hit does damage.
 - `health`: required. The live pool a fight takes away, as `battle.health` is. Its temporary buffer,
-  if the pool allows one, is what damage drains first.
+  if the pool allows one, is what damage drains first. It has to be a pool: a fight cannot mark a
+  wound track yet, so a ruleset whose health is a track keeps it for checks and for the player to
+  mark by hand, and either leaves `combat` out or names a pool for fights. See Not yet.
 - `defense`: required, a value reference. A field the player enters, or a derived value you compute.
 - `initiative`: required. The dice rolled once at the start, and an optional modifier reference. A
   tie goes to the higher modifier, and then to the order the fight was set up in.
@@ -920,6 +976,11 @@ Said plainly, because a ruleset should not claim what the Engine does not do:
   one turn and the next arrives with reactions.
 - Conditions do what the closed effect list can say and no more. A condition that gives
   disadvantage on ability checks, or resistance to everything, is a plain record on the sheet today.
+- **A fight cannot mark a wound track.** `combat.health` names a live pool, and damage subtracts
+  from it. A wound track is marked by the player and by the Game Master's own sheet command, and its
+  penalty bites every check, but a fight resolved by the `combat` block still needs a pool to take
+  away from. A ruleset whose health is a track either leaves `combat` out and plays its fights in
+  the narration, or keeps a pool beside the track for fights to spend.
 
 ## Layers: variants of your own ruleset
 

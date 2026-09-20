@@ -664,6 +664,35 @@ Desktop uses a browse list with an adjacent detail region. Mobile uses one pane 
 
 An extraction is complete only when the base production client and server bundles no longer contain the package implementation, a fresh install cannot activate it without downloading the package, an upgraded install retains it, and package install/update/uninstall passes on desktop, mobile, and Termux-compatible filesystems.
 
+### Capability API 1.30: wound tracks
+
+A ruleset's `live.tracks` entry may declare `levels` and `kinds`, which turns it from a bounded
+integer into a WOUND TRACK: a column of boxes, each with its own label and penalty, that a mark sits
+on. `levels` is 1 to 16 rungs, best first and worst last, each a `label` and an integer `penalty`.
+`kinds` is 1 to 6 sorts of harm the track may take, each an `id`, a short `label` and a distinct
+`severity`. The two go together: `kinds` without `levels` is refused, because there would be nothing
+to mark. Beside them, `resolution.penaltyFrom` names the track whose penalty rides on every roll:
+under `dice-pool` it takes that many dice off the pool and never below `pool.min`, and under
+`dice-sum` it is a flat modifier on the roll.
+
+```json
+{
+  "capabilityApi": { "major": 1, "minor": 30 },
+  "kind": ["ruleset"],
+  "contributions": { "assets": { "paths": ["ruleset.json"] } }
+}
+```
+
+A wound track's length is its levels, so its `min` is 0 and its `max` is `levels.length`, and a file
+that says otherwise is refused rather than quietly corrected. A track named by `resolution.penaltyFrom`
+must be a wound track: a plain track carries no penalty to apply. 1.29 is deliberately skipped, so
+this number does not clash with another slice in flight.
+
+Not a soft seam, for the same reason as 1.20 through 1.28: an Engine that cannot read `levels`,
+`kinds` or `penaltyFrom` refuses the whole ruleset file, so install reads the verified bytes of
+`ruleset.json` and refuses the package under an older declaration. No change for a ruleset whose
+tracks are plain numbers.
+
 ### Capability API 1.28: a ruleset fight on a board
 
 A ruleset's `combat` block may say what one cell of a battlefield is worth in its own distance
