@@ -429,6 +429,7 @@ const KIND_KEYS: Readonly<Record<RulesetCatalogMechanics["kind"], string>> = Obj
   buff: "game.ruleset.catalog.kind.buff",
   debuff: "game.ruleset.catalog.kind.debuff",
   utility: "game.ruleset.catalog.kind.utility",
+  rider: "game.ruleset.catalog.kind.rider",
 });
 
 const SHAPE_KEYS: Readonly<Record<"burst" | "cone" | "line", string>> = Object.freeze({

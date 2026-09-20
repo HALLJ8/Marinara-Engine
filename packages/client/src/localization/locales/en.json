@@ -1013,6 +1013,7 @@
   "game.ruleset.catalog.kind.buff": "Buff",
   "game.ruleset.catalog.kind.debuff": "Debuff",
   "game.ruleset.catalog.kind.heal": "Healing",
+  "game.ruleset.catalog.kind.rider": "Always on",
   "game.ruleset.catalog.kind.utility": "Utility",
   "game.ruleset.catalog.listFull": "{{list}} already holds all {{max}} rows it can. Remove one to add more.",
   "game.ruleset.catalog.listGain": "{{list}} gains {{adding}}, with room for {{room}}.",
