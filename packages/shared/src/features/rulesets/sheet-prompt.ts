@@ -111,14 +111,26 @@ export function renderRulesetSheetBlock(
       .join(", "),
   );
 
-  // A track at its default says nothing: three death saves at zero are the absence of a fact.
-  const trackValues = new Map(live.tracks.map((track) => [track.id, track.value]));
+  // A track at its default says nothing: three death saves at zero are the absence of a fact. A
+  // marked WOUND track says how far down it is, what that level is called and what it costs a roll,
+  // because those three are exactly what the Game Master has to narrate honestly.
+  const resolvedTracks = new Map(live.tracks.map((track) => [track.id, track]));
   push(
     sheet.live.tracks
       .flatMap((track) => {
-        const value = trackValues.get(track.id);
+        const resolved = resolvedTracks.get(track.id);
+        if (!resolved) return [];
+        if (resolved.wound) {
+          if (resolved.value === 0 && resolved.wound.overflow === 0) return [];
+          const level = resolved.wound.levels[resolved.value - 1]?.label;
+          const over = resolved.wound.overflow > 0 ? ` +${resolved.wound.overflow} over` : "";
+          const penalty = resolved.wound.penalty !== 0 ? ` ${resolved.wound.penalty} to rolls` : "";
+          return [
+            `${track.label} ${resolved.value}/${resolved.max}${level ? ` ${safeValue(level)}` : ""}${penalty}${over}`,
+          ];
+        }
         const fallback = Math.min(Math.max(track.default ?? track.min, track.min), track.max);
-        return value === undefined || value === fallback ? [] : [`${track.label} ${value}`];
+        return resolved.value === fallback ? [] : [`${track.label} ${resolved.value}`];
       })
       .join(", "),
   );

@@ -212,6 +212,11 @@ const sheetMathShape = {
   proficiency: z.object({ bonus: rulesetValueRefSchema }).strict().optional(),
   /** The first tier is the untrained default for a skill or save the sheet does not mention. */
   proficiencyTiers: z.array(proficiencyTierSchema).min(1).max(12),
+  /** The wound track whose penalty applies to this ruleset's rolls, named rather than assumed. A
+   *  ruleset that leaves it out rolls exactly as it did before wound tracks existed. What the
+   *  penalty DOES is the kind's business, the same way the sheet's own number is: `dice-sum` adds
+   *  it to the roll, `dice-pool` takes that many dice off the pool and never below `pool.min`. */
+  penaltyFrom: sheetId.optional(),
 };
 
 /** One rung of a summed ladder. Hoisted out of the kind because a layer may swap the whole ladder
@@ -452,8 +457,42 @@ const livePoolSchema = z
   })
   .strict();
 
+/** How many levels one wound track may have. A track is a column of boxes on a sheet, so this is a
+ *  ceiling on something a player reads at a glance rather than on anything the Engine computes. */
+export const RULESET_TRACK_LEVELS_MAX = 16;
+/** How many kinds of harm one wound track may take. Three (bashing, lethal, aggravated) is the
+ *  usual number; six leaves room without turning a track into a table. */
+export const RULESET_TRACK_KINDS_MAX = 6;
+
+/** One rung of a wound track, best first and worst last. `penalty` is what being marked down to
+ *  this level does to a roll: 0 for a scratch, and a large negative is how these systems say "you
+ *  are out of it", so it is bounded wide rather than tight. */
+const liveTrackLevelSchema = z.object({ label, penalty: z.number().int().min(-1000).max(0) }).strict();
+
+/** One kind of harm the track may take. `severity` orders them; the numbers themselves mean
+ *  nothing beyond their order, so a ruleset may space them however it likes. */
+const liveTrackKindSchema = z
+  .object({ id: sheetId, label: promptSafeText(16), severity: z.number().int().min(-100).max(100) })
+  .strict();
+
+/** A track is a bounded integer (exhaustion, death saves). A track that declares `levels` is a
+ *  WOUND TRACK instead: a column of boxes, each with a label and a penalty, that a MARK sits on.
+ *  `kinds` is what the ruleset says a mark may BE; a mark is one of those kinds on the track in
+ *  play. The definition holds kinds, the live state holds marks, and the two words never swap.
+ *
+ *  A wound track's length is `levels.length`, so `min` and `max` say nothing about it. The
+ *  cross-checks below hold a wound track to `min: 0` and `max: levels.length` rather than ignoring
+ *  what the author wrote, so the file cannot carry two disagreeing lengths. */
 const liveTrackSchema = z
-  .object({ id: sheetId, label, min: z.number().int(), max: z.number().int(), default: z.number().int().optional() })
+  .object({
+    id: sheetId,
+    label,
+    min: z.number().int(),
+    max: z.number().int(),
+    default: z.number().int().optional(),
+    levels: z.array(liveTrackLevelSchema).min(1).max(RULESET_TRACK_LEVELS_MAX).optional(),
+    kinds: z.array(liveTrackKindSchema).min(1).max(RULESET_TRACK_KINDS_MAX).optional(),
+  })
   .strict();
 
 const liveSchema = z
@@ -1650,6 +1689,47 @@ function refineRulesetDefinition(def: RulesetDefinitionBase, ctx: z.RefinementCt
     if (tracks.has(pool.id)) issue(["sheet", "live", "pools", index, "id"], `"${pool.id}" is already a track id`);
   }
 
+  // Wound tracks. `kinds` says what a mark may be, so it needs `levels` for a mark to sit on, and
+  // the severities have to be distinct or "the lowest-severity mark" would name two boxes at once.
+  const woundTracks = new Set<string>();
+  sheet.live.tracks.forEach((track, index) => {
+    const path = ["sheet", "live", "tracks", index];
+    if (!track.levels) {
+      if (track.kinds) issue([...path, "kinds"], "kinds needs levels beside it: there is nothing to mark");
+      return;
+    }
+    woundTracks.add(track.id);
+    if (!track.kinds) {
+      issue([...path, "levels"], "A track with levels needs kinds beside it: a mark has to be of something");
+    }
+    // A wound track's length is its levels, so the two numbers beside them cannot say anything else.
+    if (track.min !== 0) issue([...path, "min"], "A wound track starts unmarked, so its min is 0");
+    if (track.max !== track.levels.length) {
+      issue([...path, "max"], `A wound track holds one mark per level, so its max is ${track.levels.length}`);
+    }
+    if (track.default !== undefined && track.default !== 0) {
+      issue([...path, "default"], "A wound track starts unmarked, so it declares no default");
+    }
+    unique(track.kinds ?? [], [...path, "kinds"], "wound kind");
+    const severities = new Set<number>();
+    track.kinds?.forEach((kind, kindIndex) => {
+      if (severities.has(kind.severity)) {
+        issue([...path, "kinds", kindIndex, "severity"], `Duplicate severity ${kind.severity}`);
+      }
+      severities.add(kind.severity);
+    });
+  });
+
+  // The track whose penalty rides on every roll. A plain track has no penalty to read, so naming
+  // one is an author saying something the resolver could never honour.
+  if (resolution.penaltyFrom !== undefined) {
+    const path = ["resolution", "penaltyFrom"];
+    if (!tracks.has(resolution.penaltyFrom)) issue(path, `Unknown track "${resolution.penaltyFrom}"`);
+    else if (!woundTracks.has(resolution.penaltyFrom)) {
+      issue(path, `"${resolution.penaltyFrom}" has no levels, so it carries no penalty to apply`);
+    }
+  }
+
   sheet.abilities.forEach((ability, index) => {
     if (ability.min > ability.max) issue(["sheet", "abilities", index, "min"], "min is above max");
     if (ability.default < ability.min || ability.default > ability.max) {
@@ -2165,6 +2245,10 @@ function refineRulesetDefinition(def: RulesetDefinitionBase, ctx: z.RefinementCt
       const dying = combat.dying;
       for (const key of ["successes", "failures"] as const) {
         if (!tracks.has(dying[key])) issue(at("dying", key), `Unknown track "${dying[key]}"`);
+        // These two count rolls, and the fight sets them by number. A wound track is marked with
+        // kinds instead, so it could never hold a count of successful death saves.
+        else if (woundTracks.has(dying[key]))
+          issue(at("dying", key), `"${dying[key]}" is a wound track, not a counter`);
       }
       if (dying.successes === dying.failures) {
         issue(at("dying", "failures"), "Successes and failures are counted on two different tracks");
@@ -2333,6 +2417,12 @@ export type RulesetSheetSchema = RulesetDefinition["sheet"];
 export type RulesetField = z.infer<typeof rulesetFieldSchema>;
 export type RulesetListColumn = z.infer<typeof rulesetListColumnSchema>;
 export type RulesetDerived = z.infer<typeof rulesetDerivedSchema>;
+export type RulesetLiveTrack = RulesetSheetSchema["live"]["tracks"][number];
+/** One rung of a wound track. Absent on a plain track, which is a bounded integer. */
+export type RulesetTrackLevel = z.infer<typeof liveTrackLevelSchema>;
+/** One kind of harm a wound track may take. The DEFINITION holds kinds; a MARK is one of them
+ *  sitting on the track in play, and lives in the live state. */
+export type RulesetTrackKind = z.infer<typeof liveTrackKindSchema>;
 export type RulesetRest = RulesetDefinition["rests"][number];
 /** The opt-in battle block. Absent on a ruleset that does not lend its sheet to battles. */
 export type RulesetBattle = NonNullable<RulesetDefinition["battle"]>;
