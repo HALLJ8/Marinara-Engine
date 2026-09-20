@@ -36,7 +36,10 @@ import {
   rulesetAreaTargets,
   rulesetCriticalFromAdjacent,
   rulesetDefenseAgainst,
+  rulesetFreeStrike,
+  rulesetGrantedStandard,
   rulesetProneCondition,
+  rulesetStandardName,
   rulesetSequenceCanHappen,
   rulesetSequencePartAvailable,
   rulesetAttackMode,
@@ -641,12 +644,20 @@ function whyNotOffered(combat: RulesetCombat, actor: RulesetCombatant, optionId:
   if (optionId === RULESET_MOVE_OPTION || optionId === RULESET_STAND_OPTION) return "unreachable";
   const action = actor.actions.find((entry) => entry.id === optionId);
   if (action) {
+    // Something free, or a strike out of what a spend already bought, never fell short of a budget.
+    if (action.free || rulesetFreeStrike(actor, action)) return "insufficient";
     if ((actor.budgets[action.budget] ?? 0) < 1) return "no-budget";
     return "insufficient";
   }
-  const standard = optionId.startsWith("standard:") ? optionId.slice("standard:".length) : null;
-  if (standard && (combat.standard ?? []).some((entry) => entry === standard)) {
-    return (actor.budgets[rulesetStandardBudget(combat)] ?? 0) < 1 ? "no-budget" : "unknown-option";
+  if (optionId.startsWith("standard:")) {
+    const granted = rulesetGrantedStandard(actor, optionId);
+    const standard = rulesetStandardName(optionId);
+    if ((combat.standard ?? []).some((entry) => entry === standard)) {
+      const budget = granted ? granted.budget : rulesetStandardBudget(combat);
+      // An `@budget` nobody's own ability grants is not a standard action this actor has at all.
+      if (optionId.includes("@") && !granted) return "unknown-option";
+      return (actor.budgets[budget] ?? 0) < 1 ? "no-budget" : "unknown-option";
+    }
   }
   return "unknown-option";
 }
@@ -731,8 +742,43 @@ export function applyRulesetCombatChoice(
   }
 
   if (option.kind === "standard") {
-    resolveStandard(ctx, working, option.id.slice("standard:".length), workingTargets[0]);
+    // A standard action an ability allowed is paid for as that ability is: the budget it named,
+    // just spent, and whatever the ability itself costs off the sheet.
+    const granted = rulesetGrantedStandard(working, option.id);
+    if (granted) {
+      const price = planRulesetCombatCost(definition, working, granted.action);
+      if (!price) return refusal(state, choice.actorId, "insufficient", option.id);
+      if (price.live && working.sheet) working.sheet.live = price.live;
+      for (const entry of price.cost) {
+        ctx.events.push({
+          type: "spend",
+          actorId: working.id,
+          pool: entry.pool,
+          label: entry.label,
+          amount: entry.amount,
+        });
+      }
+      spendAvailability(ctx, working, granted.action);
+    }
+    resolveStandard(ctx, working, rulesetStandardName(option.id), workingTargets[0]);
     return finish();
+  }
+
+  // Strikes: one spend of a source that declares them buys several, and the rest wait in hand until
+  // the turn ends. Taking one with any in hand spends no budget at all, which is why this reads
+  // what the option said rather than the budget it would otherwise have named.
+  const striking = working.actions.find((entry) => entry.id === option.id);
+  if (striking?.strikes !== undefined) {
+    const left = (working.strikesLeft ?? 0) > 0 ? working.strikesLeft! - 1 : Math.max(0, striking.strikes - 1);
+    if (left > 0) working.strikesLeft = left;
+    else delete working.strikesLeft;
+    ctx.events.push({
+      type: "strikes",
+      actorId: working.id,
+      optionId: striking.id,
+      label: striking.label,
+      left,
+    });
   }
 
   if (area && choice.at) {
@@ -1020,6 +1066,31 @@ function resolveSequence(
   }
 }
 
+/**
+ * Budgets handed to somebody the moment they use the thing that hands them over.
+ *
+ * Capped where they land, at what a turn holds plus the gift, so a budget saved up over three turns
+ * and then spent all at once is not a thing this can be used to do.
+ */
+function grantBudgets(ctx: RulesetCombatContext, actor: RulesetCombatant, action: RulesetCombatAction): void {
+  for (const gift of action.gives ?? []) {
+    const declared = ctx.combat.economy.budgets.find((budget) => budget.id === gift.budget);
+    // A budget the economy no longer declares is a catalog read by a later ruleset: it hands over
+    // nothing rather than inventing a budget nothing else in the fight knows about.
+    if (!declared) continue;
+    const left = Math.min((actor.budgets[gift.budget] ?? 0) + gift.count, declared.count + gift.count);
+    actor.budgets[gift.budget] = left;
+    ctx.events.push({
+      type: "gives",
+      actorId: actor.id,
+      optionId: action.id,
+      label: action.label,
+      budget: gift.budget,
+      left,
+    });
+  }
+}
+
 function resolveAction(
   ctx: RulesetCombatContext,
   actor: RulesetCombatant,
@@ -1028,6 +1099,7 @@ function resolveAction(
   payWith?: string,
 ): void {
   if (action.sequence) return resolveSequence(ctx, actor, action, targets);
+  if (action.gives) grantBudgets(ctx, actor, action);
   if (action.concentration) startConcentration(ctx, actor, action);
   const steps = payWith ? rulesetCostSteps(ctx.definition, action, payWith) : 0;
   const extra = action.use?.perCostStep && steps > 0 ? { amount: action.use.perCostStep, times: steps } : undefined;
@@ -1247,7 +1319,11 @@ export function advanceRulesetTurn(
 
   const { ctx, finish } = begin(definition, combat, state, roller);
   const leaving = currentRulesetActor(ctx.state);
-  if (leaving) tickConditions(ctx, leaving, "turn-end");
+  if (leaving) {
+    tickConditions(ctx, leaving, "turn-end");
+    // Strikes a spend bought are for the turn it was spent on. Nothing is carried over.
+    delete leaving.strikesLeft;
+  }
 
   let turn = ctx.state.turn;
   let round = ctx.state.round;

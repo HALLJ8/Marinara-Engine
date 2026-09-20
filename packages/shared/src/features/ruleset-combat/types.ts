@@ -187,6 +187,17 @@ export interface RulesetCombatAction {
   use?: { name: string; pool?: string; group?: string; perCostStep?: RulesetCombatAmount };
   uses?: RulesetCombatUses;
   recharge?: RulesetCombatRecharge;
+  /** How many strikes ONE spend of this action's budget buys, when its source said so. Taking it
+   *  with none in hand spends the budget and puts the rest in hand; while any are in hand, every
+   *  action that declares this costs no budget at all. */
+  strikes?: number;
+  /** Costs no budget: whatever else it asks for, a turn may hold as many as it can pay for. */
+  free?: true;
+  /** Budgets this hands its user the moment it is used, capped where they land so nothing banks. */
+  gives?: Array<{ budget: string; count: number }>;
+  /** The standard actions its holder may take for THIS budget instead of the main one. The action
+   *  itself is a permission: what it grants is on the menu as `standard:<id>@<budget>`. */
+  standard?: { actions: string[]; budget: string };
   /** The other actions this one resolves, in order, for one budget. */
   sequence?: RulesetCombatSequenceStep[];
   /** Bought with the actor's own points at the end of somebody else's turn, not with a budget. */
@@ -252,6 +263,9 @@ export interface RulesetCombatant {
   spent: string[];
   /** The points a signature action is bought with, when this combatant has any. */
   signature?: { points: number; max: number };
+  /** Strikes in hand: what is left of a spend that bought several. Absent when there are none, and
+   *  cleared at the end of the turn they were bought on, so nothing carries into the next one. */
+  strikesLeft?: number;
   tracked: RulesetTrackedCondition[];
   concentrating: { actionId: string; label: string } | null;
   /** What a standard action left behind. `dodging`, `dashed`, `disengaged`, `hidden` and `ready`
@@ -427,6 +441,10 @@ export type RulesetCombatEvent =
       back: boolean;
     }
   | { type: "signature"; actorId: string; optionId: string; label: string; cost: number; left: number }
+  /** A spend that bought several strikes, and what is left of it after this one. */
+  | { type: "strikes"; actorId: string; optionId: string; label: string; left: number }
+  /** A budget something handed its user, and what they hold of it now. */
+  | { type: "gives"; actorId: string; optionId: string; label: string; budget: string; left: number }
   | {
       type: "concentration";
       actorId: string;
@@ -487,8 +505,11 @@ export interface RulesetCombatOption {
   /** `move` is the one a positioned fight adds: walking, and getting back up. */
   kind: "attack" | "ability" | "block" | "standard" | "end-turn" | "move";
   label: string;
-  /** Absent on "end turn", which spends nothing. */
+  /** Absent on "end turn", which spends nothing, and on anything that costs no budget: something
+   *  the entry called free, or a strike taken out of what a spend already bought. */
   budget?: string;
+  /** Strikes in hand this one would be taken out of. Present only while it costs no budget. */
+  strikes?: number;
   targets: { side: "enemy" | "ally" | "self" | "any"; count: number };
   cost?: Array<{ pool: string; label: string; amount: number }>;
   /** Other pools of the same family this could be paid from instead, in declaration order. */

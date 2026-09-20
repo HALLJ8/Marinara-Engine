@@ -39,6 +39,89 @@ export function rulesetStandardBudget(combat: RulesetCombat): string {
   return combat.economy.budgets[0]!.id;
 }
 
+/** The standard action one option id names. An ability that lets its holder buy one with another
+ *  budget writes that budget after an `@`, which no standard action's own name may hold. */
+export function rulesetStandardName(optionId: string): string {
+  const name = optionId.startsWith("standard:") ? optionId.slice("standard:".length) : optionId;
+  const at = name.indexOf("@");
+  return at < 0 ? name : name.slice(0, at);
+}
+
+/** Whether this action would be taken out of strikes already in hand rather than out of a budget. */
+export function rulesetFreeStrike(actor: RulesetCombatant, action: RulesetCombatAction): boolean {
+  return action.strikes !== undefined && (actor.strikesLeft ?? 0) > 0;
+}
+
+/** Whether taking this action itself would do anything at all. An entry that only says which
+ *  standard actions its holder may buy with another budget is a PERMISSION, not something to take:
+ *  what it grants is on the menu as `standard:<id>@<budget>`, and the entry itself is not. */
+function actionDoesSomething(action: RulesetCombatAction): boolean {
+  if (!action.standard) return true;
+  return !!(
+    action.damage ||
+    action.heal ||
+    action.temporary ||
+    action.applies?.length ||
+    action.gives ||
+    action.sequence ||
+    action.concentration
+  );
+}
+
+/**
+ * The standard actions an ability lets its holder buy with a budget other than the main one, priced
+ * by the ability that grants them. The granting ability's own price is paid when one is taken, so a
+ * grant nobody can pay for is not offered at all.
+ */
+function grantedStandardOptions(
+  definition: RulesetDefinition,
+  combat: RulesetCombat,
+  actor: RulesetCombatant,
+): RulesetCombatOption[] {
+  const declared = new Set<string>(combat.standard ?? []);
+  const options: RulesetCombatOption[] = [];
+  const seen = new Set<string>();
+  for (const action of actor.actions) {
+    const granted = action.standard;
+    if (!granted || (actor.budgets[granted.budget] ?? 0) < 1) continue;
+    if (!rulesetActionAvailable(actor, action)) continue;
+    const paid = planRulesetCombatCost(definition, actor, action);
+    if (!paid) continue;
+    for (const name of granted.actions) {
+      if (!declared.has(name)) continue;
+      const id = `standard:${name}@${granted.budget}`;
+      if (seen.has(id)) continue;
+      seen.add(id);
+      options.push({
+        id,
+        kind: "standard",
+        label: name,
+        budget: granted.budget,
+        targets: name === "help" ? { side: "ally", count: 1 } : { side: "self", count: 0 },
+        ...(paid.cost.length > 0 ? { cost: paid.cost } : {}),
+      });
+    }
+  }
+  return options;
+}
+
+/** The ability behind a `standard:<id>@<budget>` option, when one of the actor's own granted it.
+ *  Null for an ordinary standard action, which no ability had to allow. */
+export function rulesetGrantedStandard(
+  actor: RulesetCombatant,
+  optionId: string,
+): { action: RulesetCombatAction; name: string; budget: string } | null {
+  if (!optionId.startsWith("standard:")) return null;
+  const at = optionId.indexOf("@");
+  if (at < 0) return null;
+  const name = optionId.slice("standard:".length, at);
+  const budget = optionId.slice(at + 1);
+  const action = actor.actions.find(
+    (entry) => entry.standard?.budget === budget && entry.standard.actions.includes(name),
+  );
+  return action ? { action, name, budget } : null;
+}
+
 /** The one thing a fight with no board answers about distance: nothing at all. */
 function positioned(state: RulesetEncounterState): boolean {
   return !!state.board?.grid;
@@ -533,7 +616,11 @@ function optionFrom(
   if (action.signature) return null;
   // A sequence whose parts are all gone, or all spent, would spend a budget and do nothing.
   if (!rulesetSequenceCanHappen(actor, action)) return null;
-  if ((actor.budgets[action.budget] ?? 0) < 1) return null;
+  if (!actionDoesSomething(action)) return null;
+  // Free of the economy, or paid for out of strikes a spend already bought. Either way no budget is
+  // asked for, and the option says so by carrying none.
+  const free = action.free === true || rulesetFreeStrike(actor, action);
+  if (!free && (actor.budgets[action.budget] ?? 0) < 1) return null;
   if (!rulesetActionAvailable(actor, action)) return null;
   const paid = planRulesetCombatCost(definition, actor, action);
   if (!paid) return null;
@@ -541,8 +628,9 @@ function optionFrom(
     id: action.id,
     kind: action.kind,
     label: action.label,
-    budget: action.budget,
+    ...(free ? {} : { budget: action.budget }),
     targets: action.targets,
+    ...(rulesetFreeStrike(actor, action) ? { strikes: actor.strikesLeft } : {}),
     ...(action.heal ? { heals: true } : {}),
   };
   if (paid.cost.length > 0) option.cost = paid.cost;
@@ -745,6 +833,7 @@ export function rulesetCombatOptions(
       targets: action === "help" ? { side: "ally", count: 1 } : { side: "self", count: 0 },
     });
   }
+  options.push(...grantedStandardOptions(definition, combat, actor));
   options.push(endTurn);
   return options;
 }

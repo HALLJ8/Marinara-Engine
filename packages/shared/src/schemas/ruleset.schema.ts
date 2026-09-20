@@ -702,6 +702,12 @@ const catalogPlusClauseSchema = z
     }
   });
 
+/** The generic actions the kind implements, named once so a ruleset opts into the ones it has. Up
+ *  here rather than beside the combat block because a catalog entry names them too: an ability that
+ *  lets its holder buy one of them with another budget says which ones. */
+const combatStandardActionSchema = z.enum(["dash", "disengage", "dodge", "help", "hide", "ready"]);
+export const RULESET_COMBAT_STANDARD_ACTIONS = combatStandardActionSchema.options;
+
 /** How long a condition an entry applies lasts. `until-save` has no clock of its own, so it needs
  *  the save that ends it beside it, or nothing would ever take it off again. */
 const catalogDurationSchema = z.union([
@@ -775,6 +781,21 @@ const catalogMechanicsSchema = z
     scales: z.object({ from: rulesetValueRefSchema, table: stepTableSchema }).strict().optional(),
     /** Which budget of the action economy a use spends, instead of the list's own default. */
     budget: sheetId.optional(),
+    /** Costs no budget at all: a turn may hold as many of these as their own price allows. */
+    free: z.literal(true).optional(),
+    /** Budgets this hands its user the moment it is used, for this turn only. Capped where it
+     *  lands, so nothing can be saved up for a later turn. */
+    gives: z
+      .array(z.object({ budget: sheetId, count: z.number().int().min(1).max(10) }).strict())
+      .min(1)
+      .max(4)
+      .optional(),
+    /** The standard actions its holder may take for a budget other than the main one. The menu
+     *  offers them beside the ordinary ones, and the resolver spends the budget named here. */
+    standard: z
+      .object({ actions: z.array(combatStandardActionSchema).min(1).max(6), budget: sheetId })
+      .strict()
+      .optional(),
   })
   .strict()
   .superRefine((mechanics, ctx) => {
@@ -787,6 +808,24 @@ const catalogMechanicsSchema = z
     // to be typed against or saved out of.
     if (mechanics.plus && mechanics.kind === "heal") {
       ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["plus"], message: "A heal carries no damage clauses" });
+    }
+    // Free of the economy, or spending one named budget of it. Both at once says two things about
+    // the same use and the menu would have to pick one.
+    if (mechanics.free && mechanics.budget !== undefined) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["free"],
+        message: "Something free spends no budget, so it names none",
+      });
+    }
+    // A standard action bought with the MAIN budget is the one the block already offers, so saying
+    // it again would put the same thing on the menu twice.
+    if (mechanics.standard && mechanics.standard.actions.length !== new Set(mechanics.standard.actions).size) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["standard", "actions"],
+        message: "The same standard action is named twice",
+      });
     }
   });
 
@@ -1256,6 +1295,11 @@ const combatAttackSourceSchema = z
       .object({ normal: combatDistanceSourceSchema, long: combatDistanceSourceSchema.optional() })
       .strict()
       .optional(),
+    /** How many strikes ONE spend of this list's budget buys, read off the sheet or written down.
+     *  A row taken with no strikes in hand spends the budget and puts the rest in hand; while any
+     *  are in hand every row of a list that declares this costs no budget at all. A list that says
+     *  nothing buys one strike a spend, which is what every fight did before this existed. */
+    strikes: rulesetValueRefSchema.optional(),
     toHit: z
       .object({
         /** An enum column holding an ability id. Another value adds nothing, exactly as
@@ -1291,10 +1335,6 @@ const combatAbilitySourceSchema = battleSkillsSchema.extend({
   /** The difficulty an entry's save is rolled against. */
   saveDifficulty: rulesetValueRefSchema.optional(),
 });
-
-/** The generic actions the kind implements, named once so a ruleset opts into the ones it has. */
-const combatStandardActionSchema = z.enum(["dash", "disengage", "dodge", "help", "hide", "ready"]);
-export const RULESET_COMBAT_STANDARD_ACTIONS = combatStandardActionSchema.options;
 
 /** What a condition DOES, from a closed list the kind implements. A ruleset maps its own condition
  *  ids onto them, so the sheet's conditions and the fight's are one record and a poisoned character
@@ -2131,6 +2171,14 @@ function refineRulesetDefinition(def: RulesetDefinitionBase, ctx: z.RefinementCt
     combat.attacks?.forEach((source, index) => {
       const path = at("attacks", index);
       checkBudget(source.budget, [...path, "budget"]);
+      if (source.strikes) {
+        checkRef(source.strikes, [...path, "strikes"], derivedIds);
+        // A number written down can be read now. One that comes off a sheet is the player's, and a
+        // row that says less than one strike is read as the one strike every spend already buys.
+        if (source.strikes.const !== undefined && source.strikes.const < 1) {
+          issue([...path, "strikes", "const"], "One spend buys at least one strike");
+        }
+      }
       const list = listById.get(source.list);
       if (!list) return issue([...path, "list"], `Unknown list "${source.list}"`);
       const typeOf = (id: string) => list.columns.find((column) => column.id === id)?.type;
@@ -2781,6 +2829,25 @@ export function rulesetCatalogEntryIssues(
     }
     if (mechanics?.budget !== undefined && budgets && !budgets.has(mechanics.budget)) {
       add([index, "mechanics", "budget"], `Unknown budget "${mechanics.budget}"`);
+    }
+    // What a use hands back, and what it lets its holder buy with another budget. Both name the
+    // combat block's own words, so both are checked against the block that declares them.
+    mechanics?.gives?.forEach((gift, giftIndex) => {
+      if (budgets && !budgets.has(gift.budget)) {
+        add([index, "mechanics", "gives", giftIndex, "budget"], `Unknown budget "${gift.budget}"`);
+      }
+    });
+    if (mechanics?.standard && definition.combat) {
+      const path = [index, "mechanics", "standard"];
+      if (!budgets?.has(mechanics.standard.budget)) {
+        add([...path, "budget"], `Unknown budget "${mechanics.standard.budget}"`);
+      }
+      const declared = new Set<string>(definition.combat.standard ?? []);
+      mechanics.standard.actions.forEach((action, actionIndex) => {
+        if (!declared.has(action)) {
+          add([...path, "actions", actionIndex], `This ruleset does not have the standard action "${action}"`);
+        }
+      });
     }
     if (mechanics?.scales) {
       // A scaling amount reads the sheet exactly as a scaled column does, so any declared derived

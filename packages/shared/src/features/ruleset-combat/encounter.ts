@@ -198,6 +198,7 @@ function distanceInCells(
 }
 
 function attackActions(
+  definition: RulesetDefinition,
   source: RulesetCombatAttackSource,
   index: number,
   build: RulesetSheetBuild,
@@ -206,6 +207,11 @@ function attackActions(
 ): RulesetCombatAction[] {
   const rows = build.lists?.[source.list];
   if (!Array.isArray(rows)) return [];
+  // How many strikes one spend of this list's budget buys, read off the sheet once. A number below
+  // one is the one strike every spend has always bought, so a sheet left alone changes nothing.
+  const strikes = source.strikes
+    ? Math.max(1, Math.trunc(resolveRulesetValueRef(definition, build, source.strikes, evaluated)))
+    : undefined;
   const actions: RulesetCombatAction[] = [];
   rows.forEach((raw, rowIndex) => {
     if (!raw || typeof raw !== "object") return;
@@ -223,6 +229,7 @@ function attackActions(
       label: name,
       budget: source.budget,
       targets: { side: "enemy", count: 1 },
+      ...(strikes !== undefined ? { strikes } : {}),
       ...(reach !== undefined ? { reach } : {}),
       // A row whose long distance came out shorter than its ordinary one is the player's row, not
       // the ruleset's rule, so it is read as having nothing beyond the ordinary one.
@@ -280,6 +287,9 @@ function clausesOf(
 /** Who a catalog entry may be pointed at. What it does decides it when the entry says nothing: a
  *  heal or a buff goes to the actor's own side, anything else to the other one. */
 function targetsOf(mechanics: RulesetCatalogMechanics): RulesetCombatAction["targets"] {
+  // A `utility` entry is only ever here because it changes what the turn may hold, and what it
+  // changes is the holder's own economy: there is nobody to point it at.
+  if (mechanics.kind === "utility") return { side: "self", count: 0 };
   const side = mechanics.targets ?? (mechanics.kind === "heal" || mechanics.kind === "buff" ? "ally" : "enemy");
   return { side, count: Math.max(1, mechanics.targetCount ?? 1) };
 }
@@ -296,8 +306,11 @@ function abilityAction(
   perCell: number | undefined,
 ): RulesetCombatAction | null {
   const mechanics = entry.mechanics;
-  // A reaction is a timing window a later slice owns, and a `utility` entry has nothing to resolve.
-  if (!mechanics || mechanics.kind === "utility" || mechanics.reaction) return null;
+  // A reaction is a timing window a later slice owns.
+  if (!mechanics || mechanics.reaction) return null;
+  // A `utility` entry has nothing to resolve unless it changes what the turn itself may hold: one
+  // that hands a budget back, or lets its holder buy a standard action with another one.
+  if (mechanics.kind === "utility" && !mechanics.gives && !mechanics.standard) return null;
   const resolve = (ref: RulesetValueRef) => resolveRulesetValueRef(definition, build, ref, evaluated);
   const amount = amountOf(mechanics.amount);
   // A scaling amount grows in DICE: the table says how many to add at each step of what it reads.
@@ -349,6 +362,13 @@ function abilityAction(
   if (source.saveDifficulty) action.saveDifficulty = sourceDifficulty;
   if (mechanics.applies?.length) action.applies = mechanics.applies.map((entry2) => ({ ...entry2 }));
   if (mechanics.concentration) action.concentration = true;
+  // What the turn's own economy makes of it: free of a budget, handing budgets back, or letting
+  // its holder buy a standard action with a budget other than the main one.
+  if (mechanics.free) action.free = true;
+  if (mechanics.gives?.length) action.gives = mechanics.gives.map((gift) => ({ ...gift }));
+  if (mechanics.standard) {
+    action.standard = { actions: [...mechanics.standard.actions], budget: mechanics.standard.budget };
+  }
   // Distance, in the unit this CATALOG declared, or the combat block's when it declared none. A
   // range of zero is self or touch, and touching somebody else is the next cell: a REACH of one,
   // never a range, so the rules for shooting (a foe beside the shooter, long range) do not read it.
@@ -701,7 +721,9 @@ export function createRulesetEncounter(input: RulesetEncounterInput): RulesetEnc
       });
     }
     const actions = [
-      ...(combat.attacks ?? []).flatMap((source, index) => attackActions(source, index, build, evaluated, perCell)),
+      ...(combat.attacks ?? []).flatMap((source, index) =>
+        attackActions(definition, source, index, build, evaluated, perCell),
+      ),
       ...(combat.abilities ?? []).flatMap((source, index) =>
         abilityActions(definition, source, index, build, catalogs, evaluated, perCell),
       ),
