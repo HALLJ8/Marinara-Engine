@@ -1622,6 +1622,21 @@ const combatSchema = z
     attacks: z.array(combatAttackSourceSchema).max(8).optional(),
     abilities: z.array(combatAbilitySourceSchema).max(8).optional(),
     standard: z.array(combatStandardActionSchema).max(6).optional(),
+    /**
+     * What a standard action does BEYOND the flag it sets, for the ones where the flag is not the
+     * whole rule. Only `dodge` has such a part today: many systems also make the dodger harder to
+     * catch with the saves that are about getting out of the way. Kept in its own block rather than
+     * on `standard`, which is a list of names every shipped ruleset already writes as strings.
+     */
+    standardEffects: z
+      .object({
+        dodge: z
+          .object({ saves: z.array(sheetId).min(1).max(12) })
+          .strict()
+          .optional(),
+      })
+      .strict()
+      .optional(),
     conditions: z.array(combatConditionSchema).max(80).optional(),
     concentration: combatConcentrationSchema.optional(),
     dying: combatDyingSchema.optional(),
@@ -2384,6 +2399,16 @@ function refineRulesetDefinition(def: RulesetDefinitionBase, ctx: z.RefinementCt
       if (standard.has(action)) issue(at("standard", index), `Duplicate standard action "${action}"`);
       standard.add(action);
     });
+    // A part of a standard action nobody can take says nothing, and a save the sheet never declared
+    // cannot be rolled with advantage.
+    if (combat.standardEffects?.dodge) {
+      if (!standard.has("dodge")) {
+        issue(at("standardEffects", "dodge"), "This ruleset has no dodge for these saves to belong to");
+      }
+      combat.standardEffects.dodge.saves.forEach((save, index) => {
+        if (!saves.has(save)) issue(at("standardEffects", "dodge", "saves", index), `Unknown save "${save}"`);
+      });
+    }
 
     const mapped = new Set<string>();
     combat.conditions?.forEach((entry, index) => {
@@ -2941,6 +2966,11 @@ export function rulesetCatalogEntryIssues(
     const declaredTypes = definition.combat?.damageTypes
       ? new Set(definition.combat.damageTypes.map((type) => type.trim().toLowerCase()))
       : null;
+    // The entry's OWN damage type is held to the same names its clauses are. It was not, which read
+    // as the first amount being freer than the second one on the very same blow.
+    if (mechanics?.damageType && declaredTypes && !declaredTypes.has(mechanics.damageType.trim().toLowerCase())) {
+      add([index, "mechanics", "damageType"], `Unknown damage type "${mechanics.damageType}"`);
+    }
     mechanics?.plus?.forEach((clause, clauseIndex) => {
       const path = [index, "mechanics", "plus", clauseIndex];
       if (clause.type && declaredTypes && !declaredTypes.has(clause.type.trim().toLowerCase())) {

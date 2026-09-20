@@ -498,6 +498,7 @@ arithmetic. What it does not do yet is listed under Not yet.
   ],
   "abilities": [{ "list": "knacks", "budget": "act" }],
   "standard": ["dodge", "help"],
+  "standardEffects": { "dodge": { "saves": ["dex_save"] } },
   "conditions": [
     { "condition": "shaken", "effects": ["own-attacks-disadvantage", "ends-on-damage"] },
     { "condition": "pinned", "effects": ["cannot-act", "speed-zero"] }
@@ -595,6 +596,11 @@ same keys for a d20 system:
   ally's next attack is rolled twice and the better kept) are always resolved. `dash` (the same
   movement allowance again) and `disengage` (nobody strikes at you for walking away this turn) are
   resolved on a board and recorded off one. `hide` and `ready` are accepted and do nothing yet.
+- `standardEffects`: optional, for the part of a standard action its flag does not carry. Only
+  `dodge` has one today: `{ "dodge": { "saves": ["dex_save"] } }` says which of your saves a dodger
+  rolls twice, keeping the better, for as long as the dodge lasts. Name only saves your sheet
+  declares, and only when your `standard` list has `dodge`. Leave it out and dodging is exactly what
+  it was: harder to hit, and nothing else.
 - `conditions`: optional. Maps YOUR condition ids onto what they do, so the sheet's conditions and
   the fight's are one record and a poisoned character is still poisoned afterwards. The effects are
   a closed list: `own-attacks-advantage`, `own-attacks-disadvantage`, `attacks-against-advantage`,
@@ -1037,9 +1043,6 @@ Said plainly, because a ruleset should not claim what the Engine does not do:
   plain record on the sheet today.
 - **A rider fires by itself.** Choosing when to spend one is a window, so the first qualifying hit
   of the period takes it. `on` has one value, `hit`; the rest of the moments arrive with reactions.
-- **Standard actions are still the closed list**, so `dodge` cannot yet be told which saves it is
-  about: saying so would change the shape of `combat.standard`, which every ruleset that already
-  ships one would have to be rewritten for.
 
 ## Layers: variants of your own ruleset
 

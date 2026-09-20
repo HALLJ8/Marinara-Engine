@@ -115,10 +115,13 @@ function requireDamageAmount(node) {
   if (Array.isArray(node)) return node.forEach(requireDamageAmount);
   if (!node || typeof node !== "object") return;
   Object.values(node).forEach(requireDamageAmount);
-  const keys = Object.keys(node.properties ?? {});
+  const keys = Object.keys(node.properties ?? {}).filter((key) => key !== "$comment");
   const damageShaped =
     ["dice", "flat", "type"].every((key) => keys.includes(key)) && keys.every((key) => DAMAGE_KEYS.includes(key));
-  if (node.type === "object" && damageShaped) {
+  // A rider's amount carries no type of its own (it takes the blow's), so it is dice and flat alone.
+  // It still has to say one of them, exactly as a clause does, or it adds nothing.
+  const riderAmountShaped = keys.length === 2 && keys.includes("dice") && keys.includes("flat");
+  if (node.type === "object" && (damageShaped || riderAmountShaped)) {
     node.anyOf = [{ required: ["dice"] }, { required: ["flat"] }];
   }
 }

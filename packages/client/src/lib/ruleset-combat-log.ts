@@ -238,9 +238,11 @@ export function rulesetCombatEventLine(
         left: event.left,
       });
     case "strikes":
+      // The count is what says "1 strike" rather than "1 strikes": the last swing has its own line.
       return key(event.left > 0 ? "strikes" : "strikesLast", {
         actor: names.combatant(event.actorId),
         label: event.label,
+        count: event.left,
         left: event.left,
       });
     case "gives":

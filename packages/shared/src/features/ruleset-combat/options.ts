@@ -524,7 +524,9 @@ export function rulesetOptionTargets(
         // Whoever put a condition on this actor that says they may not be pointed at.
         if (forbidden.has(combatant.id)) return false;
         // Helping yourself is not help.
-        if (option.id === "standard:help" && combatant.id === actor.id) return false;
+        // Read the NAME rather than the id: the same standard action is also offered bought with
+        // another budget, as `standard:help@bonus`, and nobody helps themselves whichever they took.
+        if (rulesetStandardName(option.id) === "help" && combatant.id === actor.id) return false;
         if (option.targets.side === "self") return combatant.id === actor.id;
         if (option.targets.side === "ally") return combatant.side === actor.side;
         if (option.targets.side === "enemy") return combatant.side !== actor.side;

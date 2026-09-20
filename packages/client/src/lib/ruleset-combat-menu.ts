@@ -89,7 +89,7 @@ export function rulesetOptionCostText(
   if (option.budget) parts.push(t("game.combat.ruleset.option.spends", { budget: budgetLabel(option.budget) }));
   // A strike out of what a spend already bought costs no budget, and says how many are in hand.
   else if (typeof option.strikes === "number") {
-    parts.push(t("game.combat.ruleset.option.freeStrike", { left: option.strikes }));
+    parts.push(t("game.combat.ruleset.option.freeStrike", { count: option.strikes }));
   }
   // A walk is priced in the ruleset's own distance rather than in a budget, so it is said beside
   // whichever of the two above applied.

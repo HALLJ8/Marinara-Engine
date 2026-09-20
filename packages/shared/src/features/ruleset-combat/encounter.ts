@@ -206,6 +206,9 @@ export function rulesetSaveMode(
     if (entry.effects.includes("own-saves-advantage")) advantage = true;
     if (entry.effects.includes("own-saves-disadvantage")) disadvantage = true;
   }
+  // Dodging is not only about being harder to hit: where the ruleset says so, the saves that are
+  // about getting out of the way are rolled with advantage too, for as long as the dodge lasts.
+  if (combatant.flags.dodging && combat.standardEffects?.dodge?.saves.includes(save)) advantage = true;
   if (advantage === disadvantage) return "normal";
   return advantage ? "advantage" : "disadvantage";
 }

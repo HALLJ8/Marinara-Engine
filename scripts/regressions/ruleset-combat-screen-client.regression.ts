@@ -683,7 +683,7 @@ const line = (definition: RulesetDefinition, state: RulesetEncounterState, event
   assert.equal(printed.get("uses"), "Thorns: 1 of 3 left.");
   assert.equal(printed.get("recharge"), "Thorns is ready again: 5, needing 5.");
   assert.equal(printed.get("signature"), "Thorn Lurker spends 2 on Wail, with 1 left.");
-  assert.equal(printed.get("strikes"), "Brenna swings with Longsword, with 1 strikes left.");
+  assert.equal(printed.get("strikes"), "Brenna swings with Longsword, with 1 strike left.");
   assert.equal(printed.get("gives"), "Brenna uses Second Wind and has 1 Action.");
   assert.equal(printed.get("rider"), "Sly Strike catches Thorn Lurker as well.");
   // The last strike of a spend says so rather than promising none left.
@@ -819,7 +819,7 @@ const line = (definition: RulesetDefinition, state: RulesetEncounterState, event
   // A strike taken out of what one spend already bought carries no budget and says what is left.
   assert.equal(
     rulesetOptionCostText({ ...sword, budget: undefined, strikes: 1 }, budgetLabel, t),
-    "Free, 1 strikes left",
+    "Free, 1 strike left",
   );
   const forecast = rulesetOptionForecastText(sword, t);
   assert.match(forecast, /^\d+% to hit, about \d+ damage$/u, `the forecast reads oddly: ${forecast}`);

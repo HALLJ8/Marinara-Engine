@@ -3144,7 +3144,19 @@
                         },
                         "$comment": {}
                       },
-                      "additionalProperties": false
+                      "additionalProperties": false,
+                      "anyOf": [
+                        {
+                          "required": [
+                            "dice"
+                          ]
+                        },
+                        {
+                          "required": [
+                            "flat"
+                          ]
+                        }
+                      ]
                     },
                     "damageType": {
                       "type": "string",
@@ -3281,7 +3293,19 @@
                         },
                         "$comment": {}
                       },
-                      "additionalProperties": false
+                      "additionalProperties": false,
+                      "anyOf": [
+                        {
+                          "required": [
+                            "dice"
+                          ]
+                        },
+                        {
+                          "required": [
+                            "flat"
+                          ]
+                        }
+                      ]
                     },
                     "concentration": {
                       "type": "boolean"
@@ -3395,7 +3419,19 @@
                         },
                         "$comment": {}
                       },
-                      "additionalProperties": false
+                      "additionalProperties": false,
+                      "anyOf": [
+                        {
+                          "required": [
+                            "dice"
+                          ]
+                        },
+                        {
+                          "required": [
+                            "flat"
+                          ]
+                        }
+                      ]
                     },
                     "scales": {
                       "type": "object",
@@ -3577,7 +3613,19 @@
                             },
                             "$comment": {}
                           },
-                          "additionalProperties": false
+                          "additionalProperties": false,
+                          "anyOf": [
+                            {
+                              "required": [
+                                "dice"
+                              ]
+                            },
+                            {
+                              "required": [
+                                "flat"
+                              ]
+                            }
+                          ]
                         },
                         "type": {
                           "type": "string",
@@ -3653,7 +3701,19 @@
                           "required": [
                             "dice"
                           ],
-                          "additionalProperties": false
+                          "additionalProperties": false,
+                          "anyOf": [
+                            {
+                              "required": [
+                                "dice"
+                              ]
+                            },
+                            {
+                              "required": [
+                                "flat"
+                              ]
+                            }
+                          ]
                         }
                       ]
                     },
@@ -4244,7 +4304,19 @@
                               },
                               "$comment": {}
                             },
-                            "additionalProperties": false
+                            "additionalProperties": false,
+                            "anyOf": [
+                              {
+                                "required": [
+                                  "dice"
+                                ]
+                              },
+                              {
+                                "required": [
+                                  "flat"
+                                ]
+                              }
+                            ]
                           },
                           "type": {
                             "type": "string",
@@ -5337,6 +5409,33 @@
             ]
           },
           "maxItems": 6
+        },
+        "standardEffects": {
+          "type": "object",
+          "properties": {
+            "dodge": {
+              "type": "object",
+              "properties": {
+                "saves": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "maxLength": 40,
+                    "pattern": "^[a-z][a-z0-9_]*$"
+                  },
+                  "minItems": 1,
+                  "maxItems": 12
+                },
+                "$comment": {}
+              },
+              "required": [
+                "saves"
+              ],
+              "additionalProperties": false
+            },
+            "$comment": {}
+          },
+          "additionalProperties": false
         },
         "conditions": {
           "type": "array",

@@ -1865,6 +1865,12 @@
       }
     ],
     "standard": ["dash", "disengage", "dodge", "help", "hide", "ready"],
+    "standardEffects": {
+      "dodge": {
+        "$comment": "SRD 5.1, Dodge: \"you have advantage on Dexterity saving throws\" until the start of your next turn. Being harder to hit is already carried by the action's own flag; this is the other half of it.",
+        "saves": ["dex_save"]
+      }
+    },
     "conditions": [
       {
         "$comment": "Only the parts of each condition the closed effect list can say today. Charmed and deafened have no effect it can express, so they are left out and stay plain records on the sheet.",

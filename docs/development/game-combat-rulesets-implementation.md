@@ -23,14 +23,13 @@
 > provokes, who may be targeted and where a shape may be aimed all drawn from the server's view and
 > said in the ruleset's own distance. Reactions and the windows signature actions are used in are
 > still to come, in C5.
-> The board is not drawn on screen yet, so a positioned fight is reachable only through the API
-> until C4b. As of slice C5a a TURN of such a fight can do what a tabletop turn does: a blow may
+> The battlefield is drawn on screen as of slice C4b. As of slice C5a a TURN of such a fight can do what a tabletop turn does: a blow may
 > carry a second damage clause, one spend of an action may buy several strikes, an ability may cost
 > no budget, hand one back or let its holder buy a standard action with another one, a rider may add
 > itself to the first qualifying hit of a period, and a condition may bend the holder's own saves,
 > halve every kind of harm, keep them from turning on or walking towards whoever applied it, count
-> only while that somebody is in sight, or end when they go down. Reactions and the windows
-> signature actions are used in are still to come, in C5b.
+> only while that somebody is in sight, or end when they go down. Reactions, and the windows a
+> signature action is bought in, are still to come.
 
 Status: implementation proposal, September 17, 2026. The AI overhaul does not implement these rulesets. Traditional's speed-follow-up requirement is accepted product direction; thresholds and other defaults below are proposals for tuning. Implement against current `staging`, after checking related work.
 

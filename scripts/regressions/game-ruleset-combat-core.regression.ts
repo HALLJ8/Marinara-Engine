@@ -2267,6 +2267,34 @@ const labels = (definition: RulesetDefinition, state: RulesetEncounterState, id:
       ],
       "only the three the entry named, and only for the budget it named",
     );
+    // Nobody helps themselves, whichever budget the help was bought with: the rule reads the
+    // action's NAME, so the budgeted id is held to it exactly as the plain one is. The permission
+    // is edited on the PICKED entry, which is what the fight reads, not on the file's own copy.
+    {
+      const helpful = feats.map((entry) =>
+        entry.id === "quick-hands"
+          ? { ...entry, mechanics: { ...entry.mechanics!, standard: { actions: ["help"], budget: "bonus" } } }
+          : entry,
+      ) as typeof feats;
+      const withHelp = createRulesetEncounter({
+        definition: fiveE,
+        seed: 4242,
+        combatants: [
+          { ...rogue(["quick-hands"]), catalogs: { feats: helpful } },
+          { ...rogue(["quick-hands"]), catalogs: { feats: helpful }, id: "mate", name: "Mate" },
+          sack(),
+        ],
+        roller: dice(20, 10, 1),
+      });
+      for (const id of ["standard:help", "standard:help@bonus"]) {
+        const help = rulesetCombatOptions(fiveE, withHelp, "vess").find((option) => option.id === id);
+        assert.ok(help, `${id} is on the menu`);
+        const targets = rulesetOptionTargets(fiveE, withHelp, "vess", help);
+        assert.equal(targets.includes("vess"), false, `${id} is never pointed at the one taking it`);
+        assert.ok(targets.includes("mate"), `${id} reaches the ally beside them`);
+      }
+    }
+
     const step = act(fiveE, state, { actorId: "vess", optionId: "standard:dash@bonus", targetIds: [] });
     assert.deepEqual(
       step.events.map((event) => event.type),
@@ -2414,6 +2442,61 @@ const labels = (definition: RulesetDefinition, state: RulesetEncounterState, id:
       ["con_save", undefined, [18]],
       "a save the condition does not name is the one throw it always was",
     );
+  }
+
+  {
+    // Dodging is the other half of the same action: harder to hit, AND the saves the ruleset names
+    // are rolled with advantage while it lasts. The 5e example names its Dexterity save.
+    const sweeper = () =>
+      foe("binder", "Binder", {
+        health: 40,
+        defense: 10,
+        initiativeModifier: -5,
+        actions: [
+          {
+            id: "sweep",
+            name: "Sweep",
+            budget: "action",
+            damage: { count: 1, sides: 6, flat: 0 },
+            save: { save: "dex_save", difficulty: 12, onSuccess: "half" },
+          },
+        ],
+      });
+    const before = fight(fiveE, [rogue(), sweeper()], 20, 1);
+    // Vess is up first either way: once ending the turn without dodging, once dodging first. The
+    // dodge lasts until the start of their own next turn, so the binder's sweep meets it.
+    const stoodStill = endTurn(fiveE, before, "vess").state;
+    const flat = act(fiveE, stoodStill, { actorId: "binder", optionId: "sweep", targetIds: ["vess"] }, 7, 3);
+    assert.deepEqual(
+      [firstOf(flat.events, "save").mode, firstOf(flat.events, "save").rolls],
+      [undefined, [7]],
+      "standing still, the save is the one throw it always was",
+    );
+    const dodged = endTurn(
+      fiveE,
+      act(fiveE, before, { actorId: "vess", optionId: "standard:dodge", targetIds: [] }).state,
+      "vess",
+    ).state;
+    const swept = act(fiveE, dodged, { actorId: "binder", optionId: "sweep", targetIds: ["vess"] }, 7, 19, 3);
+    const save = firstOf(swept.events, "save");
+    assert.deepEqual(
+      [save.save, save.mode, save.rolls, save.kept],
+      ["dex_save", "advantage", [7, 19], 19],
+      "dodging, the named save is rolled twice and the better one kept",
+    );
+    // And only the saves it names: a ruleset that names none is unchanged by dodging.
+    const plain = parsedOrThrow(
+      variant(fiveEText, (doc) => delete doc.combat.standardEffects),
+      "a ruleset whose dodge says nothing about saves",
+    );
+    const plainly = fight(plain, [rogue(), sweeper()], 20, 1);
+    const stillDodging = endTurn(
+      plain,
+      act(plain, plainly, { actorId: "vess", optionId: "standard:dodge", targetIds: [] }).state,
+      "vess",
+    ).state;
+    const plainSweep = act(plain, stillDodging, { actorId: "binder", optionId: "sweep", targetIds: ["vess"] }, 7, 3);
+    assert.equal(firstOf(plainSweep.events, "save").mode, undefined);
   }
 
   {
