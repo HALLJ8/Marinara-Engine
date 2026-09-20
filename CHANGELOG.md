@@ -4,6 +4,8 @@ This file is the release-notes source of truth for Marinara Engine. Reuse these 
 
 ## [Unreleased]
 
+- The Roleplay swipe media regression follows the continuation behavior shipped in #6396, so the node regression lane passes again on `staging`.
+
 - Roleplay `/continue` and `/cont` display their streamed text inside the original reply, preserving its existing content and newline preference; an empty send still creates a separate reply (#6394).
 - Narrator dice commands can target the active persona by name, including character cards used as personas, and apply that identity's assigned RPG attribute modifier (#6395).
 
