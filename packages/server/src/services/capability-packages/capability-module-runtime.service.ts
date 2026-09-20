@@ -27,6 +27,7 @@ import { registerCapabilityService } from "./capability-service-registry.service
 import { assertCapabilityAgentRuntimeServiceRegistration } from "./capability-agent-runtime.service.js";
 import { createCapabilityIntegrationHost } from "./capability-integrations.service.js";
 import { createCapabilityLanguageModelHost } from "./capability-language-model.service.js";
+import { linkCapabilityNativeDependencies } from "./capability-native-dependencies.service.js";
 import {
   createCapabilityEmbeddingHost,
   createConfiguredCapabilityEmbeddingHost,
@@ -149,6 +150,11 @@ class CapabilityModuleRuntime {
   }
 
   private async ensureModuleResolution(): Promise<void> {
+    try {
+      await linkCapabilityNativeDependencies(join(DATA_DIR, "capability-runtime-snapshots"));
+    } catch (error) {
+      logger.warn(error, "Could not link native package runtime dependencies");
+    }
     const packageRoot = join(DATA_DIR, "capability-packages");
     const link = join(packageRoot, "node_modules");
     if (existsSync(link)) return;
