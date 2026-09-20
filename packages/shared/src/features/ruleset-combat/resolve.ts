@@ -162,9 +162,15 @@ interface RulesetDamageInput {
   critical?: boolean;
 }
 
-/** Damage, with the target's own hide read first: immune takes none, resistant takes half rounded
- *  down and vulnerable takes double. Temporary points go first, which is the sheet's own rule. */
-function dealDamage(ctx: RulesetCombatContext, target: RulesetCombatant, input: RulesetDamageInput): number {
+/**
+ * ONE amount off a target, with their own hide read first: immune takes none, resistant takes half
+ * rounded down and vulnerable takes double. Temporary points go first, which is the sheet's own rule.
+ *
+ * A blow may be several of these, one for the first amount and one for every clause beside it, so
+ * what follows a blow (the conditions damage ends, concentration, going down) is `afterBlow`'s, and
+ * is done once for the lot.
+ */
+function applyDamage(ctx: RulesetCombatContext, target: RulesetCombatant, input: RulesetDamageInput): number {
   const before = healthOf(ctx, target);
   const type = input.damageType?.trim().toLowerCase();
   let dealt = Math.max(0, Math.floor(input.amount));
@@ -208,8 +214,26 @@ function dealDamage(ctx: RulesetCombatContext, target: RulesetCombatant, input: 
     maxHealth: after.max,
     ...(input.critical ? { critical: true } : {}),
   });
-  if (dealt <= 0) return 0;
+  return dealt;
+}
+
+/**
+ * What a whole blow does once every amount on it has landed: the conditions any damage ends, ONE
+ * check against concentration for the summed damage, and one check for going down.
+ *
+ * `before` is the health the target had before the FIRST amount of the blow, so a second clause
+ * cannot be read as a second blow at somebody who is already on the ground.
+ */
+function afterBlow(
+  ctx: RulesetCombatContext,
+  target: RulesetCombatant,
+  before: { value: number },
+  dealt: number,
+  critical: boolean,
+): void {
+  if (dealt <= 0) return;
   endConditionsOnDamage(ctx, target);
+  const after = healthOf(ctx, target);
   // A blow that leaves somebody standing tests their concentration. One that takes them to zero
   // does not: going down ends it outright (`dropToZero`), so nothing is rolled for it.
   if (after.value > 0) concentrationFromDamage(ctx, target, dealt);
@@ -217,14 +241,13 @@ function dealDamage(ctx: RulesetCombatContext, target: RulesetCombatant, input: 
     if (before.value > 0) dropToZero(ctx, target);
     else if (target.dying && !target.defeated) {
       // Already down: a blow while down costs the rule's own number of failures.
-      const rule = input.critical ? ctx.combat.dying?.criticalWhileDown : ctx.combat.dying?.damageWhileDown;
+      const rule = critical ? ctx.combat.dying?.criticalWhileDown : ctx.combat.dying?.damageWhileDown;
       // A stable member who is hurt is no longer stable: the count starts again with this blow.
       if (rule && rule !== "none") target.stable = false;
       if (rule === "one-failure") addDeathFailures(ctx, target, 1);
       else if (rule === "two-failures") addDeathFailures(ctx, target, 2);
     }
   }
-  return dealt;
 }
 
 function dealHeal(
@@ -1021,6 +1044,9 @@ function resolveAction(
     return perTarget ? () => rollAmount(ctx, amount, extra) : () => (rolled ??= rollAmount(ctx, amount, extra));
   };
   const damage = once(action.damage);
+  // One roller per clause, read the same way: an ability that lands on several targets without
+  // rolling to hit rolls every clause once and everybody takes those numbers.
+  const clauses = (action.damage?.plus ?? []).map((clause) => once(clause)!);
   const heal = once(action.heal);
   const temporary = once(action.temporary);
 
@@ -1085,11 +1111,14 @@ function resolveAction(
     }
     const halved = saved && action.save?.onSuccess === "half";
 
+    // Everything this blow is made of: the first amount, and every clause beside it. Rolled and
+    // typed one at a time, taken off one at a time, and finished ONCE at the end.
+    const blow: RulesetDamageInput[] = [];
     if (damage && action.damage) {
       const rolled = damage();
       const bonus = critical ? criticalExtra(ctx, action.damage, extra) : { rolls: [], flat: 0 };
       const total = rolled.total + sumOf(bonus.rolls) + bonus.flat;
-      dealDamage(ctx, target, {
+      blow.push({
         sourceId: actor.id,
         label: action.label,
         ...(action.damage.type ? { damageType: action.damage.type } : {}),
@@ -1099,6 +1128,33 @@ function resolveAction(
         ...(halved ? { saved: true } : {}),
         ...(critical ? { critical: true } : {}),
       });
+      (action.damage.plus ?? []).forEach((clause, index) => {
+        // A clause with a save of its own asks the TARGET for it, whatever the action already asked.
+        const own = clause.save ? rollSave(ctx, target, clause.save.save, clause.save.difficulty, actor.id) : false;
+        if (own && clause.save?.onSuccess === "none") return;
+        // Halved by its own save when it has one, and by the action's save-for-half when it does not.
+        const clauseHalved = clause.save ? own : halved;
+        const rolledClause = clauses[index]!();
+        const clauseBonus = critical ? criticalExtra(ctx, clause) : { rolls: [], flat: 0 };
+        const clauseTotal = rolledClause.total + sumOf(clauseBonus.rolls) + clauseBonus.flat;
+        blow.push({
+          sourceId: actor.id,
+          label: action.label,
+          // A clause with no type of its own is the blow's own kind of harm.
+          ...((clause.type ?? action.damage?.type) ? { damageType: clause.type ?? action.damage?.type } : {}),
+          rolls: [...rolledClause.rolls, ...clauseBonus.rolls],
+          flat: rolledClause.flat + clauseBonus.flat,
+          amount: clauseHalved ? Math.floor(clauseTotal / 2) : clauseTotal,
+          ...(clauseHalved ? { saved: true } : {}),
+          ...(critical ? { critical: true } : {}),
+        });
+      });
+    }
+    if (blow.length > 0) {
+      const before = healthOf(ctx, target);
+      let dealt = 0;
+      for (const part of blow) dealt += applyDamage(ctx, target, part);
+      afterBlow(ctx, target, before, dealt, critical);
     }
     if (heal) {
       const rolled = heal();

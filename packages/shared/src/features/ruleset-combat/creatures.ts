@@ -7,6 +7,7 @@
 // Pure, like the rest of the fight: no I/O, nothing thrown, and a clamp that says in plain words
 // what it changed so a log can print the line.
 
+import { RULESET_DAMAGE_MAX_PLUS } from "../../schemas/ruleset.schema.js";
 import type {
   RulesetCatalogEntriesById,
   RulesetCatalogEntry,
@@ -15,8 +16,14 @@ import type {
   RulesetCreatureAction,
   RulesetDefinition,
 } from "../../schemas/ruleset.schema.js";
-import { parseRulesetCombatDice, rulesetAverageAmount } from "./dice.js";
-import type { RulesetCombatAmount, RulesetCombatDamage, RulesetStatBlock, RulesetStatBlockAction } from "./types.js";
+import { parseRulesetCombatDice, rulesetAverageAmount, rulesetAverageDamage } from "./dice.js";
+import type {
+  RulesetCombatAmount,
+  RulesetCombatDamage,
+  RulesetCombatDamageClause,
+  RulesetStatBlock,
+  RulesetStatBlockAction,
+} from "./types.js";
 
 /** How many actions survive a clamp. A proposal with more than this is a creature nobody could read
  *  at the table, whatever the numbers say. */
@@ -79,8 +86,35 @@ function amountOf(input: { dice?: string; flat?: number } | undefined): RulesetC
   return { count: dice?.count ?? 0, sides: dice?.sides ?? 0, flat: (dice?.flat ?? 0) + (input.flat ?? 0) };
 }
 
+/** The clauses beside a blow's first amount. A clause with a save of its own falls back to the
+ *  action's number when it named none, and a block has no other number to reach for. */
+function clausesOf(action: RulesetCreatureAction): RulesetCombatDamageClause[] | null {
+  const fallback = action.save?.difficulty ?? action.saveDifficulty ?? 0;
+  const clauses = (action.damage?.plus ?? []).flatMap((clause) => {
+    const amount = amountOf(clause);
+    if (!amount) return [];
+    return [
+      {
+        ...amount,
+        ...(clause.type ? { type: clause.type } : {}),
+        ...(clause.save
+          ? {
+              save: {
+                save: clause.save.save,
+                onSuccess: clause.save.onSuccess,
+                difficulty: clause.save.difficulty ?? fallback,
+              },
+            }
+          : {}),
+      },
+    ];
+  });
+  return clauses.length > 0 ? clauses : null;
+}
+
 function creatureAction(action: RulesetCreatureAction): RulesetStatBlockAction {
   const damage = amountOf(action.damage);
+  const plus = clausesOf(action);
   return {
     id: action.id,
     name: action.name,
@@ -88,7 +122,13 @@ function creatureAction(action: RulesetCreatureAction): RulesetStatBlockAction {
     ...(action.toHit !== undefined ? { toHit: action.toHit } : {}),
     ...(action.autoHit ? { autoHit: true } : {}),
     ...(damage
-      ? { damage: { ...damage, ...(action.damage?.type ? { type: action.damage.type } : {}) } as RulesetCombatDamage }
+      ? {
+          damage: {
+            ...damage,
+            ...(action.damage?.type ? { type: action.damage.type } : {}),
+            ...(plus ? { plus } : {}),
+          } as RulesetCombatDamage,
+        }
       : {}),
     ...(action.save ? { save: { ...action.save } } : {}),
     ...(action.saveDifficulty !== undefined ? { saveDifficulty: action.saveDifficulty } : {}),
@@ -213,9 +253,18 @@ export interface RulesetClampedStatBlock {
   adjusted: string[];
 }
 
-/** What one action deals on average, per target. */
+/** What one action deals on average, per target: the whole blow, clauses and all. */
 function damageAverage(action: RulesetStatBlockAction | undefined): number {
-  return action?.damage ? Math.max(0, rulesetAverageAmount(action.damage)) : 0;
+  return action?.damage ? Math.max(0, rulesetAverageDamage(action.damage)) : 0;
+}
+
+/** Every amount one action's blow is made of, heaviest first: the first amount and every clause. A
+ *  clamp shaves the heaviest of them, so a creature whose weight sits in a clause loses it there. */
+function blowAmounts(action: RulesetStatBlockAction): RulesetCombatAmount[] {
+  if (!action.damage) return [];
+  return [action.damage, ...(action.damage.plus ?? [])].sort(
+    (left, right) => rulesetAverageAmount(right) - rulesetAverageAmount(left),
+  );
 }
 
 /** The id a block action answers to, with the same fallback the encounter builds its menu with, so
@@ -399,6 +448,31 @@ export function clampRulesetStatBlock(
       );
       delete action.damage.type;
     }
+    // The clauses beside the first amount, held to the same names and the same ceiling. A clause
+    // over the cap is dropped outright: a blow written as a list nobody could read is not a blow.
+    if (action.damage?.plus) {
+      if (action.damage.plus.length > RULESET_DAMAGE_MAX_PLUS) {
+        adjusted.push(
+          `"${action.name}" carried more than ${RULESET_DAMAGE_MAX_PLUS} damage clauses, so the rest were dropped.`,
+        );
+        action.damage.plus = action.damage.plus.slice(0, RULESET_DAMAGE_MAX_PLUS);
+      }
+      for (const clause of action.damage.plus) {
+        if (clause.type && types && !types.has(clause.type.trim().toLowerCase())) {
+          adjusted.push(
+            `The damage type "${clause.type}" is not one this ruleset has, so a clause of "${action.name}" deals untyped damage.`,
+          );
+          delete clause.type;
+        }
+        if (clause.save && !saves.has(clause.save.save)) {
+          adjusted.push(
+            `A clause of "${action.name}" asked for a save this ruleset does not have, so it simply lands.`,
+          );
+          delete clause.save;
+        }
+        if (clause.save && clause.save.difficulty > difficultyCap) clause.save.difficulty = difficultyCap;
+      }
+    }
     if (action.save && !saves.has(action.save.save)) {
       adjusted.push(`"${action.name}" asked for a save this ruleset does not have, so it simply lands.`);
       delete action.save;
@@ -467,7 +541,9 @@ export function clampRulesetStatBlock(
       .map((id) => byId.get(id))
       .filter((action): action is RulesetStatBlockAction => !!action?.damage)
       .sort((left, right) => damageAverage(right) - damageAverage(left))[0];
-    const damage = part?.damage;
+    // The heaviest amount of the heaviest part: the first amount of a blow that carries only one,
+    // and otherwise whichever of it and its clauses says most.
+    const damage = part ? blowAmounts(part)[0] : undefined;
     const rolls = !!damage && damage.count > 0 && damage.sides > 0;
     if (damage && damage.count > 1 && damage.sides > 0) damage.count -= 1;
     else if (damage && damage.flat > (rolls ? 0 : 1)) damage.flat -= 1;

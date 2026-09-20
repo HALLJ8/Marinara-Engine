@@ -21,10 +21,29 @@ export interface RulesetCombatAmount {
   flat: number;
 }
 
+/** The save one damage clause asks its target for, resolved to a number when the fight began.
+ *  `onSuccess` says what a success leaves of THIS clause: nothing at all, or half of it. */
+export interface RulesetCombatClauseSave {
+  save: string;
+  difficulty: number;
+  onSuccess: "none" | "half";
+}
+
+/** One more amount on the same blow, rolled and typed on its own. A clause never rolls to hit: it
+ *  rides the blow that carried it, and a critical doubles its dice exactly as it doubles the first
+ *  amount's. */
+export interface RulesetCombatDamageClause extends RulesetCombatAmount {
+  type?: string;
+  save?: RulesetCombatClauseSave;
+}
+
 /** An amount of damage, and what kind it is. The type is matched without case against a stat
  *  block's resistances, so "Fire" and "fire" are one thing. */
 export interface RulesetCombatDamage extends RulesetCombatAmount {
   type?: string;
+  /** More amounts on the same blow. Each is rolled, typed and saved against on its own; the blow
+   *  they make together is ONE check against concentration and one check for going down. */
+  plus?: RulesetCombatDamageClause[];
 }
 
 /** A condition a hit or a failed save puts on its target. */

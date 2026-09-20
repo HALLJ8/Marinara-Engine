@@ -59,7 +59,12 @@ assert.equal(
     if (!node || typeof node !== "object") return;
     const object = node as { properties?: Record<string, unknown>; anyOf?: unknown };
     const keys = Object.keys(object.properties ?? {}).filter((key) => key !== "$comment");
-    if (keys.length === 3 && ["dice", "flat", "type"].every((key) => keys.includes(key))) damageNodes.push(object);
+    // A blow and every clause beside it: the three an amount always carries, plus the two a blow or
+    // a clause may carry and nothing else.
+    const damageShaped =
+      ["dice", "flat", "type"].every((key) => keys.includes(key)) &&
+      keys.every((key) => ["dice", "flat", "type", "plus", "save"].includes(key));
+    if (damageShaped) damageNodes.push(object);
     Object.values(node).forEach(walk);
   };
   // The same for what a combat block measures in cells: the Engine refuses any of it in a block

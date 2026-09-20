@@ -9,7 +9,7 @@ import {
   type RulesetLiveState,
   type RulesetSheetOp,
 } from "../rulesets/live-state.js";
-import { rulesetAverageAmount } from "./dice.js";
+import { rulesetAverageDamage } from "./dice.js";
 import {
   currentRulesetActor,
   rulesetCombatant,
@@ -497,7 +497,7 @@ function forecastFor(
         strikes = 1;
         spent.add(part.id);
       }
-      return sum + (part.damage ? strikes * rulesetAverageAmount(part.damage) : 0);
+      return sum + (part.damage ? strikes * rulesetAverageDamage(part.damage) : 0);
     }, 0);
     if (total > 0) forecast.averageDamage = Math.round(total * 100) / 100;
     return forecast.averageDamage === undefined ? undefined : forecast;
@@ -514,8 +514,10 @@ function forecastFor(
     );
     if (chance !== null) forecast.hitChance = Math.round(chance * 1000) / 1000;
   }
+  // The whole blow, clauses and all. A clause with a save of its own is counted in full: a forecast
+  // says what a blow would do, not what a die nobody has thrown might take off it.
   const amount = action.damage ?? action.heal;
-  if (amount) forecast.averageDamage = Math.round(rulesetAverageAmount(amount) * 100) / 100;
+  if (amount) forecast.averageDamage = Math.round(rulesetAverageDamage(amount) * 100) / 100;
   return forecast.hitChance !== undefined || forecast.averageDamage !== undefined ? forecast : undefined;
 }
 

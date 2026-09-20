@@ -668,6 +668,40 @@ const catalogDice = z
 
 const catalogAmountShape = { dice: catalogDice.optional(), flat: z.number().int().optional() };
 
+/** How many SECOND amounts one blow may carry beside its first. Three, because a blow written as a
+ *  list of four separate things is a blow nobody at a table could read out. */
+export const RULESET_DAMAGE_MAX_PLUS = 3;
+
+/** The save one clause asks the TARGET for, on top of whatever the action itself asked. `difficulty`
+ *  is the clause's own number; without one it falls back to the action's, and then to the number the
+ *  source it came from rolls saves against. `onSuccess` says what a success leaves of THIS clause:
+ *  nothing at all, or half of it. (The action's own `save` uses the same word for something else:
+ *  there "none" means the save changes nothing. A clause is only ever rolled against to take
+ *  something off it, so it has no third value.) */
+const catalogClauseSaveSchema = z
+  .object({
+    save: sheetId,
+    difficulty: z.number().int().min(0).max(1000).optional(),
+    onSuccess: z.enum(["none", "half"]),
+  })
+  .strict();
+
+/** One more amount on the same blow, rolled and typed on its own: "and 2d6 fire", "and 1d6 poison
+ *  the target may shake off". Never a second attack roll: a clause rides the blow that carried it. */
+const catalogPlusClauseSchema = z
+  .object({
+    dice: catalogDice.optional(),
+    flat: z.number().int().min(-1000).max(10000).optional(),
+    type: promptSafeText(40).optional(),
+    save: catalogClauseSaveSchema.optional(),
+  })
+  .strict()
+  .superRefine((clause, ctx) => {
+    if (clause.dice === undefined && clause.flat === undefined) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "A clause names dice, a flat amount, or both" });
+    }
+  });
+
 /** How long a condition an entry applies lasts. `until-save` has no clock of its own, so it needs
  *  the save that ends it beside it, or nothing would ever take it off again. */
 const catalogDurationSchema = z.union([
@@ -712,6 +746,8 @@ const catalogMechanicsSchema = z
     friendlyFire: z.boolean().optional(),
     amount: z.object(catalogAmountShape).strict().optional(),
     damageType: promptSafeText(40).optional(),
+    /** More amounts on the same blow, beside `amount`, each rolled and typed on its own. */
+    plus: z.array(catalogPlusClauseSchema).max(RULESET_DAMAGE_MAX_PLUS).optional(),
     attackRoll: z.boolean().optional(),
     save: z
       .object({ save: sheetId, onSuccess: z.enum(["none", "half", "negates"]) })
@@ -740,7 +776,19 @@ const catalogMechanicsSchema = z
     /** Which budget of the action economy a use spends, instead of the list's own default. */
     budget: sheetId.optional(),
   })
-  .strict();
+  .strict()
+  .superRefine((mechanics, ctx) => {
+    // A second amount needs a first one to ride: a blow made of nothing but clauses would be an
+    // amount written in the one place nothing reads it.
+    if (mechanics.plus && !mechanics.amount) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["plus"], message: "A clause needs an amount beside it" });
+    }
+    // An `amount` that MENDS is health given back, and there is nothing for a second damage clause
+    // to be typed against or saved out of.
+    if (mechanics.plus && mechanics.kind === "heal") {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["plus"], message: "A heal carries no damage clauses" });
+    }
+  });
 
 /** What the picker may filter on. `startFrom` names a sheet field the picker opens on, so a caster
  *  sees their own school first. Nothing here knows the word "spell" or "class". */
@@ -816,6 +864,8 @@ const creatureDamageSchema = z
     dice: catalogDice.optional(),
     flat: z.number().int().min(-1000).max(10000).optional(),
     type: promptSafeText(40).optional(),
+    /** More amounts on the same blow, each rolled and typed on its own. */
+    plus: z.array(catalogPlusClauseSchema).max(RULESET_DAMAGE_MAX_PLUS).optional(),
   })
   .strict()
   .superRefine((damage, ctx) => {
@@ -2543,6 +2593,19 @@ function creatureIssues(
     if (action.damage?.type && damageTypes && !damageTypes.has(action.damage.type.trim().toLowerCase())) {
       add([...path, "damage", "type"], `Unknown damage type "${action.damage.type}"`);
     }
+    // Every second amount on the blow is held to the same names the first one is, and a save of its
+    // own needs a number to be rolled against: the clause's, the action's, or nothing at all.
+    action.damage?.plus?.forEach((clause, clauseIndex) => {
+      const where = [...path, "damage", "plus", clauseIndex];
+      if (clause.type && damageTypes && !damageTypes.has(clause.type.trim().toLowerCase())) {
+        add([...where, "type"], `Unknown damage type "${clause.type}"`);
+      }
+      if (!clause.save) return;
+      if (!saves.has(clause.save.save)) add([...where, "save", "save"], `Unknown save "${clause.save.save}"`);
+      if (clause.save.difficulty === undefined && !action.save && action.saveDifficulty === undefined) {
+        add([...where, "save", "difficulty"], "This clause's save has no difficulty to be rolled against");
+      }
+    });
     if (action.save && !saves.has(action.save.save)) {
       add([...path, "save", "save"], `Unknown save "${action.save.save}"`);
     }
@@ -2663,6 +2726,20 @@ export function rulesetCatalogEntryIssues(
     if (mechanics?.save && !saves.has(mechanics.save.save)) {
       add([index, "mechanics", "save", "save"], `Unknown save "${mechanics.save.save}"`);
     }
+    // The same names the first amount is held to. A clause's damage type is checked where the
+    // ruleset says what its types are, exactly as a creature's is.
+    const declaredTypes = definition.combat?.damageTypes
+      ? new Set(definition.combat.damageTypes.map((type) => type.trim().toLowerCase()))
+      : null;
+    mechanics?.plus?.forEach((clause, clauseIndex) => {
+      const path = [index, "mechanics", "plus", clauseIndex];
+      if (clause.type && declaredTypes && !declaredTypes.has(clause.type.trim().toLowerCase())) {
+        add([...path, "type"], `Unknown damage type "${clause.type}"`);
+      }
+      if (clause.save && !saves.has(clause.save.save)) {
+        add([...path, "save", "save"], `Unknown save "${clause.save.save}"`);
+      }
+    });
     mechanics?.cost?.forEach((cost, costIndex) => {
       if (!costTargets.has(cost.pool)) {
         add([index, "mechanics", "cost", costIndex, "pool"], `Unknown pool or pool group "${cost.pool}"`);
@@ -2683,13 +2760,20 @@ export function rulesetCatalogEntryIssues(
     // source of the list the entry lands in, so an entry that asks for a save (its own, or one that
     // ends a condition) in a list whose source declares no `saveDifficulty` would be saved against
     // nothing, and everybody would always succeed.
-    const asksForSave = !!mechanics?.save || !!mechanics?.applies?.some((applies) => applies.saveEnds);
+    const asksForSave =
+      !!mechanics?.save ||
+      !!mechanics?.applies?.some((applies) => applies.saveEnds) ||
+      !!mechanics?.plus?.some((clause) => clause.save && clause.save.difficulty === undefined);
     if (asksForSave && definition.combat) {
       const lists = new Set((entry.rows ?? []).map((row) => row.list));
       (definition.combat.abilities ?? []).forEach((source) => {
         if (lists.has(source.list) && source.saveDifficulty === undefined) {
           add(
-            [index, "mechanics", mechanics?.save ? "save" : "applies"],
+            [
+              index,
+              "mechanics",
+              mechanics?.save ? "save" : mechanics?.applies?.some((applies) => applies.saveEnds) ? "applies" : "plus",
+            ],
             `The combat abilities source for "${source.list}" declares no saveDifficulty for this save to be rolled against`,
           );
         }

@@ -29,7 +29,13 @@
 //     picks from, which is what the enemy's own turn will read.
 
 export * from "./types.js";
-export { parseRulesetCombatDice, rollRulesetDice, rulesetAverageAmount, rulesetCombatRoller } from "./dice.js";
+export {
+  parseRulesetCombatDice,
+  rollRulesetDice,
+  rulesetAverageAmount,
+  rulesetAverageDamage,
+  rulesetCombatRoller,
+} from "./dice.js";
 export {
   clampRulesetStatBlock,
   findRulesetCreature,

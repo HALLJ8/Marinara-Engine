@@ -43,6 +43,7 @@ import type {
   RulesetCombatant,
   RulesetCombatantInput,
   RulesetCombatBoard,
+  RulesetCombatDamageClause,
   RulesetCombatEvent,
   RulesetCombatRoller,
   RulesetEncounterState,
@@ -246,6 +247,36 @@ function attackActions(
   return actions;
 }
 
+/** The clauses beside a blow's first amount, with each save's difficulty resolved once: the
+ *  clause's own number when it named one, and otherwise the number this source rolls saves against.
+ *  A clause with neither dice nor a flat part is refused at import, so nothing here is dropped. */
+function clausesOf(
+  plus: RulesetCatalogMechanics["plus"] | undefined,
+  difficulty: number,
+): RulesetCombatDamageClause[] | null {
+  if (!plus?.length) return null;
+  const clauses = plus.flatMap((clause) => {
+    const amount = amountOf(clause);
+    if (!amount) return [];
+    return [
+      {
+        ...amount,
+        ...(clause.type ? { type: clause.type } : {}),
+        ...(clause.save
+          ? {
+              save: {
+                save: clause.save.save,
+                onSuccess: clause.save.onSuccess,
+                difficulty: clause.save.difficulty ?? difficulty,
+              },
+            }
+          : {}),
+      },
+    ];
+  });
+  return clauses.length > 0 ? clauses : null;
+}
+
 /** Who a catalog entry may be pointed at. What it does decides it when the entry says nothing: a
  *  heal or a buff goes to the actor's own side, anything else to the other one. */
 function targetsOf(mechanics: RulesetCatalogMechanics): RulesetCombatAction["targets"] {
@@ -275,6 +306,7 @@ function abilityAction(
     : 0;
   const scaled = amount ? { ...amount, count: amount.count + (amount.count > 0 ? extra : 0) } : null;
   const heals = mechanics.kind === "heal";
+  const sourceDifficulty = source.saveDifficulty ? resolve(source.saveDifficulty) : 0;
   const cost = mechanics.cost?.length === 1 ? mechanics.cost[0]! : undefined;
   const pool = cost ? definition.sheet.live.pools.find((entry2) => entry2.id === cost.pool) : undefined;
   const family = cost ? (pool ? pool.group : cost.pool) : undefined;
@@ -296,8 +328,15 @@ function abilityAction(
         : {}),
     },
   };
+  const plus = clausesOf(mechanics.plus, sourceDifficulty);
   if (scaled && heals) action.heal = scaled;
-  else if (scaled) action.damage = { ...scaled, ...(mechanics.damageType ? { type: mechanics.damageType } : {}) };
+  else if (scaled) {
+    action.damage = {
+      ...scaled,
+      ...(mechanics.damageType ? { type: mechanics.damageType } : {}),
+      ...(plus ? { plus } : {}),
+    };
+  }
   const temporary = amountOf(mechanics.temporary);
   if (temporary) action.temporary = temporary;
   // An entry that rolls to hit always rolls: a source that names no bonus adds nothing to the dice.
@@ -305,13 +344,9 @@ function abilityAction(
   if (mechanics.attackRoll) action.toHit = source.toHit ? resolve(source.toHit) : 0;
   if (mechanics.autoHit) action.autoHit = true;
   if (mechanics.save) {
-    action.save = {
-      save: mechanics.save.save,
-      onSuccess: mechanics.save.onSuccess,
-      difficulty: source.saveDifficulty ? resolve(source.saveDifficulty) : 0,
-    };
+    action.save = { save: mechanics.save.save, onSuccess: mechanics.save.onSuccess, difficulty: sourceDifficulty };
   }
-  if (source.saveDifficulty) action.saveDifficulty = resolve(source.saveDifficulty);
+  if (source.saveDifficulty) action.saveDifficulty = sourceDifficulty;
   if (mechanics.applies?.length) action.applies = mechanics.applies.map((entry2) => ({ ...entry2 }));
   if (mechanics.concentration) action.concentration = true;
   // Distance, in the unit this CATALOG declared, or the combat block's when it declared none. A
@@ -449,7 +484,14 @@ function blockActions(block: RulesetStatBlockLike, perCell: number | undefined):
     },
     ...(action.toHit !== undefined ? { toHit: action.toHit } : {}),
     ...(action.autoHit ? { autoHit: true } : {}),
-    ...(action.damage ? { damage: { ...action.damage } } : {}),
+    ...(action.damage
+      ? {
+          damage: {
+            ...action.damage,
+            ...(action.damage.plus ? { plus: action.damage.plus.map((clause) => ({ ...clause })) } : {}),
+          },
+        }
+      : {}),
     ...(action.save ? { save: { ...action.save } } : {}),
     ...(action.saveDifficulty !== undefined ? { saveDifficulty: action.saveDifficulty } : {}),
     ...(action.applies?.length ? { applies: action.applies.map((entry) => ({ ...entry })) } : {}),
