@@ -715,7 +715,9 @@ assert.equal(untouched.sparse, 0);
 // through the error door.
 assert.match(
   generateRoutes,
-  /const rolled = await resolveSkillCheckTagsInContent\(fullResponse, \{[\s\S]*?\}\);\s*const generalRolls = resolveGameDiceRequests\(\s*rolled\.content,\s*toolDiceRollResults,\s*undefined,\s*dicePoolSession \?\? undefined,?\s*\);\s*if \(generalRolls\.content !== fullResponse\) \{/u,
+  // Between the two calls the route may keep what the resolver handed back, such as the purchases a
+  // check paid for, but it may not roll anything else in between and it may not swallow either one.
+  /const rolled = await resolveSkillCheckTagsInContent\(fullResponse, \{[\s\S]*?\}\);(?:[^;]*;){0,3}\s*const generalRolls = resolveGameDiceRequests\(\s*rolled\.content,\s*toolDiceRollResults,\s*undefined,\s*dicePoolSession \?\? undefined,?\s*\);\s*if \(generalRolls\.content !== fullResponse\) \{/u,
   "the resolver's own output decides the frame and the save on both paths",
 );
 
