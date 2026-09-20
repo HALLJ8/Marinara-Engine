@@ -139,6 +139,7 @@ import {
   loadGameRulesetSheetContext,
   loadTurnRulesetCatalogs,
   renderGameRulesetSheetBlocks,
+  sheetCommandCards,
   type GameRulesetSheetTurn,
 } from "../services/game/ruleset-sheet-turn.service.js";
 import { createCustomToolsStorage } from "../services/storage/custom-tools.storage.js";
@@ -4137,6 +4138,24 @@ export async function generateRoutes(app: FastifyInstance) {
           const pinnedGameRuleset =
             chatMeta.gameRuleset != null ? resolveGameRuleset(chatMeta, await loadRulesetRegistry()) : null;
           turnGameRuleset = pinnedGameRuleset;
+          const promptRulesetCatalogs =
+            pinnedGameRuleset?.status === "ok" &&
+            pinnedGameRuleset.definition.resolution.kind === "dice-pool" &&
+            !input.impersonate
+              ? await loadTurnRulesetCatalogs(
+                  {
+                    definition: pinnedGameRuleset.definition,
+                    packageId: pinnedGameRuleset.packageId,
+                    cards: sheetCommandCards(
+                      pinnedGameRuleset.definition,
+                      Array.isArray(chatMeta.gameCharacterCards) ? chatMeta.gameCharacterCards : [],
+                    ),
+                    playerName: gmCtx.playerName ?? null,
+                  },
+                  "",
+                  { force: true },
+                )
+              : {};
           // The pool block is rendered from the same session the readers spend out of, and
           // from the same modifier context the resolver uses, so the block and the engine
           // cannot disagree about a value or about a total.
@@ -4180,6 +4199,7 @@ export async function generateRoutes(app: FastifyInstance) {
                             pinnedGameRuleset.definition,
                             chatMeta.gameCharacterCards,
                             parseStoredRulesetLive((await selectedGameStateSnapshotPromise)?.rulesetLive),
+                            promptRulesetCatalogs,
                           ),
                         }
                       : {}),

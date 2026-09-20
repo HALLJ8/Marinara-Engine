@@ -11,7 +11,7 @@ This file is the release-notes source of truth for Marinara Engine. Reuse these 
 
 - Roleplay dice commands accept an optional situational bonus or penalty and DC, combine the adjustment with the automatic attribute bonus, and show the DC on the existing dice card (#6417).
 
-- Game Mode catalog abilities can modify dice-pool checks with rerolls, bonus dice, successes or thresholds. Free abilities and paid abilities use the same check command; any costs are applied with the roll (#6411).
+- Game Mode catalog abilities can modify dice-pool checks with rerolls, bonus dice, successes or thresholds. Their effects and costs appear in the picker and character prompt. Free and paid abilities use the same check command, with costs applied once (#6411).
 
 - Ruleset combat can use wound tracks for health, applying the ruleset's damage kinds, healing and falling rules instead of subtracting hit points (#6407).
 
@@ -20,6 +20,7 @@ This file is the release-notes source of truth for Marinara Engine. Reuse these 
 - Dice-pool rulesets can let players spend resources for extra dice or successes on a check, with costs, limits and actual spending recorded by the Engine (#6405).
 
 - Character sheets support wound tracks, ordered damage kinds, healing and persistent overflow. A ruleset can apply the current wound penalty to its checks; these features require Capability API 1.30 (#6407).
+- Atlas Cloud browser checks verify persisted model options directly, avoiding a race with the temporary save confirmation.
 
 - Atlas Cloud video connections show a **Model options** section under **Video Defaults** with every input the selected model has beyond clip length, aspect ratio, and resolution, such as negative prompt, seed, audio, shot type, prompt expansion, and LoRA lists. Each option shows Atlas Cloud's description and default, stays unsent until changed, and is saved per model. Switching models hides the old controls until the selected schema loads; ordinary field names such as `prototype` are preserved and object inputs are validated. The section also lists the clip lengths and resolutions the model accepts and warns when a text-to-video model cannot use the gallery image (#6408).
 - **Fetch Models** on an Atlas Cloud image or video connection loads Atlas Cloud's current catalog instead of a fixed starter list. Video models list image-to-video first and show their starting price per second; the starter list remains the fallback when the catalog cannot be reached (#6408).

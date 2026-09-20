@@ -78,10 +78,11 @@ export function renderGameRulesetSheetBlocks(
   definition: RulesetDefinition,
   cards: unknown,
   live: RulesetLiveStates | null | undefined,
+  catalogs: RulesetCatalogEntriesById = {},
 ): string[] {
   const party = Array.isArray(cards) ? (cards as Array<Record<string, unknown>>) : [];
   return sheetCommandCards(definition, party).map((card) =>
-    renderRulesetSheetBlock(definition, card, live?.[normalizeCharacterLookupName(card.name)]),
+    renderRulesetSheetBlock(definition, card, live?.[normalizeCharacterLookupName(card.name)], catalogs),
   );
 }
 

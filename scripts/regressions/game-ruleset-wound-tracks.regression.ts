@@ -314,6 +314,7 @@ try {
     // refused for elsewhere. This case is about the penalty, so it reads the file without one.
     delete summed.catalogs;
     delete summed.sheet.lists;
+    delete summed.gm.sheetSummary.lists;
     summed.id = "gravewatch-summed";
     summed.resolution = {
       kind: "dice-sum",

@@ -8,8 +8,15 @@
 // Every value that comes off the sheet is user-authored text on its way into a prompt, so it is
 // flattened to one line, stripped of the characters that shape a tag or a macro, and capped.
 
-import type { RulesetDefinition, RulesetField, RulesetSheetBuild } from "../../schemas/ruleset.schema.js";
+import {
+  RULESET_CATALOG_ROW_KEY,
+  type RulesetCatalogEntriesById,
+  type RulesetDefinition,
+  type RulesetField,
+  type RulesetSheetBuild,
+} from "../../schemas/ruleset.schema.js";
 import { readRulesetLive } from "./live-state.js";
+import { rulesetCatalogEntriesByRef } from "./scaled-rows.js";
 import { evaluateRulesetSheet, formatRulesetCheckValue, isRulesetItemHidden } from "./sheet-math.js";
 
 /** How much of one sheet value reaches the prompt. */
@@ -56,11 +63,13 @@ export function renderRulesetSheetBlock(
   definition: RulesetDefinition,
   card: { name: string; build: RulesetSheetBuild },
   stored: unknown,
+  catalogs: RulesetCatalogEntriesById = {},
 ): string {
   const { sheet, gm } = definition;
   const build = card.build;
   const evaluated = evaluateRulesetSheet(definition, build);
   const live = readRulesetLive(definition, build, stored);
+  const catalogEntries = rulesetCatalogEntriesByRef(catalogs);
   const lines: string[] = [];
   const push = (line: string) => {
     if (line) lines.push(line);
@@ -160,10 +169,17 @@ export function renderRulesetSheetBlock(
       }
       const name = cellText(own(row as Record<string, unknown>, entry.nameColumn));
       if (!name) continue;
+      const ref = own(row as Record<string, unknown>, RULESET_CATALOG_ROW_KEY);
+      const mechanics = typeof ref === "string" ? catalogEntries.get(ref)?.mechanics : undefined;
+      const cost = mechanics?.cost?.map((term) => `${term.amount} ${safeValue(term.pool)}`).join(" + ");
+      const check = mechanics?.check
+        ? ` (check: ${JSON.stringify(mechanics.check)}${cost ? `; pool cost: ${cost}` : ""}${mechanics.perCostStep ? "; scales per payment" : ""})`
+        : "";
+      const describedName = name + check;
       const group = entry.groupBy === undefined ? "" : cellText(own(row as Record<string, unknown>, entry.groupBy));
       const bucket = groups.get(group);
-      if (bucket) bucket.push(name);
-      else groups.set(group, [name]);
+      if (bucket) bucket.push(describedName);
+      else groups.set(group, [describedName]);
       named += 1;
     }
     if (groups.size === 0) continue;
