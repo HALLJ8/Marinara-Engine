@@ -44,6 +44,9 @@ function positioned(state: RulesetEncounterState): boolean {
   return !!state.board?.grid;
 }
 
+/** How many cells one aim scan may look at: the area of the largest board a saved fight may hold. */
+const RULESET_AIM_SCAN_CEILING = 64 * 64;
+
 /** The two ids a positioned fight adds to the menu beside the actor's own actions. Written with a
  *  colon, which no sheet id or stat block action id may hold, so a creature that really has an
  *  action called "move" or "stand" can never be mistaken for walking. The same trick the standard
@@ -158,8 +161,12 @@ export function rulesetAimCells(
   const bottom = Math.min(grid.height - 1, from.y + reach.max);
   const left = Math.max(0, from.x - reach.max);
   const right = Math.min(grid.width - 1, from.x + reach.max);
+  // And a ceiling on the cells looked at, whatever `limit` says: the largest board a save may hold
+  // is 64 by 64, so nothing legitimate is cut short, and nothing else can make this loop long.
+  let looked = 0;
   for (let y = top; y <= bottom; y++) {
     for (let x = left; x <= right; x++) {
+      if (++looked > RULESET_AIM_SCAN_CEILING) return aims;
       const at = { x, y };
       if (!rulesetAimLegal(state, actorId, optionId, at)) continue;
       const targetIds = rulesetAreaTargets(state, actorId, optionId, at);

@@ -754,8 +754,11 @@ required.
 call that unit. Every distance in the block's world is in it: `economy.movement`, a creature's
 `speed`, a weapon's `reach` and `range`, and a creature action's `reach` and `range`. A catalog that
 declares its own `units.distance` converts its own `mechanics.range` and `area.size` with its own
-`perCell`; one that does not uses this. A distance is rounded to the nearest cell and never to none,
-so anything you gave a number to reaches at least one.
+`perCell`; one that does not uses this. A distance above zero is rounded to the nearest cell and
+never to none, so anything you gave a number to reaches at least one. Zero is not a short distance,
+it keeps its own meaning: a `mechanics.range` of 0 is self or touch (and a touch on somebody else
+reaches the next cell), and a weapon `reach` or `range` column reading 0 on a row means that row
+has no such distance.
 
 **Whether a fight is on a board.** Two things have to agree: your block declares `distance`, and the
 player's game is set to the Tactical combat style. With the Classic style, or on a ruleset without
