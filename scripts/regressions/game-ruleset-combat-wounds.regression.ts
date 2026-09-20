@@ -533,6 +533,9 @@ for (const marks of ["per-blow", "per-point"] as const) {
     ],
   ] as Array<[string, (doc: Record<string, any>) => void]>) {
     const result = parseRulesetDefinition(trackDocument(edit));
+    // Before reading the issues at all: an accepted document has none, and every assertion below
+    // would then pass by saying nothing about a refusal that had quietly disappeared.
+    assert.equal(result.ok, false, `${label} must be refused`);
     const issues = result.ok ? [] : result.issues;
     assert.ok(
       !issues.some((issue) => /health is a pool/.test(issue)),
