@@ -44,9 +44,16 @@ export interface RulesetBoardCell {
 
 export const rulesetCellKey = (cell: { x: number; y: number }): string => `${cell.x},${cell.y}`;
 
-/** Whether taking this option asks the player to aim it at a cell rather than at anybody. */
+/** Whether taking this option on a board asks the player to aim it at a cell rather than at anybody.
+ *  Every shape does, one with nowhere to land included: the server refuses a shape sent with no
+ *  cell, so the step opens and says nobody would be caught instead of sending a choice that fails. */
 export function rulesetOptionNeedsAim(option: DirectedRulesetOption): boolean {
-  return !!option.area && (option.aim?.length ?? 0) > 0;
+  return !!option.area;
+}
+
+/** Whether a shape has any square it may be aimed at right now. */
+export function rulesetOptionHasAim(option: DirectedRulesetOption): boolean {
+  return (option.aim?.length ?? 0) > 0;
 }
 
 /** Whether taking this option asks the player to pick a cell to walk to. Getting back up spends

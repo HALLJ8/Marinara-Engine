@@ -12,7 +12,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import type { DirectedRulesetOption, DirectedRulesetView, RulesetCombatCell } from "@marinara-engine/shared";
 import { useTranslation } from "react-i18next";
-import { rulesetOptionNeedsAim, rulesetOptionNeedsCell } from "../../lib/ruleset-combat-board";
+import { rulesetOptionHasAim, rulesetOptionNeedsAim, rulesetOptionNeedsCell } from "../../lib/ruleset-combat-board";
 import {
   rulesetDefaultTargets,
   rulesetMenuGroups,
@@ -209,10 +209,14 @@ export function RulesetCombatMenu({
     return (
       <div className="flex flex-col gap-2 p-3">
         <p className="text-xs text-amber-200">
-          {t(step.stage === "move" ? "game.combat.ruleset.board.movePrompt" : "game.combat.ruleset.board.aimPrompt", {
-            label: rulesetOptionLabel(option, t),
-            name: actorName,
-          })}
+          {t(
+            step.stage === "move"
+              ? "game.combat.ruleset.board.movePrompt"
+              : rulesetOptionHasAim(option)
+                ? "game.combat.ruleset.board.aimPrompt"
+                : "game.combat.ruleset.board.aimNobody",
+            { label: rulesetOptionLabel(option, t), name: actorName },
+          )}
         </p>
         <BackButton onClick={closeStep} label={t("game.combat.ruleset.target.back")} />
       </div>

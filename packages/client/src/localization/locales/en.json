@@ -765,6 +765,7 @@
   "game.combat.preference.tacticalLabel": "Tactical: grid battles with movement and terrain",
   "game.combat.ruleset.board.aimable": "Can be aimed at, catching {{names}}.",
   "game.combat.ruleset.board.aimableEmpty": "Can be aimed at, catching nobody.",
+  "game.combat.ruleset.board.aimNobody": "{{label}} would catch nobody from here. Move closer, or go back.",
   "game.combat.ruleset.board.aimPrompt": "Choose where {{label}} lands, then press Enter. Escape goes back.",
   "game.combat.ruleset.board.cell": "Cell {{x}}, {{y}}.",
   "game.combat.ruleset.board.distance": "{{amount}} {{unit}}",

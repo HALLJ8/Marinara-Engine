@@ -23,6 +23,7 @@ import {
   parseRulesetDefinition,
   rowsFromCatalogEntry,
   rulesetAimCells,
+  rulesetCombatHealth,
   rulesetCombatOptions,
   rulesetEncounterSummary,
   rulesetOptionTargets,
@@ -58,6 +59,7 @@ import {
   rulesetDistanceText,
   rulesetHealthPercent,
   rulesetNothingInReach,
+  rulesetOptionHasAim,
   rulesetOptionNeedsAim,
   rulesetOptionNeedsCell,
   rulesetPathTo,
@@ -328,7 +330,10 @@ const viewOf = (
       name: combatant.name,
       side: combatant.side,
       initiative: combatant.initiative,
-      health: { value: 0, max: 0, temp: 0 },
+      // The real numbers wherever the fixture knows the ruleset, as the server's projection reads them.
+      health: board?.definition.combat
+        ? rulesetCombatHealth(board.definition, board.definition.combat, combatant)
+        : { value: 0, max: 0, temp: 0 },
       defense: combatant.defense,
       conditions: [],
       budgets: { ...combatant.budgets },
@@ -1135,8 +1140,8 @@ function drawn(...rows: string[]): TacticalGrid {
   );
   assert.equal(
     rulesetCellSentences(at(plain, 0, 1), view, t).join(" "),
-    "Plains. Brenna stands here, health 0 of 0. On turn.",
-    "the numbers are the view's own, and this fixture's view carries none",
+    "Plains. Brenna stands here, health 60 of 60. On turn.",
+    "the numbers are the view's own, read off her sheet as the server reads them",
   );
   assert.equal(
     rulesetCellSentences(at(walking, 1, 2), view, t).join(" "),
@@ -1145,7 +1150,7 @@ function drawn(...rows: string[]): TacticalGrid {
   );
   assert.equal(
     rulesetCellSentences(at(targeted, 6, 1), near, t).join(" "),
-    "Plains. Thorn Lurker stands here, health 0 of 0. Can be chosen as a target.",
+    "Plains. Thorn Lurker stands here, health 30 of 30. Can be chosen as a target.",
   );
   // Stepping back out of its reach is a walk somebody strikes at, and the square says who.
   const back = near.options!.find((option) => option.id === RULESET_MOVE_OPTION);
@@ -1250,8 +1255,20 @@ function drawn(...rows: string[]): TacticalGrid {
     rulesetCellSentences({ ...alone, aim: { targetIds: ["lurker", "ghost"] } }, view, t).join(" "),
     /catching Thorn Lurker\.$/u,
   );
-  // A shape with nowhere legal to land is not an aiming step at all.
-  assert.ok(!rulesetOptionNeedsAim({ ...shape!, aim: undefined }));
+  // A shape with nowhere to land is STILL an aiming step: the server refuses a shape sent with no
+  // square, so the step opens, lights nothing up and says so, rather than sending a choice that fails.
+  const nowhere = { ...shape!, aim: undefined };
+  assert.ok(rulesetOptionNeedsAim(nowhere));
+  assert.ok(!rulesetOptionHasAim(nowhere));
+  assert.ok(rulesetOptionHasAim(shape!));
+  assert.ok(
+    rulesetBoardCells(view, { stage: "aim", option: nowhere, targets: [] }).every((cell) => !cell.aim),
+    "and no square is offered",
+  );
+  assert.equal(
+    t("game.combat.ruleset.board.aimNobody", { label: "Fireball" }),
+    "Fireball would catch nobody from here. Move closer, or go back.",
+  );
 }
 
 // ── The menu groups, the movement group first ──
