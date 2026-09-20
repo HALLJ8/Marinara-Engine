@@ -87,6 +87,8 @@ export interface RulesetStatBlockAction {
   targetCount?: number;
   reach?: number;
   range?: number | RulesetCombatRange;
+  /** The shape it lands in, in the ruleset's own distance unit. */
+  area?: { shape: RulesetCombatArea["shape"]; size: number; friendlyFire?: boolean };
   uses?: RulesetCombatUses;
   recharge?: RulesetCombatRecharge;
   /** Other actions of this block, in order. ONE budget pays for the lot, and each part takes its

@@ -856,6 +856,82 @@ const cellsOf = (cells: Array<{ x: number; y: number }>) =>
   assert.deepEqual(rulesetAreaTargets(state, "corwin", breath.id, { x: 4, y: 1 }).sort(), ["brenna", "pike", "snag"]);
 }
 
+// ── A creature breathes a real shape, and spares its own pack when its entry says so ──
+{
+  /** A hound whose breath is a 15 foot cone that never catches another hound. */
+  const breather = (id: string, name: string, at: { x: number; y: number }) => ({
+    combatant: {
+      id,
+      name,
+      side: "enemy" as const,
+      block: {
+        health: 12,
+        defense: 11,
+        initiativeModifier: 0,
+        speed: 30,
+        actions: [
+          { id: "bite", name: "Bite", budget: "action", toHit: 3, damage: { count: 1, sides: 6, flat: 1 }, reach: 5 },
+          {
+            id: "breath",
+            name: "Scalding Breath",
+            budget: "action",
+            save: { save: "dex_save", onSuccess: "half" },
+            saveDifficulty: 11,
+            damage: { count: 2, sides: 6, flat: 0, type: "fire" },
+            area: { shape: "cone" as const, size: 15, friendlyFire: false },
+          },
+        ],
+      },
+    },
+    at,
+  });
+  const pack = [breather("hound", "Scald Hound", { x: 0, y: 2 }), breather("mate", "Pack Mate", { x: 0, y: 3 })];
+  const state = fight(fiveE, [fighter(), wizard(), ...pack.map((entry) => entry.combatant)], [4, 3, 18, 17], {
+    grid: open(8, 5),
+    placements: {
+      brenna: { x: 2, y: 2 },
+      corwin: { x: 3, y: 2 },
+      ...Object.fromEntries(pack.map((entry) => [entry.combatant.id, entry.at])),
+    },
+  });
+  const breath = optionNamed(fiveE, state, "hound", "Scalding Breath");
+  // Fifteen feet is three cells of this ruleset, and a shape with no range of its own is aimed no
+  // further than it draws.
+  assert.deepEqual(breath.area, { shape: "cone", size: 3, range: 3 });
+  assert.deepEqual(
+    rulesetAreaTargets(state, "hound", breath.id, { x: 3, y: 2 }).sort(),
+    ["brenna", "corwin"],
+    "the cone catches both of them and never the hound beside it",
+  );
+  const blown = act(
+    fiveE,
+    state,
+    { actorId: "hound", optionId: breath.id, targetIds: [], at: { x: 3, y: 2 } },
+    5,
+    3,
+    4,
+    2,
+  );
+  const area = firstOf(blown.events, "area");
+  assert.deepEqual(area.at, { x: 3, y: 2 });
+  assert.ok(area.cells.length > 1, "it landed as a shape rather than on one square");
+  assert.equal(
+    area.cells.some((cell) => cell.x === 0 && cell.y === 3),
+    false,
+    "and never on the pack mate's own square",
+  );
+  assert.deepEqual(
+    eventsOf(blown.events, "damage")
+      .map((event) => event.targetId)
+      .sort(),
+    ["brenna", "corwin"],
+  );
+  // Off a board the same creature still breathes, on as many as its entry says: the old fight.
+  const theatre = fight(fiveE, [fighter(), wizard(), ...pack.map((entry) => entry.combatant)], [4, 3, 18, 17]);
+  const flat = optionNamed(fiveE, theatre, "hound", "Scalding Breath");
+  assert.equal(flat.area, undefined, "a fight with no board draws no shapes");
+}
+
 // ── Ember Roads throws its own shape, in its own catalog's own unit ──
 {
   const state = fight(ember, [traveller(), emberHound(), emberHound("dust", "Dust-hound")], [3, 4, 2, 3, 2, 4], {

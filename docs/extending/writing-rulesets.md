@@ -693,10 +693,11 @@ is filed under one of your own tiers.
   anything with numbers in it belongs in an action.
 - `signaturePoints`: points given back at the start of its own turn, spent on `signature` actions.
 - `actions`: up to twelve, each with an `id` of its own. An action carries what a hand-written stat
-  block carries (`toHit`, `autoHit`, `damage`, `save`, `applies`, `targetCount`, `reach`, `range`)
-  plus four things only a creature has. `reach` is how far it strikes and `range` how far it is
-  thrown or shot, both in your own distance unit; `range` may be a plain number, or
-  `{ "normal": 30, "long": 120 }` when it still carries further at a penalty:
+  block carries (`toHit`, `autoHit`, `damage`, `save`, `applies`, `targetCount`, `reach`, `range`, `area`)
+  plus four things only a creature has. `reach` is how far it strikes, `range` how far it is thrown
+  or shot and `area` the shape it lands in, all in your own distance unit; `range` may be a plain
+  number, or `{ "normal": 30, "long": 120 }` when it still carries further at a penalty, and `area`
+  is `{ "shape": "burst" | "cone" | "line", "size": n, "friendlyFire": false }` (see Positions):
   - `uses`: `{ "per": "encounter" | "day", "count": n }`. When they run out the action leaves the
     menu.
   - `recharge`: `{ "dice": { "count": 1, "sides": 6 }, "from": 5 }`. It starts the fight available,
@@ -798,6 +799,13 @@ A creature action uses its own `reach` or `range`, and a catalog ability uses `m
 A row with BOTH is a thrown weapon: inside its reach it is a swing, beyond it a shot. So the rules
 below for a shot do not touch it in somebody's hand, and it is something to strike a passer-by with,
 which a bow is not.
+
+A creature action may also carry the `area` it lands in, in your own unit: `{ "shape": "cone",
+"size": 15 }`, with `"friendlyFire": false` to spare its own side. That is how a breath weapon is a
+real cone on a board rather than a number of targets. Its `range` then says how far off it may be
+aimed; a shape with no range is aimed from where the creature stands, no further than it draws. A
+fight without a board ignores the shape and uses `targetCount`, so a creature entry can carry both
+and be honest either way.
 
 `ranged` says what a shot costs when it is taken past its ordinary `normal` distance, or with
 somebody on the other side in the next cell. Each is `"disadvantage"` or `"normal"`; leave the block

@@ -465,6 +465,15 @@ function blockActions(block: RulesetStatBlockLike, perCell: number | undefined):
     ...(action.signature ? { signature: { cost: action.signature.cost } } : {}),
     ...(perCell !== undefined && action.reach !== undefined ? { reach: rulesetInCells(action.reach, perCell) } : {}),
     ...(rangeOf(action.range) ? { range: rangeOf(action.range)! } : {}),
+    ...(perCell !== undefined && action.area
+      ? {
+          area: {
+            shape: action.area.shape,
+            size: rulesetInCells(action.area.size, perCell),
+            ...(action.area.friendlyFire === false ? { friendlyFire: false } : {}),
+          },
+        }
+      : {}),
   }));
 }
 

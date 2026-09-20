@@ -1340,6 +1340,7 @@ const traveller = (live: unknown = {}): RulesetCombatantInput => ({
       for (const entry of catalog.entries ?? []) {
         for (const action of entry.creature?.actions ?? []) {
           if (action.range && typeof action.range === "object") action.range = action.range.normal;
+          delete action.area;
         }
       }
     }

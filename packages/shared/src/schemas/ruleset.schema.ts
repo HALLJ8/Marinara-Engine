@@ -877,6 +877,18 @@ const creatureActionSchema = z
     /** How far it is thrown or shot. A plain number is the ordinary distance; the pair says how far
      *  it still reaches beyond that, which a ruleset may make harder. */
     range: creatureRangeSchema.optional(),
+    /** The shape it lands in, in the ruleset's own distance unit, read once a fight has positions.
+     *  A breath weapon is a cone; a bolt is a line; a blast is a burst. Its `range` says how far
+     *  off it may be aimed, and a shape with none is aimed from where the creature stands. */
+    area: z
+      .object({
+        shape: z.enum(["burst", "cone", "line"]),
+        size: z.number().finite().gt(0).max(10000),
+        /** False spares the creature's own side, as a catalog entry's does. */
+        friendlyFire: z.boolean().optional(),
+      })
+      .strict()
+      .optional(),
     /** How many times it can be done at all, and over what stretch. */
     uses: z
       .object({ per: z.enum(["encounter", "day"]), count: z.number().int().min(1).max(20) })

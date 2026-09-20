@@ -1199,7 +1199,7 @@
           }
         },
         {
-          "$comment": "A recharge: the hound's breath is spent when it is used and rolled for at the start of its own turn, and comes back on a 5 or a 6.",
+          "$comment": "A recharge, and a shape: the hound's breath is spent when it is used and rolled for at the start of its own turn, and comes back on a 5 or a 6. On a board it lands as a cone of fifteen feet that never catches another hound; without one it simply catches two.",
           "id": "cinder-hound",
           "label": "Cinder Hound",
           "summary": "A lean hunting dog that runs hot enough to scorch the ground it sleeps on.",
@@ -1231,7 +1231,7 @@
                 "damage": { "dice": "2d6", "type": "fire" },
                 "save": { "save": "dex_save", "difficulty": 12, "onSuccess": "half" },
                 "targetCount": 2,
-                "range": { "normal": 15 },
+                "area": { "shape": "cone", "size": 15, "friendlyFire": false },
                 "recharge": { "dice": { "count": 1, "sides": 6 }, "from": 5 }
               }
             ]

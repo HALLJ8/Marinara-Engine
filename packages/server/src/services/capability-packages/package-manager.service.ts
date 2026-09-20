@@ -533,8 +533,9 @@ function entriesCarryCreatures(entries: unknown): boolean {
 }
 
 /** A creature action whose `range` is an ordinary distance with a longer one beyond it, which is a
- *  new SHAPE for an old key: an Engine that knows only the plain number refuses the file it sits in.
- *  Read structurally, for the same reason the three above are. */
+ *  new SHAPE for an old key, or one that carries the `area` it lands in, which is a new key: either
+ *  way an Engine that knows neither refuses the file they sit in. Read structurally, for the same
+ *  reason the three above are. */
 function entriesCarryCreatureRanges(entries: unknown): boolean {
   if (!Array.isArray(entries)) return false;
   return entries.some((entry) => {
@@ -542,8 +543,9 @@ function entriesCarryCreatureRanges(entries: unknown): boolean {
     const actions = creature && typeof creature === "object" ? (creature as { actions?: unknown }).actions : undefined;
     if (!Array.isArray(actions)) return false;
     return actions.some((action) => {
-      const range = action && typeof action === "object" ? (action as { range?: unknown }).range : undefined;
-      return !!range && typeof range === "object";
+      if (!action || typeof action !== "object") return false;
+      const { range, area } = action as { range?: unknown; area?: unknown };
+      return (!!range && typeof range === "object") || area !== undefined;
     });
   });
 }

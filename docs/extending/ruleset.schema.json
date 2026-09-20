@@ -3778,6 +3778,33 @@
                             ],
                             "description": "A distance, or an ordinary distance with a longer one beyond it"
                           },
+                          "area": {
+                            "type": "object",
+                            "properties": {
+                              "shape": {
+                                "type": "string",
+                                "enum": [
+                                  "burst",
+                                  "cone",
+                                  "line"
+                                ]
+                              },
+                              "size": {
+                                "type": "number",
+                                "exclusiveMinimum": 0,
+                                "maximum": 10000
+                              },
+                              "friendlyFire": {
+                                "type": "boolean"
+                              },
+                              "$comment": {}
+                            },
+                            "required": [
+                              "shape",
+                              "size"
+                            ],
+                            "additionalProperties": false
+                          },
                           "uses": {
                             "type": "object",
                             "properties": {
