@@ -6,6 +6,7 @@ import { join } from "node:path";
 
 const dataDir = mkdtempSync(join(tmpdir(), "marinara-host-integrations-"));
 process.env.DATA_DIR = dataDir;
+process.env.IMAGE_LOCAL_URLS_ENABLED = "false";
 const png = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
 const requests: Array<{ path: string; body: Record<string, unknown>; headers: Record<string, unknown> }> = [];
 const server = createServer(async (request, response) => {
@@ -16,6 +17,11 @@ const server = createServer(async (request, response) => {
   response.setHeader("content-type", "application/json");
   if (request.url?.startsWith("/failure/")) {
     response.writeHead(500).end(JSON.stringify({ error: { message: "fixture provider failure" } }));
+  } else if (request.url === "/untrusted/v1/images/generations") {
+    response.end(JSON.stringify({ data: [{ url: `http://${request.headers.host}/private-image.png` }] }));
+  } else if (request.url === "/private-image.png") {
+    response.setHeader("content-type", "image/png");
+    response.end(Buffer.from(png, "base64"));
   } else if (request.url?.endsWith("/images/generations")) {
     response.end(JSON.stringify({ data: [{ b64_json: png }] }));
   } else {
@@ -137,9 +143,18 @@ try {
   const generated = await host.images.generate("openai", `${base}/v1`, "fixture-secret", "openai", {
     prompt: "a synthetic landscape",
     model: "local-flux",
-    allowLocalUrls: true,
   });
   assert.equal(generated.base64, png);
+  const untrustedRequest = { prompt: "policy override", allowLocalUrls: true, privateImageResultOrigin: base };
+  await assert.rejects(
+    host.images.generate("openai", `${base}/untrusted/v1`, "fixture-secret", "openai", untrustedRequest),
+    /private|loopback|reserved/i,
+    "A package cannot grant private image-result access through request fields",
+  );
+  assert.equal(
+    requests.some((entry) => entry.path === "/private-image.png"),
+    false,
+  );
   const staged = host.images.stage("fixture-chat", png, "png");
   assert.equal(existsSync(join(dataDir, "gallery", staged.filePath)), false);
   staged.promote();

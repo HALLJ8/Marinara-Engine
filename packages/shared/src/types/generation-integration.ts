@@ -431,7 +431,7 @@ export interface CapabilityIntegrationHost {
       baseUrl: string,
       apiKey: string,
       serviceHint: string,
-      request: ImageGenRequest,
+      request: Omit<ImageGenRequest, "allowLocalUrls" | "privateImageResultOrigin">,
     ): Promise<ImageGenResult>;
     save(chatId: string, base64: string, ext: string, options?: SaveImageToDiskOptions): string;
     remove(filePath: string): void;

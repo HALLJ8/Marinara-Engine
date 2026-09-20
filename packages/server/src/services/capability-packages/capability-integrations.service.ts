@@ -57,7 +57,19 @@ export function createCapabilityIntegrationHost(permissions: readonly string[]):
       },
     }),
     images: Object.freeze({
-      generate: guarded("network", generateImage),
+      generate: guarded(
+        "network",
+        (
+          ...[source, baseUrl, apiKey, serviceHint, request]: Parameters<
+            CapabilityIntegrationHost["images"]["generate"]
+          >
+        ) =>
+          generateImage(source, baseUrl, apiKey, serviceHint, {
+            ...request,
+            allowLocalUrls: undefined,
+            privateImageResultOrigin: undefined,
+          }),
+      ),
       save: guarded("storage", saveImageToDisk),
       remove: guarded("storage", removeSavedImageFromDisk),
       stage: guarded("storage", stageImageToDisk),
