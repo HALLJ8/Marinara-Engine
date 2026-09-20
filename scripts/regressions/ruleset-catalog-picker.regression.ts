@@ -291,6 +291,7 @@ const d20Labels = {
   units: { distance: { label: "ft", perCell: 5 } },
   saves: { dexterity: "Dexterity" },
   pools: { slots3: "Slots (3rd)" },
+  budgets: { action: "Action", bonus: "Bonus action" },
 };
 assert.equal(
   formatCatalogMechanics(
@@ -329,9 +330,43 @@ assert.equal(
   "kind.debuff · targets.enemy · mechanics.attackRoll · 1d8+3 · mechanics.perStep(amount=2) · mechanics.saveNegates(save=grit) · mechanics.concentration · mechanics.reaction",
 );
 assert.equal(formatCatalogMechanics({ kind: "utility" }, d20Labels, keyed), "kind.utility");
+// And what this slice added, which is the whole of what some entries do: an ability that costs no
+// action, one that hands a budget back, one that buys standard actions with another budget, and the
+// clauses beside a blow's first amount, each said on its own because each is rolled on its own.
+assert.equal(
+  formatCatalogMechanics(
+    {
+      kind: "utility",
+      free: true,
+      gives: [{ budget: "action", count: 1 }],
+      standard: { actions: ["dash", "hide"], budget: "bonus" },
+    },
+    d20Labels,
+    keyed,
+  ),
+  "kind.utility · mechanics.free · mechanics.gives(budget=Action,count=1) · mechanics.standard(actions=game.combat.ruleset.standard.dash(defaultValue=dash), game.combat.ruleset.standard.hide(defaultValue=hide),budget=Bonus action)",
+);
+assert.equal(
+  formatCatalogMechanics(
+    {
+      kind: "attack",
+      amount: { dice: "1d8" },
+      damageType: "slashing",
+      plus: [{ dice: "2d6", type: "fire" }, { flat: 2 }],
+    },
+    d20Labels,
+    keyed,
+  ),
+  "kind.attack · mechanics.amountOfType(amount=1d8,type=slashing) · mechanics.plus(amount=2d6,type=fire) · mechanics.plus(amount=2,type=mechanics.riderSameType)",
+);
+// A budget this ruleset does not name falls back to its own id, exactly as a save or a pool does.
+assert.equal(
+  formatCatalogMechanics({ kind: "utility", gives: [{ budget: "nowhere", count: 2 }] }, d20Labels, keyed),
+  "kind.utility · mechanics.gives(budget=nowhere,count=2)",
+);
 // A catalog that declares no distance unit still reads, with bare numbers.
 assert.equal(
-  formatCatalogMechanics({ kind: "buff", range: 4 }, { units: undefined, saves: {}, pools: {} }, keyed),
+  formatCatalogMechanics({ kind: "buff", range: 4 }, { units: undefined, saves: {}, pools: {}, budgets: {} }, keyed),
   "kind.buff · mechanics.range(distance=4)",
 );
 
