@@ -1508,8 +1508,14 @@ const combatSchema = z
     dying: combatDyingSchema.optional(),
     /** The damage types this system has. Matched without case, so "Fire" and "fire" are one type. */
     damageTypes: z.array(promptSafeText(40)).max(40).optional(),
-    /** Required when `health` names a wound track, and refused when it names a pool. */
-    damageKinds: combatDamageKindsSchema.optional(),
+    /** Required when `health` names a wound track, and refused when it names a pool. Which of the
+     *  two it is depends on the sheet the id points at, so no JSON Schema can decide it and the
+     *  rule is said in words here for an author's editor and enforced at import. */
+    damageKinds: combatDamageKindsSchema
+      .describe(
+        "Required when `health` names a wound track, and refused when it names a pool. The import check decides which, because it reads the sheet the id points at.",
+      )
+      .optional(),
     threat: z
       .object({ tiers: z.array(combatThreatTierSchema).min(1).max(40) })
       .strict()
@@ -2414,10 +2420,17 @@ function refineRulesetDefinition(def: RulesetDefinitionBase, ctx: z.RefinementCt
         if (!kinds.has(combat.damageKinds.default)) {
           issue(at("damageKinds", "default"), `"${combat.damageKinds.default}" is not a kind of "${healthTrack}"`);
         }
+        // A damage type is matched without case, so "Fire" and "fire" are one type here as they are
+        // everywhere else. Two keys that say the same type would map one blow onto two kinds of
+        // harm, and whichever won would be whichever the file happened to list second.
+        const mapped = new Set<string>();
         for (const [type, kind] of Object.entries(combat.damageKinds.byType ?? {})) {
+          const wanted = type.trim().toLowerCase();
+          if (mapped.has(wanted)) issue(at("damageKinds", "byType", type), `Duplicate damage type "${type}"`);
+          mapped.add(wanted);
           // Only checked where the ruleset says what its types are, exactly as a creature's
           // resistances are: one that declares none reads a type as free text.
-          if (damageTypes.size > 0 && !damageTypes.has(type.trim().toLowerCase())) {
+          if (damageTypes.size > 0 && !damageTypes.has(wanted)) {
             issue(at("damageKinds", "byType", type), `Unknown damage type "${type}"`);
           }
           if (!kinds.has(kind)) {

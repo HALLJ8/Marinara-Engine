@@ -168,7 +168,7 @@
             }
           ],
           "mechanics": {
-            "$comment": "cost is what ONE use is worth, perCostStep is what says it scales, and check is what it does to the roll. A point of Resolve throws the ones again; two points throws them again and hands over a success as well.",
+            "$comment": "cost is what ONE use is worth, perCostStep is what says it scales, and check is what it does to the roll. A point of Resolve throws the ones again and hands over a success; a second point hands over a second success, and the throw again is the same one either way, because a reroll does not scale.",
             "kind": "utility",
             "cost": [{ "pool": "resolve", "amount": 1 }],
             "perCostStep": { "flat": 1 },

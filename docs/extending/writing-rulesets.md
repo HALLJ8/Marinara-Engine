@@ -704,7 +704,9 @@ same keys for a d20 system:
 - `damageKinds`: required when `health` names a wound track, and refused when it names a pool. It
   says which of the track's `kinds` a blow marks and how many boxes it ticks. `default` is what
   anything unmapped lands as, including a blow that carries no type at all, and `byType` maps your
-  own `damageTypes` onto kinds. `marks` has no default because the two answers are opposite:
+  own `damageTypes` onto kinds, with its keys matched without case as the types themselves are, so
+  `"Fire"` and `"fire"` are one key and naming both is refused. `marks` has no default because the
+  two answers are opposite:
   `"per-point"` where your damage roll counts health levels, so a blow for three ticks three boxes
   and softening one is worth doing, and `"per-blow"` where a blow either lands or does not, so it
   ticks one box however hard it hit. Say which your system is.

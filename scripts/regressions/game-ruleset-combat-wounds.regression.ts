@@ -492,6 +492,11 @@ const marksOf = (definition: RulesetDefinition, state: RulesetEncounterState, id
   refuse((doc) => {
     doc.combat.damageKinds.byType = { sonic: "cut" };
   }, /Unknown damage type "sonic"/);
+  // Two keys that say one type: the fight matches without case and takes the first it finds, so
+  // which kind of harm the blow is would be decided by the order of the file.
+  refuse((doc) => {
+    doc.combat.damageKinds.byType = { cut: "cut", Cut: "bruise" };
+  }, /Duplicate damage type "Cut"/);
 
   // And the other way: a mapping with nothing to map onto.
   {

@@ -31,6 +31,14 @@ function allowAnnotations(node, isRoot = true) {
   }
 }
 
+// "At least one of these keys" as its OWN constraint, kept in `allOf` rather than folded into the
+// node's `anyOf`. A node may already carry an `anyOf` from the zod schema, and adding branches to
+// that one would WIDEN it: a document matching an existing branch would satisfy the whole `anyOf`
+// without carrying any of these keys at all.
+function requireAnyOf(node, keys) {
+  node.allOf = [...(node.allOf ?? []), { anyOf: keys.map((key) => ({ required: [key] })) }];
+}
+
 // A catalog carries its entries inline or names a package asset, never both. The zod schema says
 // so in a refinement, which a JSON Schema generator cannot see, so the editor is told here.
 function requireOneCatalogSource(node) {
@@ -115,7 +123,7 @@ function requireDamageAmount(node) {
   Object.values(node).forEach(requireDamageAmount);
   const keys = Object.keys(node.properties ?? {});
   if (node.type === "object" && keys.length === 3 && ["dice", "flat", "type"].every((key) => keys.includes(key))) {
-    node.anyOf = [{ required: ["dice"] }, { required: ["flat"] }];
+    requireAnyOf(node, ["dice", "flat"]);
   }
 }
 
@@ -171,7 +179,21 @@ function requireSpendBuysSomething(node) {
   const properties = node.properties;
   if (node.type !== "object" || !properties?.pool || !properties.perCheck) return;
   if (!properties.successes && !properties.dice) return;
-  node.anyOf = [...(node.anyOf ?? []), { required: ["successes"] }, { required: ["dice"] }];
+  requireAnyOf(node, ["successes", "dice"]);
+}
+
+/**
+ * And the other half of that: a charm's `check` throws dice again, adds dice, adds successes or
+ * moves the target, so one that says none of them spends a resource for nothing. Zod refuses it at
+ * import; without this the editor calls the empty object valid. Found by its shape: all four keys.
+ */
+function requireCheckEffectDoesSomething(node) {
+  if (Array.isArray(node)) return node.forEach(requireCheckEffectDoesSomething);
+  if (!node || typeof node !== "object") return;
+  Object.values(node).forEach(requireCheckEffectDoesSomething);
+  const keys = ["reroll", "dice", "successes", "threshold"];
+  if (node.type !== "object" || !keys.every((key) => node.properties?.[key])) return;
+  requireAnyOf(node, keys);
 }
 
 /**
@@ -191,6 +213,7 @@ function spendOnlyOnAPool(node) {
 const schema = zodToJsonSchema(rulesetDefinitionSchema, { $refStrategy: "none", target: "jsonSchema7" });
 requireLevelsWithKinds(schema);
 requireSpendBuysSomething(schema);
+requireCheckEffectDoesSomething(schema);
 spendOnlyOnAPool(schema);
 requireOneCatalogSource(schema);
 requireOneEntryContent(schema);

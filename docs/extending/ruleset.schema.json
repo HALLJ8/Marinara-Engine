@@ -590,15 +590,19 @@
                   "perCheck"
                 ],
                 "additionalProperties": false,
-                "anyOf": [
+                "allOf": [
                   {
-                    "required": [
-                      "successes"
-                    ]
-                  },
-                  {
-                    "required": [
-                      "dice"
+                    "anyOf": [
+                      {
+                        "required": [
+                          "successes"
+                        ]
+                      },
+                      {
+                        "required": [
+                          "dice"
+                        ]
+                      }
                     ]
                   }
                 ]
@@ -3388,7 +3392,33 @@
                         },
                         "$comment": {}
                       },
-                      "additionalProperties": false
+                      "additionalProperties": false,
+                      "allOf": [
+                        {
+                          "anyOf": [
+                            {
+                              "required": [
+                                "reroll"
+                              ]
+                            },
+                            {
+                              "required": [
+                                "dice"
+                              ]
+                            },
+                            {
+                              "required": [
+                                "successes"
+                              ]
+                            },
+                            {
+                              "required": [
+                                "threshold"
+                              ]
+                            }
+                          ]
+                        }
+                      ]
                     },
                     "concentration": {
                       "type": "boolean"
@@ -3779,15 +3809,19 @@
                               "$comment": {}
                             },
                             "additionalProperties": false,
-                            "anyOf": [
+                            "allOf": [
                               {
-                                "required": [
-                                  "dice"
-                                ]
-                              },
-                              {
-                                "required": [
-                                  "flat"
+                                "anyOf": [
+                                  {
+                                    "required": [
+                                      "dice"
+                                    ]
+                                  },
+                                  {
+                                    "required": [
+                                      "flat"
+                                    ]
+                                  }
                                 ]
                               }
                             ]
@@ -5380,7 +5414,8 @@
             "default",
             "marks"
           ],
-          "additionalProperties": false
+          "additionalProperties": false,
+          "description": "Required when `health` names a wound track, and refused when it names a pool. The import check decides which, because it reads the sheet the id points at."
         },
         "threat": {
           "type": "object",
