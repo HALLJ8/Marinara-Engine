@@ -1784,6 +1784,8 @@
   "settings.controls.confirmBeforeDelete.label": "Confirm before deleting",
   "settings.controls.continueAddsNewline.help": "When on, /continue starts the appended text after a blank line. Turn it off to continue directly from the final character of the last AI message.",
   "settings.controls.continueAddsNewline.label": "Add a new line before /continue text",
+  "settings.controls.conversationBackgroundImageOpacity.help": "Controls how strongly the selected chat background appears in Conversation mode. The Conversation gradient remains visible for readability.",
+  "settings.controls.conversationBackgroundImageOpacity.label": "Conversation background image opacity",
   "settings.controls.convertLatex.help": "Turns common model-written LaTeX commands like \\rightarrow, \\neq, \\times, and \\alpha into regular symbols while leaving code snippets alone. This is display-only; saved messages keep their original text.",
   "settings.controls.convertLatex.label": "Convert LaTeX symbols",
   "settings.controls.customPointer.help": "Uses Marinara's accent-colored cursor across the app. Turn this off to use the system cursor or let a custom CSS theme control cursor styles.",
