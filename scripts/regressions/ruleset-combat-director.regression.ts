@@ -1014,6 +1014,80 @@ for (const setup of [
     return state;
   };
 
+  // ── The picker walks where its own menu lets it, and as far as it needs to ──
+  {
+    /** An open field with the two of them eleven cells apart (or five), whatever board was drawn. */
+    const field = (far: boolean) => {
+      const state = started({
+        definition: fiveE,
+        cards: fiveECards,
+        partyCatalogs: spellCatalogs,
+        party: [fiveEParty[0]!],
+        enemies: [{ id: "hound", name: "Cinder Hound" }],
+        seed: 19,
+        positioned: true,
+      });
+      const encounter = state.rulesetFight!.encounter;
+      const grid = encounter.board!.grid;
+      grid.tiles = grid.tiles.map((row) => row.map(() => "plains" as (typeof row)[number]));
+      const brenna = rulesetCombatant(encounter, "brenna")!;
+      const hound = rulesetCombatant(encounter, "hound")!;
+      Object.assign(brenna, { x: 0, y: 0 });
+      Object.assign(hound, { x: far ? 11 : 5, y: 0 });
+      return { state, encounter: () => state.rulesetFight!.encounter };
+    };
+    /** Plays up to and including the hound's next turn, and hands back what that turn logged. */
+    const houndsTurn = (state: CombatDirectorState) => {
+      for (let guard = 0; guard < 4; guard++) {
+        const now = state.rulesetFight!.encounter;
+        const actor = now.order[now.turn]!;
+        const seen = state.rulesetFight!.eventSeq;
+        if (actor === "brenna") {
+          assert.ok(
+            commandRulesetCombatDirector(fiveE, state, { type: "ruleset", optionId: "end-turn", targetIds: [] }).ok,
+          );
+          continue;
+        }
+        assert.ok(commandRulesetCombatDirector(fiveE, state, { type: "continue" }).ok);
+        return state.rulesetFight!.events.filter((entry) => entry.seq > seen).map((entry) => entry.event);
+      }
+      throw new Error("the hound never came up");
+    };
+
+    // Eleven cells away on open ground, with eight cells of movement: the only cells it can hurt the
+    // fighter from are the farthest it can walk to, nowhere near the cheapest, and it still finds them.
+    const far = field(true);
+    const closing = houndsTurn(far.state);
+    assert.ok(
+      closing.some((event) => event.type === "move" && event.actorId === "hound"),
+      "the hound crossed the field",
+    );
+    // With its bite or with its breath, whichever the picker liked better from where it could get
+    // to: either way the fighter was hurt or made to save on THIS turn.
+    const hurt = (events: typeof closing) =>
+      events.some(
+        (event) =>
+          (event.type === "attack" && event.actorId === "hound") ||
+          (event.type === "save" && event.sourceId === "hound") ||
+          (event.type === "damage" && event.sourceId === "hound"),
+      );
+    assert.ok(hurt(closing), "and used what it has on the same turn, instead of stopping three cells out");
+    assert.ok(!closing.some((event) => event.type === "refused"), "nothing it chose was refused");
+
+    // Knocked down five cells from the fighter: its menu offers standing up and no walk. It stands
+    // (half its movement), walks with the rest and breathes, rather than choosing a walk the rules
+    // refuse and losing the turn to the refusal, or lying where it fell for the rest of the fight.
+    const down = field(false);
+    rulesetCombatant(down.encounter(), "hound")!.tracked.push({ condition: "prone", rounds: null });
+    const rising = houndsTurn(down.state);
+    assert.ok(!rising.some((event) => event.type === "refused"), "a prone hound is never refused a walk");
+    assert.ok(
+      !rulesetCombatant(down.encounter(), "hound")!.tracked.some((entry) => entry.condition === "prone"),
+      "it got up",
+    );
+    assert.ok(hurt(rising), "and still fought on the same turn");
+  }
+
   // Seeded fights to the end, on both rulesets, on a board and off it.
   for (const seed of [3, 11, 29, 47, 101]) {
     runToTheEnd(

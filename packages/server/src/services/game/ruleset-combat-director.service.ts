@@ -41,11 +41,11 @@ import {
   rulesetEncounterSummary,
   rulesetOptionTargets,
   rulesetPositionOf,
-  rulesetReachableCells,
   rulesetSheetBuildsByName,
   rulesetStatBlockFromCreature,
   rulesetTierStatBlock,
   RULESET_MOVE_OPTION,
+  RULESET_STAND_OPTION,
   type CombatAiCandidate,
   type Combatant,
   type CombatDecisionOption,
@@ -560,6 +560,35 @@ function rulesetCandidates(
  * off the candidate's score, so a creature will not dance through three people's reach for a
  * slightly better target.
  */
+/**
+ * The cells the actor may walk to, exactly as its own menu offers them, nearest an opponent first.
+ *
+ * Read off the MENU, never worked out again here: the menu is where a creature that cannot move,
+ * or that has to stand up before it walks, is told so, and a picker with its own idea of where it
+ * can go would choose a walk the rules then refuse and lose its turn to the refusal.
+ *
+ * Nearest an opponent first, because that is where the cells worth scoring are: a creature that can
+ * cover eight cells has hundreds to choose from, and the ones next to it are the ones it least wants.
+ */
+function rulesetWalkableCells(
+  definition: RulesetDefinition,
+  encounter: RulesetEncounterState,
+  actorId: string,
+): NonNullable<RulesetCombatOption["cells"]> {
+  const actor = rulesetCombatant(encounter, actorId);
+  const walk = rulesetCombatOptions(definition, encounter, actorId).find((option) => option.id === RULESET_MOVE_OPTION);
+  const cells = walk?.cells ?? [];
+  if (!actor || cells.length === 0) return [];
+  const foes = encounter.combatants
+    .filter((combatant) => combatant.side !== actor.side && rulesetCombatStanding(combatant))
+    .map((combatant) => rulesetPositionOf(combatant))
+    .filter((cell): cell is { x: number; y: number } => !!cell);
+  const away = (cell: { x: number; y: number }) =>
+    foes.reduce((closest, foe) => Math.min(closest, rulesetCellDistance(cell, foe)), Infinity);
+  // A stable sort over an already deterministic list, so the same fight always picks the same cell.
+  return [...cells].sort((left, right) => away(left) - away(right) || left.cost - right.cost);
+}
+
 function rulesetCandidatesAfterMoving(
   definition: RulesetDefinition,
   encounter: RulesetEncounterState,
@@ -567,7 +596,7 @@ function rulesetCandidatesAfterMoving(
 ): Array<CombatAiCandidate<RulesetCandidate>> {
   const actor = rulesetCombatant(encounter, actorId);
   if (!encounter.board?.grid || !actor || typeof actor.x !== "number" || typeof actor.y !== "number") return [];
-  const cells = rulesetReachableCells(definition, encounter, actorId).slice(0, RULESET_MOVE_CANDIDATE_CELLS);
+  const cells = rulesetWalkableCells(definition, encounter, actorId).slice(0, RULESET_MOVE_CANDIDATE_CELLS);
   if (cells.length === 0) return [];
   const home = { x: actor.x, y: actor.y, movementLeft: actor.movementLeft };
   const candidates: Array<CombatAiCandidate<RulesetCandidate>> = [];
@@ -781,7 +810,8 @@ function rulesetClosingMove(
     foes.reduce((closest, foe) => Math.min(closest, rulesetCellDistance(cell, foe)), Infinity);
   const already = nearest(from);
   let best: { cell: { x: number; y: number; cost: number; provokes: string[] }; away: number } | null = null;
-  for (const cell of rulesetReachableCells(definition, encounter, actorId).slice(0, RULESET_MOVE_CANDIDATE_CELLS)) {
+  // Every cell it may walk to, not a sample of them: closing the distance is one comparison a cell.
+  for (const cell of rulesetWalkableCells(definition, encounter, actorId)) {
     const away = nearest(cell);
     if (away >= already) continue;
     const better =
@@ -858,6 +888,13 @@ function playRulesetTurn(
   fight: RulesetFightState,
   actorId: string,
 ): void {
+  // Somebody on the ground gets up before anything else, when the rules offer it. Fighting from
+  // the floor is worse in every ruleset that has a floor, walking is not offered until they are up,
+  // and a creature that never stood would lie where it fell for the rest of the fight.
+  const stand = rulesetCombatOptions(definition, fight.encounter, actorId).find(
+    (option) => option.id === RULESET_STAND_OPTION,
+  );
+  if (stand) applyChoice(definition, state, fight, { actorId, optionId: stand.id, targetIds: [] });
   for (let action = 0; action < RULESET_TURN_ACTION_LIMIT; action++) {
     if (rulesetEncounterOutcome(fight.encounter) !== "ongoing") break;
     const picked = pickRulesetChoice(definition, state, fight.encounter, actorId);
