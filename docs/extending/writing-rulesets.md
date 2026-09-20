@@ -615,8 +615,11 @@ same keys for a d20 system:
   release. Three more keys sit beside the effects:
   - `saves`: which of your saves the two save effects are about. All of them when it is left out,
     and naming it without one of those two effects is refused.
-  - `whileSourceInSight`: the condition's effects count only while whoever applied it is in the
-    holder's line of sight. Without a board there is no line to break, so they always count.
+  - `whileSourceInSight`: what counts only while whoever applied it is in the holder's line of
+    sight. `true` gates the whole condition; a list of its own effects gates only those and leaves
+    the rest standing, which is what a fright that stops you walking any nearer whether or not you
+    can see it needs. Naming an effect the condition does not have is refused. Without a board there
+    is no line to break, so everything counts either way.
   - `endsWhenSourceDown`: it comes off the moment whoever applied it goes down.
 
   `own-saves-advantage` and its opposite roll the save twice and keep one, exactly as an attack is
