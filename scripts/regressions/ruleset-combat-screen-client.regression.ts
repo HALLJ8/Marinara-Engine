@@ -495,6 +495,44 @@ const line = (definition: RulesetDefinition, state: RulesetEncounterState, event
     ["outcome", say({ type: "outcome", outcome: "victory" })],
     ["refused", say({ type: "refused", actorId: "brenna", optionId: "sword", reason: "no-budget" })],
     ["director", say({ type: "director", reason: "ruleset-unavailable", text: "The rules are gone." })],
+    // The four a fight on a board adds. The board itself is a later slice; the lines are here so a
+    // positioned fight reads as a fight rather than as a gap in the log.
+    [
+      "move",
+      say({
+        type: "move",
+        actorId: "brenna",
+        from: { x: 1, y: 2 },
+        to: { x: 4, y: 2 },
+        path: [
+          { x: 2, y: 2 },
+          { x: 3, y: 2 },
+          { x: 4, y: 2 },
+        ],
+        cost: 3,
+        left: 3,
+      }),
+    ],
+    [
+      "opportunity",
+      say({ type: "opportunity", actorId: "lurker", targetId: "brenna", label: "Barbed claw", budget: "reaction" }),
+    ],
+    ["cover", say({ type: "cover", targetId: "lurker", bonus: 2, defense: 15 })],
+    [
+      "area",
+      say({
+        type: "area",
+        actorId: "corwin",
+        optionId: "fireball",
+        label: "Fireball",
+        at: { x: 5, y: 3 },
+        cells: [
+          { x: 4, y: 3 },
+          { x: 5, y: 3 },
+          { x: 6, y: 3 },
+        ],
+      }),
+    ],
   ];
   const printed = new Map(table);
   for (const [type, text] of table) {
@@ -531,6 +569,36 @@ const line = (definition: RulesetDefinition, state: RulesetEncounterState, event
   assert.equal(printed.get("outcome"), "The fight is won.");
   assert.equal(printed.get("refused"), "Brenna could not do that: They have nothing left to spend on it this turn.");
   assert.equal(printed.get("director"), "The fight stopped here: The rules are gone.");
+  assert.equal(printed.get("move"), "Brenna moves to 4, 2 for 3 and has 3 left.");
+  assert.equal(printed.get("opportunity"), "Thorn Lurker strikes at Brenna with Barbed claw as they move away.");
+  assert.equal(printed.get("cover"), "Thorn Lurker is under cover, which adds 2 for a defense of 15.");
+  assert.equal(printed.get("area"), "Corwin aims Fireball at 5, 3, covering 3 cells.");
+  // A walk that went nowhere is getting back up, and a walk cut short says so.
+  assert.equal(
+    line(fiveE, state, {
+      type: "move",
+      actorId: "brenna",
+      from: { x: 1, y: 2 },
+      to: { x: 1, y: 2 },
+      path: [],
+      cost: 3,
+      left: 3,
+    }),
+    "Brenna gets back up, which costs 3.",
+  );
+  assert.equal(
+    line(fiveE, state, {
+      type: "move",
+      actorId: "brenna",
+      from: { x: 1, y: 2 },
+      to: { x: 2, y: 2 },
+      path: [{ x: 2, y: 2 }],
+      cost: 1,
+      left: 5,
+      stopped: true,
+    }),
+    "Brenna is stopped at 2, 2.",
+  );
 
   // A fight that is still going says nothing, so nobody prints "ongoing" at a player.
   assert.equal(line(fiveE, state, { type: "outcome", outcome: "ongoing" }), null);
