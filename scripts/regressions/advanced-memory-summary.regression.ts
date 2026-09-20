@@ -84,6 +84,8 @@ const baseUrl = `http://127.0.0.1:${address.port}/v1`;
 const { createFileNativeDB } = await import("../../packages/server/src/db/file-backed-store.js");
 const { createChatsStorage } = await import("../../packages/server/src/services/storage/chats.storage.js");
 const { createConnectionsStorage } = await import("../../packages/server/src/services/storage/connections.storage.js");
+const { createCharactersStorage } = await import("../../packages/server/src/services/storage/characters.storage.js");
+const { characterDataSchema } = await import("../../packages/shared/dist/index.js");
 const { createAdvancedMemoryService } = await import("../../packages/server/src/services/advanced-memory.js");
 const { createConnectionSchema } = await import("../../packages/shared/src/schemas/connection.schema.ts");
 const { DEFAULT_ADVANCED_MEMORY_SETTINGS } = await import("../../packages/shared/src/types/advanced-memory.ts");
@@ -91,6 +93,8 @@ const { measureContextBudget } = await import("../../packages/server/src/service
 const require = createRequire(new URL("../../packages/server/package.json", import.meta.url));
 const app = require("fastify")();
 const db = await createFileNativeDB();
+const { advancedMemoryRecords } = await import("../../packages/server/src/db/schema/advanced-memory.ts");
+const { eq } = await import("../../packages/server/src/db/file-query.ts");
 const chats = createChatsStorage(db);
 const memory = createAdvancedMemoryService(db);
 const connections = createConnectionsStorage(db);
@@ -147,6 +151,8 @@ try {
   assert.equal(requests.at(-1)!.max_output_tokens, 256, "scene classification respects the connection cap");
   sceneNeedsReasoningBudget = false;
   const body = requests.find((item) => !item.instructions?.startsWith("Identify scene transitions"))!;
+  assert(body.instructions?.includes("self-contained historical recap"));
+  assert(body.instructions?.includes('Omit "current situation", "open tensions"'));
   assert(body.max_output_tokens! >= 2048, "short retained memory does not starve reasoning of completion tokens");
   assert(
     body.max_output_tokens! <= Math.floor(settings.maxContextTokens / 3),
@@ -163,6 +169,158 @@ try {
   assert(
     records.some((record) => record.kind === "excerpt" && record.content.includes("The frogs sang")),
     "only historical excerpts retain verbatim source text",
+  );
+  const sharedChat = await createChat("Two characters remember the same history");
+  await chats.update(sharedChat.id, { characterIds: ["maukie", "powers"] });
+  await chats.patchMetadata(sharedChat.id, {
+    groupChatMode: "individual",
+    advancedMemory: { ...settings, knowledgeStarts: { maukie: null, powers: null } },
+  });
+  const beforeShared = requests.length;
+  await memory.initialize(sharedChat.id);
+  const sharedScenes = (await memory.status(sharedChat.id)).records.filter(
+    (record) => record.kind === "scene" && record.status === "closed" && record.audienceCharacterIds.length,
+  );
+  assert.equal(sharedScenes.length, 1, "characters with identical sources share one scene record");
+  assert.deepEqual(sharedScenes[0]!.audienceCharacterIds, ["maukie", "powers"]);
+  assert.equal(
+    requests.slice(beforeShared).filter((item) => !item.instructions?.startsWith("Identify scene transitions")).length,
+    1,
+    "the common scene is summarized once, including the owner archive",
+  );
+  const sharedRow = (
+    await db.select().from(advancedMemoryRecords).where(eq(advancedMemoryRecords.id, sharedScenes[0]!.id))
+  )[0]!;
+  for (const character of ["maukie", "powers"]) {
+    await db.insert(advancedMemoryRecords).values({
+      ...sharedRow,
+      id: `legacy-${character}`,
+      audienceCharacterIds: JSON.stringify([character]),
+      content: `An earlier separately generated recap for ${character}.`,
+    });
+  }
+  const beforeReuse = requests.length;
+  await memory.initialize(sharedChat.id);
+  assert.equal(requests.length, beforeReuse, "unchanged shared scenes need no further generation");
+  assert(!(await memory.status(sharedChat.id)).records.some((record) => record.id.startsWith("legacy-")));
+  await memory.updateRecord(sharedChat.id, sharedScenes[0]!.id, { content: "A shared manual correction." });
+  await memory.initialize(sharedChat.id);
+  assert.equal(
+    (await memory.status(sharedChat.id)).records.find((record) => record.id === sharedScenes[0]!.id)?.content,
+    "A shared manual correction.",
+  );
+  const sharedSource = await chats.listMessages(sharedChat.id);
+  await chats.updateMessageExtra(sharedSource[0]!.id, { hiddenFromAICharacterIds: ["maukie"] });
+  await memory.initialize(sharedChat.id);
+  const restrictedScenes = (await memory.status(sharedChat.id)).records.filter(
+    (record) => record.kind === "scene" && record.content && record.embeddingStatus !== "stale",
+  );
+  assert(
+    !restrictedScenes.some((record) => record.audienceCharacterIds.includes("maukie")),
+    "a previously shared scene cannot grant a character hidden history after its scope changes",
+  );
+  const characters = createCharactersStorage(db);
+  const borrower = await characters.create(characterDataSchema.parse({ name: "Maukie" }));
+  const narratorActor = await characters.create(characterDataSchema.parse({ name: "Narrator" }));
+  assert(borrower && narratorActor);
+  const narratorChat = await createChat("Narrator shares the whole scene archive");
+  await chats.update(narratorChat.id, { characterIds: [borrower.id, narratorActor.id] });
+  await chats.createMessagesBatch(
+    narratorChat.id,
+    Array.from({ length: 8 }, (_, index) => ({
+      role: "user" as const,
+      content: `${index === 6 ? "The following morning, " : ""}${"A brass compass promise beside the river. ".repeat(25)}`,
+      extra: index === 2 ? { hiddenFromAICharacterIds: [narratorActor.id] } : undefined,
+    })),
+  );
+  const narratorSource = await chats.listMessages(narratorChat.id);
+  await chats.updateMessageExtra(narratorSource[8]!.id, { conversationStartForCharacterIds: [borrower.id] });
+  await chats.patchMetadata(narratorChat.id, {
+    groupChatMode: "individual",
+    advancedMemory: {
+      ...settings,
+      narratorCharacterId: narratorActor.id,
+      knowledgeStarts: { [borrower.id]: narratorSource[8]!.id },
+    },
+  });
+  await memory.initialize(narratorChat.id);
+  const narratorScenes = (await memory.status(narratorChat.id)).records.filter((record) => record.kind === "scene");
+  assert(
+    !narratorScenes.some((record) => record.audienceCharacterIds.includes(narratorActor.id)),
+    "the narrator does not get a separate character scene copy",
+  );
+  const earlySharedScene = narratorScenes.find(
+    (record) => !record.audienceCharacterIds.length && record.messageIds.includes(narratorSource[0]!.id),
+  );
+  assert(earlySharedScene, "the shared archive includes scenes before ordinary characters joined");
+  await chats.patchMetadata(narratorChat.id, {
+    summaryEntries: [
+      {
+        id: "narrator-macro-correction",
+        kind: "rolling",
+        origin: "manual",
+        content: "{{char}} alone keeps the corrected compass account.",
+        enabled: true,
+        title: "Narrator correction",
+        sourceMode: "range",
+        messageIds: [narratorSource[0]!.id],
+        rangeStartIndex: 1,
+        rangeEndIndex: 1,
+        tokenEstimate: 12,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      },
+    ],
+  });
+  const currentNarratorSource = await chats.listMessages(narratorChat.id);
+  const narratorFullHistory = await memory.prepare({
+    chatId: narratorChat.id,
+    messages: currentNarratorSource,
+    audienceCharacterIds: [narratorActor.id],
+    budgetTokens: 50_000,
+    readOnly: true,
+  });
+  assert(
+    narratorFullHistory.chatSummary?.includes("Narrator alone keeps"),
+    "shared narrator memory retains narrator macros",
+  );
+  assert(narratorFullHistory.messageIds.includes(narratorSource[0]!.id), "the narrator knows the early history");
+  assert(!narratorFullHistory.messageIds.includes(narratorSource[4]!.id), "explicit narrator hiding still applies");
+  const narratorMemory = await memory.prepare({
+    chatId: narratorChat.id,
+    messages: currentNarratorSource,
+    audienceCharacterIds: [narratorActor.id],
+    budgetTokens: 1800,
+  });
+  const narratorContinuity = (await memory.status(narratorChat.id)).records.find(
+    (record) => record.id === narratorMemory.receipt.checkpointId,
+  );
+  assert(
+    narratorContinuity?.dependencies.some((dependency) => dependency.id === `record:${earlySharedScene.id}`),
+    "the narrator uses the existing shared summary when older history is compacted",
+  );
+  const ownerMemory = await memory.prepare({
+    chatId: narratorChat.id,
+    messages: currentNarratorSource,
+    audienceCharacterIds: [],
+    audienceMode: "owner",
+    budgetTokens: 50_000,
+    readOnly: true,
+  });
+  assert(
+    ownerMemory.messageIds.includes(currentNarratorSource.at(-1)!.id) &&
+      ownerMemory.messageIds.every((id) => currentNarratorSource.slice(8).some((message) => message.id === id)),
+    "explicit owner impersonation retains its own visibility rules when a narrator is selected",
+  );
+  await assert.rejects(
+    memory.prepare({
+      chatId: narratorChat.id,
+      messages: currentNarratorSource,
+      audienceCharacterIds: [],
+      budgetTokens: 50_000,
+      readOnly: true,
+    }),
+    /requires a responding character/i,
   );
   const repeated = await createChat("Repeated scene and continuity preparation");
   await chats.createMessagesBatch(
