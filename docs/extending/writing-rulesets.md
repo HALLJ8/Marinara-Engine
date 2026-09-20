@@ -158,7 +158,7 @@ Each of these needs its own resolution kind, because none of them can be express
 - **Roll-under and open-ended percentile** compare in the other direction.
 - **Sum pools with a wild die** (as in OpenD6) add the dice up and treat one of them specially.
 
-Two things this kind does not model are re-rolls bought with a resource and automatic successes. The closest the Game Master can get is `bonus=` dice together with a `[sheet:]` command that spends the resource, which keeps both visible on the sheet and in the log. That is an approximation: extra dice are not a re-roll of one die and do not guarantee a success.
+Automatic successes bought with a resource ARE modelled: see Spending to change a roll below. What this kind still does not model is a re-roll bought with one. The closest the Game Master can get to that is `bonus=` dice together with a `[sheet:]` command that spends the resource, which keeps both visible on the sheet and in the log. That is an approximation: extra dice are not a re-roll of one die.
 
 ### Spending to change a roll
 

@@ -159,6 +159,29 @@ function WoundTrack({
         )}
       </div>
 
+      {/* The two that always mean the same thing, whatever the track looks like: one more of the
+          chosen kind (which becomes an overflow once the track is full and cannot take another),
+          and one less (which takes an overflow back before it takes a mark off). The boxes below
+          are the quick way; these are the way that still works at both ends. */}
+      <div className="flex flex-wrap items-center gap-1">
+        <button
+          type="button"
+          disabled={readOnly || !chosen}
+          onClick={() => onMark(chosen?.id ?? "", 1)}
+          className={chipClass}
+        >
+          {localizeUi("game.ruleset.sheet.wound.mark")}
+        </button>
+        <button
+          type="button"
+          disabled={readOnly || (wound.marks.length === 0 && wound.overflow === 0)}
+          onClick={() => onMark(wound.marks[wound.marks.length - 1] ?? chosen?.id ?? "", -1)}
+          className={chipClass}
+        >
+          {localizeUi("game.ruleset.sheet.wound.unmark")}
+        </button>
+      </div>
+
       <div className="flex flex-wrap gap-1">
         {wound.levels.map((level, index) => {
           const mark = wound.marks[index];

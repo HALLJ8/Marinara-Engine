@@ -298,7 +298,12 @@ export function buildSkillCheckRulesetContext(
       if (key === playerKeyForCards) {
         if (card !== playerCard) continue;
       } else {
+        // Everything read under this name goes, not just the sheet: a build or a wound penalty
+        // left behind would still be applied to a name the Engine has just decided it cannot tell
+        // apart, which is the opposite of rolling it unmodified.
         sheets.delete(key);
+        builds.delete(key);
+        penalties.delete(key);
         ambiguous.add(key);
         logger.warn("[game/skill-check] Two party cards are named %s; checks for that name roll unmodified", key);
         continue;
