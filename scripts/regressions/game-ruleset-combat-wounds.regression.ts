@@ -10,7 +10,7 @@
  *
  * What is pinned:
  *   - Health reads as levels left, out of the track's length, with no temporary buffer.
- *   - A landing blow marks ONCE, whatever the amount, with the kind `combat.damageKinds` says.
+ *   - A landing blow marks by the rule `combat.damageKinds.marks` declares, with the kind it says.
  *   - An immune target takes no mark, and a resisted blow that halves to nothing takes none either.
  *   - Filling the track puts the combatant down, and the ruleset's dying rule reads that.
  *   - Healing clears one mark and brings a downed member back, exactly as restoring a pool does.
@@ -103,7 +103,7 @@ function trackDocument(edit: (doc: Record<string, any>) => void = () => {}): Rec
   // The types this example's own creatures already deal, so the mapping is checked against a real
   // list rather than an invented one.
   doc.combat.damageTypes = ["cut", "burn", "crush"];
-  doc.combat.damageKinds = { default: "bruise", byType: { cut: "cut" } };
+  doc.combat.damageKinds = { default: "bruise", byType: { cut: "cut" }, marks: "per-blow" };
   // The `battle` block still names the pool, so the two seams are proven apart before they are
   // proven together.
   // Temporary points have no meaning on a track, so the entries that grant them go.
@@ -273,6 +273,39 @@ const marksOf = (definition: RulesetDefinition, state: RulesetEncounterState, id
   const down = firstOf(last.events, "down");
   assert.equal(down.actorId, "juno");
   assert.equal(who(state, "juno").down, true);
+
+  // ── And the OTHER honest answer, which is the one the tracked systems are played with ──
+  //
+  // Where a damage roll counts health levels, a blow for three ticks three boxes. Saying so is the
+  // whole reason softening a blow matters: under `per-blow` a soaked hit and an unsoaked one cost
+  // the same box, and the system stops meaning anything.
+  {
+    const perPoint = parsedOrThrow(
+      trackDocument((doc) => (doc.combat.damageKinds.marks = "per-point")),
+      "a ruleset whose damage roll counts health levels",
+    );
+    let counted = createRulesetEncounter({
+      definition: perPoint,
+      seed: 4242,
+      combatants: [traveller(), pell(), hound("ash", "Ash-hound")],
+      roller: dice(1, 1, 1, 1, 6, 6),
+    });
+    assert.equal(counted.order[0], "ash");
+    const claw = rulesetCombatOptions(perPoint, counted, "ash").find((option) => option.label === "Claw")!;
+    const struck = applyRulesetCombatChoice(
+      perPoint,
+      counted,
+      { actorId: "ash", optionId: claw.id, targetIds: ["juno"] },
+      dice(6, 6, 2),
+    );
+    assert.equal(firstOf(struck.events, "damage").dealt, 2);
+    assert.deepEqual(
+      marksOf(perPoint, struck.state, "juno").marks,
+      ["cut", "cut"],
+      "two damage is two marks where the ruleset says its rolls count levels",
+    );
+    assert.equal(rulesetCombatHealth(perPoint, perPoint.combat!, who(struck.state, "juno")).value, 1);
+  }
   // Ember Roads declares no dying block, so a downed member is simply down.
   assert.equal(down.dying, !!wounded.combat!.dying);
 
@@ -421,7 +454,7 @@ const marksOf = (definition: RulesetDefinition, state: RulesetEncounterState, id
     const doc = JSON.parse(emberText) as Record<string, any>;
     delete doc.layers;
     doc.id = "ember-roads-mismapped";
-    doc.combat.damageKinds = { default: "bruise" };
+    doc.combat.damageKinds = { default: "bruise", marks: "per-blow" };
     const result = parseRulesetDefinition(doc);
     assert.equal(result.ok, false);
     assert.ok(

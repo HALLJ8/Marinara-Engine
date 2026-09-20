@@ -5367,10 +5367,18 @@
                 "$comment": {}
               }
             },
+            "marks": {
+              "type": "string",
+              "enum": [
+                "per-blow",
+                "per-point"
+              ]
+            },
             "$comment": {}
           },
           "required": [
-            "default"
+            "default",
+            "marks"
           ],
           "additionalProperties": false
         },

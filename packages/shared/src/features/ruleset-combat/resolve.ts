@@ -232,11 +232,13 @@ function dealDamage(ctx: RulesetCombatContext, target: RulesetCombatant, input: 
  *
  * A POOL loses the points, temporary buffer first, exactly as it always has.
  *
- * A WOUND TRACK takes ONE MARK per blow, not one per point. That is what a track is for: these
- * systems do not count damage down, they tick a box and the boxes get worse. The rolled amount
- * still decides whether the blow lands AT ALL, so a miss and a blow softened to nothing mark
- * nothing, but one that lands marks once whether it rolled 3 or 30. Which KIND it marks is the
- * ruleset's own `combat.damageKinds`, never a guess.
+ * A WOUND TRACK is marked by the rule its ruleset declared in `combat.damageKinds.marks`, because
+ * the two honest answers are opposite ones. Where a damage roll counts health levels, a blow for
+ * three ticks three boxes (`per-point`), which is how the tracked systems are played and the whole
+ * reason soaking a blow down matters. Where a blow simply lands or does not, it ticks one box
+ * however hard it hit (`per-blow`). Either way the rolled amount still decides whether the blow
+ * lands AT ALL, so a miss and a blow softened to nothing mark nothing. Which KIND it marks is the
+ * same block's own answer, never a guess.
  *
  * Resistances, vulnerabilities and immunities are not in the picture here: they live on a stat
  * block, and a combatant with a stat block has no sheet to mark. They still do exactly what they
@@ -257,7 +259,7 @@ function writeHealthLoss(
     op: "damage",
     track: health.track,
     kind: rulesetCombatDamageKind(ctx.combat, damageType),
-    amount: 1,
+    amount: ctx.combat.damageKinds?.marks === "per-point" ? Math.max(1, Math.floor(dealt)) : 1,
   });
 }
 

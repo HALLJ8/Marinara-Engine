@@ -255,9 +255,9 @@ Plenty of systems do not count hit points at all. They have a column of boxes, e
 **Marking it in play.** The Game Master writes `[sheet: op="damage" track="harm" kind="knock" amount="1"]`, and heals with a negative `amount`. The pool form of `damage`, which names `pool=` instead, is unchanged. The plain `track` command is refused on a wound track: a bare number cannot say what the new marks are. The player can also mark and clear boxes by hand on the sheet, which is what these systems expect.
 
 **A fight can mark one too.** Point `combat.health` at the track instead of a pool and the fight
-marks it: a blow that lands marks one box, of the kind `combat.damageKinds` says that damage type
-is, and a character whose track is full is down, which is what your dying rule reads. Healing clears
-one mark. Temporary points are refused, because a track has no buffer for them to sit in. The Engine
+marks it: a blow that lands marks the boxes `combat.damageKinds.marks` says it does, of the kind
+that block maps its damage type onto, and a character whose track is full is down, which is what
+your dying rule reads. Healing clears one mark. Temporary points are refused, because a track has no buffer for them to sit in. The Engine
 reads a track as the levels it has LEFT, so everything else about a fight, going down, being
 revived, the log and the recap, is unchanged.
 
@@ -702,9 +702,13 @@ same keys for a d20 system:
   Without this block a character at zero is simply down, and healing brings them back.
 - `damageTypes`: optional. The types your system has, matched without case.
 - `damageKinds`: required when `health` names a wound track, and refused when it names a pool. It
-  says which of the track's `kinds` a blow marks: `default` is what anything unmapped lands as,
-  including a blow that carries no type at all, and `byType` maps your own `damageTypes` onto kinds.
-  `{ "default": "bashing", "byType": { "fire": "aggravated" } }`.
+  says which of the track's `kinds` a blow marks and how many boxes it ticks. `default` is what
+  anything unmapped lands as, including a blow that carries no type at all, and `byType` maps your
+  own `damageTypes` onto kinds. `marks` has no default because the two answers are opposite:
+  `"per-point"` where your damage roll counts health levels, so a blow for three ticks three boxes
+  and softening one is worth doing, and `"per-blow"` where a blow either lands or does not, so it
+  ticks one box however hard it hit. Say which your system is.
+  `{ "default": "bashing", "byType": { "fire": "aggravated" }, "marks": "per-point" }`.
 - `threat`: optional, and needed by a bestiary. `tiers`, the scale an opponent is picked from: an id,
   a label, a `health` band, a `defense`, a `toHit`, a `damagePerRound` band and a `saveDifficulty`.
   Every creature you ship names one of these tiers, and an opponent nobody wrote is pulled onto the
