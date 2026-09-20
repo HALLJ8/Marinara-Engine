@@ -42,11 +42,13 @@ import {
   rulesetLineOfSight,
   rulesetMovementAllowance,
   rulesetOpportunityAttack,
+  rulesetOptionReach,
   rulesetOptionTargets,
   rulesetReachableCells,
   rulesetSheetBuildSchema,
   supportedCapabilityApi,
   type RulesetCatalogEntry,
+  type RulesetCombatant,
   type RulesetCombatChoice,
   type RulesetCombatEvent,
   type RulesetCombatRoller,
@@ -618,12 +620,19 @@ const cellsOf = (cells: Array<{ x: number; y: number }>) =>
   );
   // And it is something to strike a passer-by with: somebody carrying nothing but a javelin still
   // swings at one going by, where somebody carrying nothing but a bow has nothing to swing.
-  const carrying = (label: string) => ({
-    ...who(inHand, "brenna"),
-    actions: who(inHand, "brenna").actions.filter((action) => action.label === label),
+  const carrying = (combatant: RulesetCombatant, label: string) => {
+    const actions = combatant.actions.filter((action) => action.label === label);
+    assert.equal(actions.length, 1, `${combatant.name} carries exactly one "${label}"`);
+    return { ...combatant, actions };
+  };
+  assert.equal(rulesetOpportunityAttack(carrying(who(inHand, "brenna"), "Javelin"))?.label, "Javelin");
+  // A spell shot across the room is not something to swing at a passer-by, and the wizard who
+  // really has one proves it.
+  const casting = fight(fiveE, [wizard(), snag()], [12, 9], {
+    grid: open(8, 1),
+    placements: { corwin: { x: 0, y: 0 }, snag: { x: 1, y: 0 } },
   });
-  assert.equal(rulesetOpportunityAttack(carrying("Javelin"))?.label, "Javelin");
-  assert.equal(rulesetOpportunityAttack(carrying("Fire Bolt")), null, "and a spell shot at range is not one");
+  assert.equal(rulesetOpportunityAttack(carrying(who(casting, "corwin"), "Fire Bolt")), null);
 
   // A touch is not a shot either: an ability whose range is 0 reaches the next cell and no further,
   // and the foe it is laid on does not make it harder.
@@ -855,6 +864,50 @@ const cellsOf = (cells: Array<{ x: number; y: number }>) =>
   const breath = optionNamed(fiveE, state, "corwin", "Scouring Breath");
   assert.deepEqual(breath.area, { shape: "cone", size: 3, range: 3 });
   assert.deepEqual(rulesetAreaTargets(state, "corwin", breath.id, { x: 4, y: 1 }).sort(), ["brenna", "pike", "snag"]);
+}
+
+// ── Where a shape may be aimed is worked out the short way, and it is the same answer ──
+{
+  // A wide board and a long throw: the cells a ball could be sent to are thousands, and the ones
+  // worth offering are the handful around the people on it. Both ways are compared cell for cell.
+  const grid = drawn(...Array.from({ length: 12 }, (_, row) => (row === 6 ? "#".repeat(24) : ".".repeat(24))));
+  const state = fight(fiveE, [wizard(), fighter(), snag("a", "Snag"), snag("b", "Other Snag")], [12, 9, 8, 7], {
+    grid,
+    placements: { corwin: { x: 1, y: 1 }, brenna: { x: 3, y: 2 }, a: { x: 14, y: 3 }, b: { x: 15, y: 4 } },
+  });
+  const ball = optionNamed(fiveE, state, "corwin", "Fireball");
+  const reach = rulesetOptionReach(state, "corwin", ball.id)!;
+  /** Every cell of the board the shape could legally be sent to, looked at one by one. */
+  const theLongWay = () => {
+    const found: Array<{ x: number; y: number; targetIds: string[] }> = [];
+    for (let y = 0; y < grid.height; y++) {
+      for (let x = 0; x < grid.width; x++) {
+        if (rulesetCellDistance({ x: 1, y: 1 }, { x, y }) > reach.max) continue;
+        if (!rulesetAimLegal(state, "corwin", ball.id, { x, y })) continue;
+        const targetIds = rulesetAreaTargets(state, "corwin", ball.id, { x, y });
+        if (targetIds.length > 0) found.push({ x, y, targetIds });
+      }
+    }
+    return found;
+  };
+  const sorted = (cells: Array<{ x: number; y: number; targetIds: string[] }>) =>
+    [...cells]
+      .sort((one, two) => one.y - two.y || one.x - two.x)
+      .map((cell) => `${cell.x},${cell.y}:${[...cell.targetIds].sort().join("+")}`);
+  const slow = theLongWay();
+  assert.ok(slow.length > 4, "there is a real answer to compare against");
+  assert.deepEqual(sorted(rulesetAimCells(state, "corwin", ball.id)), sorted(slow));
+  // And a cone, which reaches out from the caster rather than landing on a spot, is unchanged.
+  const cone = optionNamed(fiveE, state, "corwin", "Scouring Breath");
+  const slowCone: Array<{ x: number; y: number; targetIds: string[] }> = [];
+  for (let y = 0; y < grid.height; y++) {
+    for (let x = 0; x < grid.width; x++) {
+      if (!rulesetAimLegal(state, "corwin", cone.id, { x, y })) continue;
+      const targetIds = rulesetAreaTargets(state, "corwin", cone.id, { x, y });
+      if (targetIds.length > 0) slowCone.push({ x, y, targetIds });
+    }
+  }
+  assert.deepEqual(sorted(rulesetAimCells(state, "corwin", cone.id)), sorted(slowCone));
 }
 
 // ── A creature breathes a real shape, and spares its own pack when its entry says so ──

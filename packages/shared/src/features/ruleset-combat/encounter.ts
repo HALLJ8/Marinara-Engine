@@ -463,7 +463,11 @@ function blockActions(block: RulesetStatBlockLike, perCell: number | undefined):
         }
       : {}),
     ...(action.signature ? { signature: { cost: action.signature.cost } } : {}),
-    ...(perCell !== undefined && action.reach !== undefined ? { reach: rulesetInCells(action.reach, perCell) } : {}),
+    // A reach written as 0 is no reach, exactly as a weapon column reading 0 is: without it a
+    // creature that only shoots would be read as swinging, and could strike a passer-by.
+    ...(perCell !== undefined && action.reach !== undefined && action.reach > 0
+      ? { reach: rulesetInCells(action.reach, perCell) }
+      : {}),
     ...(rangeOf(action.range) ? { range: rangeOf(action.range)! } : {}),
     ...(perCell !== undefined && action.area
       ? {

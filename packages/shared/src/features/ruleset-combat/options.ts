@@ -173,23 +173,44 @@ export function rulesetAimCells(
   const aims: Array<{ x: number; y: number; targetIds: string[] }> = [];
   // Scanned over the BOARD, never over the range: a ruleset may declare a range of ten thousand
   // units, and a loop that long would be a way to stall a server with one catalog entry.
-  const top = Math.max(0, from.y - reach.max);
-  const bottom = Math.min(grid.height - 1, from.y + reach.max);
-  const left = Math.max(0, from.x - reach.max);
-  const right = Math.min(grid.width - 1, from.x + reach.max);
+  const box = (around: RulesetCombatCell, radius: number) => ({
+    top: Math.max(0, around.y - radius),
+    bottom: Math.min(grid.height - 1, around.y + radius),
+    left: Math.max(0, around.x - radius),
+    right: Math.min(grid.width - 1, around.x + radius),
+  });
+  // A BALL only ever catches somebody standing within its own radius of where it lands, so the cells
+  // worth looking at are the ones around the people on the board, not every cell it could be thrown
+  // to: a long throw over a wide board is otherwise thousands of cells, every one of them drawing
+  // its whole shape. A cone and a line reach out from the ACTOR, so a cell next to them can catch
+  // somebody at the far end, and for those the cells to look at are the ones the aim may be sent to.
+  const shape = actionOf(rulesetCombatant(state, actorId)!, optionId)?.area;
+  const boxes =
+    shape?.shape === "burst"
+      ? state.combatants
+          .filter((combatant) => rulesetCombatStanding(combatant) && rulesetPositionOf(combatant))
+          .map((combatant) => box(rulesetPositionOf(combatant)!, shape.size))
+      : [box(from, reach.max)];
   // And a ceiling on the cells looked at, whatever `limit` says: the largest board a save may hold
   // is 64 by 64, so nothing legitimate is cut short, and nothing else can make this loop long.
   let looked = 0;
-  for (let y = top; y <= bottom; y++) {
-    for (let x = left; x <= right; x++) {
-      if (++looked > RULESET_AIM_SCAN_CEILING) return aims;
-      const at = { x, y };
-      if (!rulesetAimLegal(state, actorId, optionId, at)) continue;
-      const targetIds = rulesetAreaTargets(state, actorId, optionId, at);
-      // A cell the shape would catch nobody from is still somewhere it may be aimed, but it is not
-      // worth carrying to a screen or to a picker.
-      if (targetIds.length > 0) aims.push({ x, y, targetIds });
-      if (aims.length >= limit) return aims;
+  const seen = new Set<string>();
+  for (const bounds of boxes) {
+    for (let y = bounds.top; y <= bounds.bottom; y++) {
+      for (let x = bounds.left; x <= bounds.right; x++) {
+        if (++looked > RULESET_AIM_SCAN_CEILING) return aims;
+        const key = `${x},${y}`;
+        // Two people standing close together share cells, and a cell is offered once.
+        if (seen.has(key)) continue;
+        seen.add(key);
+        const at = { x, y };
+        if (!rulesetAimLegal(state, actorId, optionId, at)) continue;
+        const targetIds = rulesetAreaTargets(state, actorId, optionId, at);
+        // A cell the shape would catch nobody from is still somewhere it may be aimed, but it is not
+        // worth carrying to a screen or to a picker.
+        if (targetIds.length > 0) aims.push({ x, y, targetIds });
+        if (aims.length >= limit) return aims;
+      }
     }
   }
   return aims;
