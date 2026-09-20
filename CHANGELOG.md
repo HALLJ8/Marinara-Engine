@@ -4,7 +4,7 @@ This file is the release-notes source of truth for Marinara Engine. Reuse these 
 
 ## [Unreleased]
 
-- Downloadable packages can use the host Engine's LLM, image and video integrations, inheriting provider fixes, queues and request safeguards without bundling stale service copies.
+- Downloadable packages can use the host Engine's LLM, image and video integrations, inheriting provider fixes, queues and request safeguards without bundling stale service copies. These integrations require Capability API 1.31.
 - Conversation mode now has a persisted background-image opacity control while keeping its readability gradient visible.
 
 - Combined damage types mark one wound per hit on rulesets configured for one mark per blow, using the most severe landed kind.
