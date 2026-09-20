@@ -65,12 +65,14 @@ export function RulesetCombatMenu({
 }: RulesetCombatMenuProps) {
   const { t } = useTranslation();
   const [ownStep, setOwnStep] = useState<RulesetMenuStep | null>(null);
-  const held = onStepChange !== undefined;
-  const step = held ? (heldStep ?? null) : ownStep;
+  // Held by the owner only when it passes BOTH halves (`step` may be null, never left out): with one
+  // of them missing the menu keeps its own, or a pick would be handed up and never come back down.
+  const held = onStepChange !== undefined && heldStep !== undefined;
+  const step = held ? heldStep : ownStep;
   // Stable whatever the owner passes, so the turn reset below runs when the turn moves and never
   // because a parent handed down a fresh function.
-  const stepChange = useRef(onStepChange);
-  stepChange.current = onStepChange;
+  const stepChange = useRef(held ? onStepChange : undefined);
+  stepChange.current = held ? onStepChange : undefined;
   const setStep = useCallback((next: RulesetMenuStep | null) => {
     if (stepChange.current) stepChange.current(next);
     else setOwnStep(next);
