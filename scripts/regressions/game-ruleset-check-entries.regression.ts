@@ -260,6 +260,20 @@ try {
     }
   }
 
+  // Direct callers must not buy fixed rerolls or thresholds without paying the base cost.
+  for (const amount of [0, -1, -5]) {
+    const applied = roll(contextFor(null), {
+      skill: "Nerve",
+      dc: 1,
+      useEntry: "Steady Hand",
+      spend: { pool: "resolve", amount },
+    });
+    assert.deepEqual(applied.result.spent, { pool: "resolve", amount: 1 });
+    assert.equal(resolveLeft(applied.written), full - 1);
+  }
+
+  assert.match(prompt, /spend="resolve:N".*positive multiple of 1/);
+
   // ── `perCostStep` is what makes it scale, and the cost scales with it ──
   {
     const twice = roll(contextFor(null), {

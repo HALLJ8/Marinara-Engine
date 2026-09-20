@@ -172,8 +172,12 @@ export function renderRulesetSheetBlock(
       const ref = own(row as Record<string, unknown>, RULESET_CATALOG_ROW_KEY);
       const mechanics = typeof ref === "string" ? catalogEntries.get(ref)?.mechanics : undefined;
       const cost = mechanics?.cost?.map((term) => `${term.amount} ${safeValue(term.pool)}`).join(" + ");
+      const scaledCost = mechanics?.perCostStep && mechanics.cost?.length === 1 ? mechanics.cost[0] : undefined;
+      const scale = scaledCost
+        ? `; stronger use: spend="${safeValue(scaledCost.pool)}:N", where N is a positive multiple of ${scaledCost.amount}`
+        : "";
       const check = mechanics?.check
-        ? ` (check: ${JSON.stringify(mechanics.check)}${cost ? `; pool cost: ${cost}` : ""}${mechanics.perCostStep ? "; scales per payment" : ""})`
+        ? ` (check: ${JSON.stringify(mechanics.check)}${cost ? `; pool cost: ${cost}` : ""}${scale})`
         : "";
       const describedName = name + check;
       const group = entry.groupBy === undefined ? "" : cellText(own(row as Record<string, unknown>, entry.groupBy));
