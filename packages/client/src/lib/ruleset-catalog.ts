@@ -584,6 +584,12 @@ export function formatCatalogMechanics(
         type: clause.type ?? t("game.ruleset.catalog.mechanics.riderSameType"),
       }),
     );
+    // A clause may ask the target for a saving throw of its OWN, which is a different throw from
+    // the action's and is the only thing standing between the target and this part of the blow.
+    // Said right after the clause it belongs to, so a reader can tell the two saves apart.
+    if (clause.save) {
+      parts.push(t(SAVE_KEYS[clause.save.onSuccess], { save: labels.saves[clause.save.save] ?? clause.save.save }));
+    }
   }
   const perStep = formatAmount(mechanics.perCostStep);
   if (perStep) parts.push(t("game.ruleset.catalog.mechanics.perStep", { amount: perStep }));

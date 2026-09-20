@@ -359,6 +359,25 @@ assert.equal(
   ),
   "kind.attack · mechanics.amountOfType(amount=1d8,type=slashing) · mechanics.plus(amount=2d6,type=fire) · mechanics.plus(amount=2,type=mechanics.riderSameType)",
 );
+// A clause may ask for a saving throw of its own, which is a different throw from the action's and
+// is the only thing standing between the target and that part of the blow. It reads beside the
+// clause it belongs to, and an unnamed save falls back to its id like every other name here.
+assert.equal(
+  formatCatalogMechanics(
+    {
+      kind: "attack",
+      amount: { dice: "1d8" },
+      save: { save: "dexterity", onSuccess: "half" },
+      plus: [
+        { dice: "2d6", type: "fire", save: { save: "dexterity", onSuccess: "none" } },
+        { dice: "1d6", type: "poison", save: { save: "grit", onSuccess: "half" } },
+      ],
+    },
+    d20Labels,
+    keyed,
+  ),
+  "kind.attack · 1d8 · mechanics.plus(amount=2d6,type=fire) · mechanics.saveNone(save=Dexterity) · mechanics.plus(amount=1d6,type=poison) · mechanics.saveHalf(save=grit) · mechanics.saveHalf(save=Dexterity)",
+);
 // A budget this ruleset does not name falls back to its own id, exactly as a save or a pool does.
 assert.equal(
   formatCatalogMechanics({ kind: "utility", gives: [{ budget: "nowhere", count: 2 }] }, d20Labels, keyed),
