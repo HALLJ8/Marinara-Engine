@@ -9868,6 +9868,7 @@
   "ui.rulesets.sheet.bonusFor": "Extra bonus for {{name}}",
   "ui.rulesets.sheet.bonusHint": "Extra bonus from items, ranks or features",
   "ui.rulesets.sheet.otherSection": "Other",
+  "ui.rulesets.sheet.refreshAddedColumn": "{{label}} (new to this row)",
   "ui.rulesets.sheet.refreshApply": "Update selected",
   "ui.rulesets.sheet.refreshCancel": "Cancel",
   "ui.rulesets.sheet.refreshCurrent": "On the sheet",

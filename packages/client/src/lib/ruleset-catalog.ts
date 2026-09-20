@@ -292,13 +292,37 @@ function refreshableText(column: RulesetListColumn, value: unknown): string | nu
   return null;
 }
 
+/**
+ * The entry's value for a column the row does NOT carry at all, whatever the column's type.
+ *
+ * The rule above exists because a number or a switch is where the player's own state lives and
+ * overwriting it would throw away what they typed. A column the row has never had is not the
+ * player's state: they have never seen it. A ruleset that ADDS a column (a weapon list that grows
+ * a reach) could otherwise only reach an existing row by having the player delete it and pick it
+ * again, which is a thing a package README should not have to say.
+ *
+ * Still held to what the column can hold, for the same reason as above: a refresh must never write
+ * something the editor cannot then show.
+ */
+function refreshableNewValue(column: RulesetListColumn, value: unknown): string | number | boolean | null {
+  if (typeof value === "number") return column.type === "number" && Number.isFinite(value) ? value : null;
+  if (typeof value === "boolean") return column.type === "boolean" ? value : null;
+  return refreshableText(column, value);
+}
+
 export type CatalogRefreshColumn = {
   columnId: string;
   label: string;
   /** What the sheet holds now. Empty when the row never carried the column. */
   current: string;
-  /** What the ruleset says now, and exactly what applying writes. */
+  /** What the ruleset says now, as text a reader can compare. */
   next: string;
+  /** Exactly what applying writes. A string for every column the row already had; a number or a
+   *  switch only ever for a column the row is GAINING. */
+  value: string | number | boolean;
+  /** True when the row does not carry this column at all, so the review can word it as something
+   *  the row gained rather than as a change to what it holds. */
+  added?: boolean;
 };
 
 export type CatalogRefreshRow = {
@@ -371,7 +395,11 @@ export function planCatalogRefresh(
           if (entryRow.scaled && Object.hasOwn(entryRow.scaled, columnId)) continue;
           const column = columnById.get(columnId);
           if (!column) continue;
-          const next = refreshableText(column, value);
+          // A column the row HAS is the rule above, unchanged: only text is compared, because the
+          // number and the switch are the player's. Tested on the KEY, never on the value, so a
+          // column holding 0, false or "" is a column the row has and stays the player's.
+          const isNew = !Object.hasOwn(row, columnId);
+          const next = isNew ? refreshableNewValue(column, value) : refreshableText(column, value);
           if (next === null) continue;
           const stored = row[columnId];
           if (stored === next) continue;
@@ -379,7 +407,9 @@ export function planCatalogRefresh(
             columnId,
             label: column.label,
             current: stored === undefined ? "" : String(stored),
-            next,
+            next: typeof next === "boolean" ? String(next) : String(next),
+            value: next,
+            ...(isNew ? { added: true } : {}),
           });
         }
         if (columns.length === 0) return;
@@ -414,7 +444,7 @@ export function applyCatalogRefresh(
     const current = rows[chosenRow.index];
     if (!current || typeof current !== "object") continue;
     const patched = { ...current };
-    for (const column of chosenRow.columns) patched[column.columnId] = column.next;
+    for (const column of chosenRow.columns) patched[column.columnId] = column.value;
     rows[chosenRow.index] = patched;
     next[chosenRow.listId] = rows;
   }

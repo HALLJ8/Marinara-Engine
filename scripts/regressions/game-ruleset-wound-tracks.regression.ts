@@ -216,16 +216,37 @@ try {
 
   // ── The penalty takes dice OFF the pool, and never below `pool.min` ──
   {
-    const cards = [{ name: "Bram", rulesetSheet: { v: 1, build } }];
+    // The shipped example EXPLODES its dice, so a rolled pool does not report the number of dice it
+    // was built from. Counting dice needs a ruleset that throws exactly what it was given, so this
+    // case runs on a copy with the exploding taken out. Nothing else about it changes.
+    const plain = JSON.parse(gravewatchText) as Record<string, any>;
+    delete plain.layers;
+    plain.id = "gravewatch-plain";
+    delete plain.resolution.explode;
+    const parsedPlain = parseRulesetDefinition(plain);
+    assert.ok(parsedPlain.ok, `the variant must validate: ${JSON.stringify(parsedPlain)}`);
+    const plainDefinition = parsedPlain.definition;
+    const plainBuild = defaultRulesetSheetBuild(plainDefinition);
+    const cards = [{ name: "Bram", rulesetSheet: { v: 1, build: plainBuild } }];
     const contextFor = (live: RulesetLiveState | undefined): SkillCheckModifierContext => ({
       skills: null,
       attributes: null,
       sheetAttributes: {},
-      ruleset: buildSkillCheckRulesetContext(gravewatch, cards, cards[0], live ? { bram: live } : null),
+      ruleset: buildSkillCheckRulesetContext(plainDefinition, cards, cards[0], live ? { bram: live } : null),
     });
-    // A fixed face every die shows, so the only thing that can move is how many were thrown.
     const roll = (context: SkillCheckModifierContext) =>
       resolveSkillCheckWithContext(context, { skill: "Nerve", dc: 1 }, () => 7);
+    /** The same wound track, marked, read with the variant's own definition. */
+    const marked = (kind: string, amount: number) => {
+      const result = applyRulesetSheetOp(
+        plainDefinition,
+        plainBuild,
+        {},
+        { op: "damage", track: "harm", kind, amount },
+      );
+      assert.ok(result.ok);
+      return result.live;
+    };
 
     const unwounded = roll(contextFor(undefined));
     assert.equal(unwounded.resolution, "successes");
@@ -234,20 +255,20 @@ try {
     assert.ok(base > 1, `the blank warden throws more than one die (${base})`);
 
     // Two marks read the second rung: -1, so one die fewer.
-    const winded = roll(contextFor(mark({}, "knock", 2).live));
+    const winded = roll(contextFor(marked("knock", 2)));
     assert.equal(winded.penalty, -1, "the record says why the pool shrank");
     assert.equal(winded.rolls.length, base - 1);
 
     // The bottom rung is -99, which is far past the pool. `pool.min` is 1, so one die is thrown.
-    const down = roll(contextFor(mark({}, "knock", 4).live));
+    const down = roll(contextFor(marked("knock", 4)));
     assert.equal(down.penalty, -99);
-    assert.equal(down.rolls.length, gravewatch.resolution.pool?.min ?? 1);
+    assert.equal(down.rolls.length, plainDefinition.resolution.pool?.min ?? 1);
     assert.equal(down.rolls.length, 1, "floored at the ruleset's own minimum, never at no dice at all");
     assert.equal(down.modifier, 0, "a pool spends the penalty on dice, so nothing is added to the successes");
 
     // Somebody the game has no sheet for rolls unwounded, exactly as they always did.
     const stranger = resolveSkillCheckWithContext(
-      contextFor(mark({}, "knock", 4).live),
+      contextFor(marked("knock", 4)),
       { skill: "Nerve", dc: 1, who: "A passing stranger" },
       () => 7,
     );
