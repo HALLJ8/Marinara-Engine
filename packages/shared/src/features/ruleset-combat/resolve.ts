@@ -1324,8 +1324,9 @@ function resolveAction(
       });
     }
     // And whatever adds itself to a hit without anybody choosing it: one more clause of this blow,
-    // doubled by a critical exactly as the rest of it is.
-    const rider = firingRider(ctx, actor, action, target, mode);
+    // doubled by a critical exactly as the rest of it is. Only a blow that DEALS something can carry
+    // one, because a rider is extra damage on a hit and an action with none never struck for any.
+    const rider = action.damage ? firingRider(ctx, actor, action, target, mode) : null;
     if (rider) {
       ctx.events.push({ type: "rider", actorId: actor.id, targetId: target.id, riderId: rider.id, label: rider.label });
       const rolled = rollAmount(ctx, rider.amount);

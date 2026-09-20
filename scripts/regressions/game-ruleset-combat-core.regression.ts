@@ -2365,6 +2365,13 @@ const labels = (definition: RulesetDefinition, state: RulesetEncounterState, id:
     const alone = fight(fiveE, [rogue(["sly-strike"], 3), sack()], 20, 1);
     const swing = act(fiveE, alone, { actorId: "vess", optionId: "attack:0:0", targetIds: ["sack"] }, 18, 5);
     assert.equal(eventsOf(swing.events, "rider").length, 0, "no advantage, and nobody beside the target");
+
+    // An action that deals nothing never carries one either: a rider is extra damage on a blow, and
+    // a blow that struck for nothing has nothing to add to.
+    const helper = fight(fiveE, [rogue(["sly-strike"], 3), fighter(), sack()], 20, 10, 1);
+    const helped = act(fiveE, helper, { actorId: "vess", optionId: "standard:help", targetIds: ["brenna"] });
+    assert.equal(eventsOf(helped.events, "rider").length, 0, "helping an ally is not a hit and carries no rider");
+    assert.equal(eventsOf(helped.events, "damage").length, 0, "and it deals nothing, which is the point");
   }
 
   {

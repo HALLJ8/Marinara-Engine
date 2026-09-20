@@ -498,7 +498,6 @@ arithmetic. What it does not do yet is listed under Not yet.
   ],
   "abilities": [{ "list": "knacks", "budget": "act" }],
   "standard": ["dodge", "help"],
-  "standardEffects": { "dodge": { "saves": ["dex_save"] } },
   "conditions": [
     { "condition": "shaken", "effects": ["own-attacks-disadvantage", "ends-on-damage"] },
     { "condition": "pinned", "effects": ["cannot-act", "speed-zero"] }

@@ -3701,19 +3701,7 @@
                           "required": [
                             "dice"
                           ],
-                          "additionalProperties": false,
-                          "anyOf": [
-                            {
-                              "required": [
-                                "dice"
-                              ]
-                            },
-                            {
-                              "required": [
-                                "flat"
-                              ]
-                            }
-                          ]
+                          "additionalProperties": false
                         }
                       ]
                     },
