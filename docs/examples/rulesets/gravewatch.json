@@ -89,6 +89,18 @@
         "section": "about"
       }
     ],
+    "lists": [
+      {
+        "id": "charms",
+        "label": "Charms",
+        "section": "about",
+        "maxItems": 6,
+        "columns": [
+          { "id": "name", "label": "Charm", "type": "text", "maxLength": 60, "required": true },
+          { "id": "notes", "label": "What it does", "type": "text", "maxLength": 200 }
+        ]
+      }
+    ],
     "live": {
       "pools": [{ "id": "resolve", "label": "Resolve", "max": { "derived": "resolve_max" } }],
       "tracks": [
@@ -134,6 +146,33 @@
         }
       ],
       "clear": { "conditions": ["rattled"] }
+    }
+  ],
+  "catalogs": [
+    {
+      "$comment": "One charm, to show what mechanics.check is for: an entry a warden picked that changes a CHECK rather than a fight. The Game Master names it on the check itself and the Engine pays for it and applies it there.",
+      "id": "charms",
+      "label": "Charms",
+      "feeds": ["charms"],
+      "entries": [
+        {
+          "id": "steady-hand",
+          "label": "Steady Hand",
+          "rows": [
+            {
+              "list": "charms",
+              "values": { "name": "Steady Hand", "notes": "Throw the dice that fell wrong again." }
+            }
+          ],
+          "mechanics": {
+            "$comment": "cost is what ONE use is worth, perCostStep is what says it scales, and check is what it does to the roll. A point of Resolve throws the ones again; two points throws them again and hands over a success as well.",
+            "kind": "utility",
+            "cost": [{ "pool": "resolve", "amount": 1 }],
+            "perCostStep": { "flat": 1 },
+            "check": { "reroll": { "upTo": 1, "mode": "once" }, "successes": 1 }
+          }
+        }
+      ]
     }
   ],
   "gm": {

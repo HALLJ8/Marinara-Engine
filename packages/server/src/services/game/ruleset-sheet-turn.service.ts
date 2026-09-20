@@ -136,9 +136,13 @@ function replyUsesCatalogEntry(content: string): boolean {
 export async function loadTurnRulesetCatalogs(
   context: GameRulesetSheetContext,
   content: string,
+  /** `force` skips the "does this reply use one" gate, for a caller that has already decided it
+   *  needs them: a check tag's `use=` is a different tag in a different place, and the gate below
+   *  only knows about `[sheet:]` commands. */
+  options?: { force?: boolean },
 ): Promise<RulesetCatalogEntriesById> {
   const declared = context.definition.catalogs;
-  if (!declared?.length || !replyUsesCatalogEntry(content)) return {};
+  if (!declared?.length || !(options?.force || replyUsesCatalogEntry(content))) return {};
   const wanted = new Set(context.cards.flatMap((card) => rulesetCatalogIdsForBuild(context.definition, card.build)));
   const catalogs: RulesetCatalogEntriesById = {};
   for (const catalog of declared) {

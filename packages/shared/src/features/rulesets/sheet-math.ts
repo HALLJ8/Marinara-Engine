@@ -462,7 +462,15 @@ export interface RulesetPoolRoll extends RulesetCheckRoll {
   /** Successes a purchase added after the dice were counted, and 0 where nothing was bought. They
    *  are in `total` already; this is what lets a record say how many of them nobody rolled. */
   autoSuccesses: number;
+  /** How many dice a bought re-throw actually replaced, so a record can say the pool was re-thrown
+   *  rather than leaving a reader to wonder why the faces beat the odds. */
+  rerolled: number;
 }
+
+/** The hard ceiling on how many dice ONE check may throw again, whatever a ruleset asks for. An
+ *  Engine bound rather than an author's choice: an `until` re-throw is a loop, and a loop inside a
+ *  turn needs an end that does not depend on the file. */
+export const RULESET_POOL_MAX_REROLLS = 100;
 
 function clampInteger(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, Math.round(value)));
@@ -490,20 +498,30 @@ export function rollDicePoolCheck(
     /** `bonus=`, honoured only where the ruleset declares situational dice. */
     bonusDice?: number;
     /** What a purchase bought for this one check, already validated and paid for by the caller:
-     *  dice thrown on top of the pool, and successes added after the dice are counted. The roller
-     *  never decides whether a spend was allowed; it only applies what it is handed. */
-    bought?: { dice?: number; successes?: number };
+     *  dice thrown on top of the pool, successes added after the dice are counted, a per-die target
+     *  for this one roll, and a re-throw of the low faces. The roller never decides whether a spend
+     *  was allowed; it only applies what it is handed. */
+    bought?: {
+      dice?: number;
+      successes?: number;
+      threshold?: number;
+      reroll?: { upTo: number; mode: "once" | "until" };
+    };
   },
   rollDie: (sides: number) => number,
 ): RulesetPoolRoll {
   const resolution = definition.resolution;
-  if (resolution.kind !== "dice-pool") return { ...noRoll(), threshold: 0, bonusDice: 0, autoSuccesses: 0 };
+  if (resolution.kind !== "dice-pool") {
+    return { ...noRoll(), threshold: 0, bonusDice: 0, autoSuccesses: 0, rerolled: 0 };
+  }
   const { die, pool, target, double, explode, cancel, botch, exceptional, situationalDice } = resolution;
 
+  // A bought threshold is the entry's own and outranks the Game Master's `threshold=`, because the
+  // player paid for it. Both are clamped into what the ruleset allows, and a ruleset whose target
+  // cannot move ignores both.
+  const asked = Number.isFinite(input.bought?.threshold) ? input.bought!.threshold! : input.threshold;
   const threshold =
-    target.min < target.max && Number.isFinite(input.threshold)
-      ? clampInteger(input.threshold!, target.min, target.max)
-      : target.default;
+    target.min < target.max && Number.isFinite(asked) ? clampInteger(asked!, target.min, target.max) : target.default;
   const bonusDice =
     situationalDice && Number.isFinite(input.bonusDice)
       ? clampInteger(input.bonusDice!, situationalDice.min, situationalDice.max)
@@ -519,6 +537,27 @@ export function rollDicePoolCheck(
   );
   const rolls: number[] = [];
   for (let i = 0; i < count; i++) rolls.push(rollDie(die.sides));
+
+  // A re-throw of the low faces, bought by the character and applied BEFORE anything else reads the
+  // pool, so a rerolled die can still explode, still count and still cancel. `once` replaces each
+  // qualifying die one time and the new face stands whatever it is; `until` keeps going, bounded by
+  // an Engine ceiling on the whole pool so a ruleset whose `upTo` is near the top face cannot roll
+  // for the rest of the turn.
+  let rerolled = 0;
+  const reroll = input.bought?.reroll;
+  if (reroll && reroll.upTo >= 1 && reroll.upTo < die.sides) {
+    for (let i = 0; i < rolls.length && rerolled < RULESET_POOL_MAX_REROLLS; i++) {
+      if (rolls[i]! > reroll.upTo) continue;
+      rolls[i] = rollDie(die.sides);
+      rerolled += 1;
+      if (reroll.mode !== "until") continue;
+      while (rolls[i]! <= reroll.upTo && rerolled < RULESET_POOL_MAX_REROLLS) {
+        rolls[i] = rollDie(die.sides);
+        rerolled += 1;
+      }
+    }
+  }
+
   if (explode) {
     // Chained, by walking the array as it grows: a die added at the end is itself examined. The
     // extra dice are capped so a low `from` on a big pool cannot roll for the rest of the turn.
@@ -559,5 +598,6 @@ export function rollDicePoolCheck(
     threshold,
     bonusDice,
     autoSuccesses,
+    rerolled,
   };
 }

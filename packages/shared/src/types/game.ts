@@ -465,6 +465,14 @@ export interface SkillCheckResult {
    * lets a card show which part of the result came out of the dice. Only a ruleset game sets it.
    */
   autoSuccesses?: number;
+  /**
+   * The catalog entry this check actually applied, by the label the ruleset gives it. Absent when
+   * the Game Master named none, when the character does not have it, or when the pool could not
+   * cover it, so a record never claims a charm that did nothing.
+   */
+  used?: string;
+  /** How many dice a bought re-throw replaced. Absent when none were. */
+  rerolled?: number;
 }
 
 // ── The sighted dice pool (opt-in, last) ──

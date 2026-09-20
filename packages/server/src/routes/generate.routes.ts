@@ -8209,6 +8209,13 @@ export async function generateRoutes(app: FastifyInstance) {
               // the Engine's own arithmetic.
               ...(chatMeta.gameRuleset != null ? { rulesetPinned: true } : {}),
               ...(dicePoolSession ? { pool: dicePoolSession } : {}),
+              // Only ever called for a check that names an entry with `use=`, so an ordinary turn
+              // reads no catalog file at all. The sheet pass below loads its own for a `[sheet:]`
+              // `use`, which is a different command in a different place.
+              loadCatalogs: async () => {
+                const context = await loadGameRulesetSheetContext(app.db, input.chatId, turnGameRuleset);
+                return context ? await loadTurnRulesetCatalogs(context, fullResponse, { force: true }) : {};
+              },
             });
             // A check that BOUGHT something (a point of will for an automatic success) paid for it
             // before the dice were thrown, so the points are already gone. That state is what the

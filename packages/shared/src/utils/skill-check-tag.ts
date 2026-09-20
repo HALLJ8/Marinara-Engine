@@ -84,6 +84,14 @@ export interface SkillCheckTag {
    * whether the pool covers it and what it buys are all the resolver's business.
    */
   spend?: { pool: string; amount: number };
+  /**
+   * `use="Potence"` as the GM wrote it: the catalog entry the player is using ON this check.
+   *
+   * Carried, never judged. Whether the character actually has that entry, what it costs and what
+   * it does to the roll are all the resolver's business, and it needs the ruleset's catalogs to
+   * answer any of them.
+   */
+  useEntry?: string;
   /** `pool=` exactly as written, for the mismatch log. Present whenever `poolDeclared` is. */
   poolRaw?: string;
   /**
@@ -365,6 +373,8 @@ export function parseSkillCheckTagBody(body: string): SkillCheckTag | null {
     const amount = at > 0 ? Number(spendValue.slice(at + 1).trim()) : Number.NaN;
     if (pool && Number.isInteger(amount) && amount > 0) tag.spend = { pool: pool.slice(0, 100), amount };
   }
+  const useEntry = values.get("use")?.trim();
+  if (useEntry) tag.useEntry = useEntry.slice(0, 100);
   const who = values.get("who")?.trim();
   if (who) tag.who = who.slice(0, 100);
   const withAbility = values.get("with")?.trim();

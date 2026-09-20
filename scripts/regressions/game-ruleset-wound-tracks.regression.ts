@@ -284,6 +284,10 @@ try {
     // penalty MEANS is the resolution kind's business.
     const summed = JSON.parse(gravewatchText) as Record<string, any>;
     delete summed.layers;
+    // The example's charm changes a POOL check, which a summed ruleset cannot honour and is
+    // refused for elsewhere. This case is about the penalty, so it reads the file without one.
+    delete summed.catalogs;
+    delete summed.sheet.lists;
     summed.id = "gravewatch-summed";
     summed.resolution = {
       kind: "dice-sum",

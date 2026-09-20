@@ -791,6 +791,36 @@ const catalogMechanicsSchema = z
       .optional(),
     /** What one step of a higher cost adds, for systems that let a player pay more. */
     perCostStep: z.object(catalogAmountShape).strict().optional(),
+    /** What using this entry does to a CHECK the character is about to make, rather than to a
+     *  fight. A charm that lets a roll be re-thrown, or that simply hands out successes. Only a
+     *  pool ruleset can honour any of it, and the cross-checks say so at import. */
+    check: z
+      .object({
+        /** Throw the dice at or below `upTo` again. `once` replaces each of them one time and
+         *  lets the new face stand; `until` keeps going, under the Engine's own hard ceiling. */
+        reroll: z
+          .object({ upTo: z.number().int().min(1).max(999), mode: z.enum(["once", "until"]) })
+          .strict()
+          .optional(),
+        /** Dice added to the pool before it is thrown. */
+        dice: z.number().int().min(1).max(SPEND_EFFECT_MAX).optional(),
+        /** Successes added after the dice are counted. */
+        successes: z.number().int().min(1).max(SPEND_EFFECT_MAX).optional(),
+        /** The per-die target this one check counts with, inside what the ruleset allows. */
+        threshold: z.number().int().min(2).max(1000).optional(),
+      })
+      .strict()
+      .superRefine((check, ctx) => {
+        if (
+          !check.reroll &&
+          check.dice === undefined &&
+          check.successes === undefined &&
+          check.threshold === undefined
+        ) {
+          ctx.addIssue({ code: z.ZodIssueCode.custom, message: "A check effect does something, or is left out" });
+        }
+      })
+      .optional(),
     concentration: z.boolean().optional(),
     reaction: z.boolean().optional(),
     /** How many targets one use may take. One unless it says otherwise. */
@@ -2905,6 +2935,32 @@ export function rulesetCatalogEntryIssues(
           );
         }
       });
+    }
+    // What an entry does to a CHECK. Successes, pool dice, a per-die target and a re-throw are all
+    // pool words, so a summed ruleset can honour none of them, and each number is held to the same
+    // range the ruleset's own dice are.
+    if (mechanics?.check) {
+      const check = mechanics.check;
+      const path = [index, "mechanics", "check"];
+      const resolution = definition.resolution;
+      if (resolution.kind !== "dice-pool") {
+        add(path, `A ${resolution.kind} ruleset has no pool for a check effect to change`);
+      } else {
+        if (check.reroll && (check.reroll.upTo < 1 || check.reroll.upTo >= resolution.die.sides)) {
+          // At the top face it would throw the whole pool again for ever, which is a different
+          // rule wearing this one's name.
+          add(
+            [...path, "reroll", "upTo"],
+            `This ruleset throws d${resolution.die.sides}, so a re-throw is on a face from 1 to ${resolution.die.sides - 1}`,
+          );
+        }
+        if (
+          check.threshold !== undefined &&
+          (check.threshold < resolution.target.min || check.threshold > resolution.target.max)
+        ) {
+          add([...path, "threshold"], `This ruleset counts on ${resolution.target.min} to ${resolution.target.max}`);
+        }
+      }
     }
     // Temporary points are a buffer damage drains first, and a wound track has no buffer: it has
     // boxes, and a box is either marked or it is not. Rather than invent a meaning (a free level? a

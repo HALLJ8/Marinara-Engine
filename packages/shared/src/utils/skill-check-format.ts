@@ -90,6 +90,10 @@ export interface SkillCheckTagExtras {
   spend?: string;
   /** `auto="2"` — successes a spend added that nobody rolled, so a reader can tell them apart. */
   auto?: number;
+  /** `use="Potence"` — the catalog entry the check actually applied, never one it could not. */
+  use?: string;
+  /** `rerolled="3"` — how many dice a bought re-throw replaced. */
+  rerolled?: number;
 }
 
 function serializeSkillCheckExtras(extras: SkillCheckTagExtras | undefined): string {
@@ -105,6 +109,10 @@ function serializeSkillCheckExtras(extras: SkillCheckTagExtras | undefined): str
   }
   if (extras.spend) parts.push(`spend="${serializeSkillCheckAttribute(extras.spend)}"`);
   if (extras.auto != null && Number.isFinite(extras.auto) && extras.auto > 0) parts.push(`auto="${extras.auto}"`);
+  if (extras.use) parts.push(`use="${serializeSkillCheckAttribute(extras.use)}"`);
+  if (extras.rerolled != null && Number.isFinite(extras.rerolled) && extras.rerolled > 0) {
+    parts.push(`rerolled="${extras.rerolled}"`);
+  }
   return parts.length > 0 ? ` ${parts.join(" ")}` : "";
 }
 
@@ -141,6 +149,8 @@ export function serializeResolvedSkillCheckTag(result: SkillCheckResult, extras?
     ...(result.bonusDice ? { bonus: result.bonusDice } : {}),
     ...(result.spent ? { spend: `${result.spent.pool}:${result.spent.amount}` } : {}),
     ...(result.autoSuccesses ? { auto: result.autoSuccesses } : {}),
+    ...(result.used ? { use: result.used } : {}),
+    ...(result.rerolled ? { rerolled: result.rerolled } : {}),
     // An extra a caller left undefined is absent, not an instruction to erase what the result says.
     ...Object.fromEntries(Object.entries(extras ?? {}).filter(([, value]) => value !== undefined)),
   };

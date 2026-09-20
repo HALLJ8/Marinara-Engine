@@ -3345,6 +3345,51 @@
                       },
                       "additionalProperties": false
                     },
+                    "check": {
+                      "type": "object",
+                      "properties": {
+                        "reroll": {
+                          "type": "object",
+                          "properties": {
+                            "upTo": {
+                              "type": "integer",
+                              "minimum": 1,
+                              "maximum": 999
+                            },
+                            "mode": {
+                              "type": "string",
+                              "enum": [
+                                "once",
+                                "until"
+                              ]
+                            },
+                            "$comment": {}
+                          },
+                          "required": [
+                            "upTo",
+                            "mode"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "dice": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 10
+                        },
+                        "successes": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 10
+                        },
+                        "threshold": {
+                          "type": "integer",
+                          "minimum": 2,
+                          "maximum": 1000
+                        },
+                        "$comment": {}
+                      },
+                      "additionalProperties": false
+                    },
                     "concentration": {
                       "type": "boolean"
                     },
