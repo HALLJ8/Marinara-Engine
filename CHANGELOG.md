@@ -4,6 +4,8 @@ This file is the release-notes source of truth for Marinara Engine. Reuse these 
 
 ## [Unreleased]
 
+- Advanced Memory retains earlier scenes across shared “Mark as new start” cutoffs, shows automatic cutoffs in chat, and updates them when manual flags move or are removed. Hidden messages and character knowledge limits remain respected (#6450).
+
 - Advanced Memory prepares the full eligible Roleplay history before the next reply, resumes unfinished scene detection, and shares one scene summary between characters with the same history. The narrator uses the shared archive across character participation boundaries without separate scene copies. The archive avoids redundant owner copies and uses compact memory rows; new recaps omit current-situation and open-tension sections (#6450).
 
 - When a Game Mode fight ends, the recap the Game Master reads now names anybody still carrying a condition and says those stay until the Game Master takes them off, with the command that does it. A charm or a fright does not expire because the fighting stopped, and what would end one is the spell's own terms or the fiction rather than arithmetic, so it is a ruling to make rather than something the Engine should guess. The condition a ruleset's own dying rule puts on somebody at zero is left out of that list, because healing or stabilising them is what lifts it.

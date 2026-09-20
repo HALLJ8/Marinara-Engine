@@ -209,7 +209,7 @@ function policyFingerprint(ctx: Context): string {
 
 function preparationPolicyRevision(ctx: Context): string {
   return hash([
-    "shared-narrator-v1", // Invalidate cached prompts without rebuilding valid source archives.
+    "archive-before-context-start-v2", // Invalidate cached prompts without rebuilding valid source archives.
     policyFingerprint(ctx),
     ctx.settings,
     ctx.metadata.summaryEntries,
@@ -220,6 +220,13 @@ function preparationPolicyRevision(ctx: Context): string {
 
 function fingerprint(ctx: Context, messages: readonly AdvancedMemoryMessage[], audience: string[]): string {
   return hash([advancedMemorySourceFingerprint(messages), policyFingerprint(ctx), [...audience].sort()]);
+}
+
+function sharedStartMessageId(messages: readonly AdvancedMemoryMessage[]): string {
+  for (let index = messages.length - 1; index >= 0; index--) {
+    if (object(messages[index]!.extra).isConversationStart === true) return messages[index]!.id;
+  }
+  return "";
 }
 
 function abortIfNeeded(signal?: AbortSignal): void {
@@ -237,18 +244,19 @@ async function serialized<T>(chatId: string, run: () => Promise<T>): Promise<T> 
   }
 }
 
-/** Explicit hiding and manual starts remain authoritative, including for the narrator. */
+/** Shared starts trim live context; archives still honor hiding and character-specific knowledge boundaries. */
 export function selectAdvancedMemoryMessages(
   messages: readonly AdvancedMemoryMessage[],
   settings: AdvancedMemorySettings,
   audienceCharacterIds: string[],
   individual = true,
+  respectSharedStart = true,
 ): AdvancedMemoryMessage[] {
   let start = 0;
   for (let index = 0; index < messages.length; index++) {
     const extra = object(messages[index]!.extra);
     if (
-      extra.isConversationStart === true ||
+      (respectSharedStart && extra.isConversationStart === true) ||
       strings(extra.conversationStartForCharacterIds).some((id) => audienceCharacterIds.includes(id))
     )
       start = index;
@@ -294,6 +302,7 @@ function allowed(
     ctx.settings,
     audience.length ? audience : ctx.characterIds,
     ctx.individual && audience.length > 0,
+    false,
   );
 }
 
@@ -1746,6 +1755,7 @@ export function createAdvancedMemoryService(db: DB) {
         revision: hash([record.content, record.enabled, record.updatedAt]),
       })),
       { id: "boundary", revision: boundary ?? "" },
+      { id: "shared-start", revision: sharedStartMessageId(ctx.messages) },
       { id: "budget", revision: String(budget) },
     ];
     const allIds = new Set([
@@ -1893,12 +1903,14 @@ export function createAdvancedMemoryService(db: DB) {
     ) {
       receipt.reasons.push("unverified-summary-omitted");
     }
+    const sharedStart = sharedStartMessageId(sources);
     const previous = available
       .filter(
         (record) =>
           record.kind === "continuity" &&
           record.enabled &&
           recallAudienceMatches(ctx, record, audience) &&
+          record.dependencies.find((dependency) => dependency.id === "shared-start")?.revision === sharedStart &&
           summarySize(record) <= summaryBudget &&
           dependenciesValid(record, available, ctx),
       )
@@ -1908,14 +1920,19 @@ export function createAdvancedMemoryService(db: DB) {
       }))
       .filter((item) => item.boundary && indexes.has(item.boundary))
       .sort((a, b) => indexes.get(b.boundary)! - indexes.get(a.boundary)!)[0];
-    let boundaryIndex = previous ? indexes.get(previous.boundary)! : -1;
+    // A shared manual cutoff moves raw turns into memory, not out of the archive.
+    let boundaryIndex = Math.max(
+      previous ? indexes.get(previous.boundary)! : -1,
+      sharedStart ? indexes.get(sharedStart)! - 1 : -1,
+    );
+    const initialBoundary = boundaryIndex >= 0 ? sources[boundaryIndex]!.id : null;
     let live = eligible.filter((message) => indexes.get(message.id)! > boundaryIndex);
     let archived = eligible.filter((message) => indexes.get(message.id)! <= boundaryIndex);
     let continuity = await digest(
       ctx,
       archived,
       audience,
-      previous?.boundary ?? null,
+      initialBoundary,
       "continuity",
       available,
       summaryBudget,
@@ -1936,7 +1953,7 @@ export function createAdvancedMemoryService(db: DB) {
     }
     archived = eligible.filter((message) => indexes.get(message.id)! <= boundaryIndex);
     const boundary = boundaryIndex >= 0 ? sources[boundaryIndex]!.id : null;
-    if (boundary !== (previous?.boundary ?? null)) {
+    if (boundary !== initialBoundary) {
       continuity = await digest(
         ctx,
         archived,
@@ -2161,6 +2178,23 @@ export function createAdvancedMemoryService(db: DB) {
         record.updatedAt,
         record.dependencies,
       ]);
+    }
+    if (!input.readOnly && !historical && input.audienceMode !== "owner") {
+      const contextStart = live.length < eligible.length ? live[0]?.id : undefined;
+      await validateSnapshot(ctx, sources, input);
+      await chats.patchMetadata(
+        ctx.chatId,
+        (fresh) => {
+          const state = object(fresh.advancedMemoryState);
+          const starts = Array.isArray(state.contextStarts) ? state.contextStarts : [];
+          const contextStarts = [
+            ...starts.filter((entry) => hash(strings(object(entry).audienceCharacterIds)) !== hash(audience)),
+            ...(contextStart ? [{ messageId: contextStart, audienceCharacterIds: audience }] : []),
+          ];
+          return hash(starts) === hash(contextStarts) ? {} : { advancedMemoryState: { ...state, contextStarts } };
+        },
+        { touchUpdatedAt: false },
+      );
     }
     if (!sceneTexts.length && !excerpts.length) receipt.reasons.push("no-relevant-recall");
     return {
