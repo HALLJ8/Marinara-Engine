@@ -764,9 +764,16 @@ export function applyRulesetSheetOp(
       // all; `by` clears that many, overflow first, which is what healing means everywhere else.
       if (entry.track.wound) {
         const declared = definition.sheet.live.tracks.find((candidate) => candidate.id === entry.track.id);
-        if (!declared || value >= entry.value) continue;
+        if (!declared) continue;
         const work = woundWork(declared, own(next.wounds, entry.track.id));
-        const cleared = entry.value - value + (step.to !== undefined ? work.overflow : 0);
+        // `by` clears the number the rest ASKED for, not the number the boxes went down by: harm
+        // that could not land is still harm, and it comes off first, so a rest of two on a track
+        // showing one mark and one spilled clears both rather than stopping at the box.
+        const cleared =
+          step.to !== undefined
+            ? entry.value - value + work.overflow
+            : Math.trunc(entry.value - moved(entry.value, entry.track.max, entry.track.min));
+        if (cleared <= 0) continue;
         applyWoundAmount(work, 0, -cleared);
         const state = woundState(work);
         setWounds(entry.track.id, state);

@@ -214,6 +214,32 @@ try {
     assert.equal(harm(live).overflow, 0);
   }
 
+  // ── And a `by` rest clears the number it ASKED for, overflow and all ──
+  {
+    // Harm that spilled is still harm, and healing takes it before any box. The shipped rest clears
+    // `to` a number, so the other shape needs a ruleset that declares one. The state it is proven
+    // on is a short track carrying spill, which is what a saved sheet holds after its ruleset
+    // shortened the track under it: reading the boxes alone would stop healing early there.
+    const byDoc = JSON.parse(gravewatchText) as Record<string, any>;
+    delete byDoc.layers;
+    byDoc.id = "gravewatch-by-rest";
+    byDoc.rests = [{ id: "breather", label: "Catch a breath", restore: [{ track: "harm", by: { const: -2 } }] }];
+    const parsedBy = parseRulesetDefinition(byDoc);
+    assert.ok(parsedBy.ok, `the variant must validate: ${JSON.stringify(parsedBy)}`);
+    const byDefinition = parsedBy.definition;
+    const byBuild = defaultRulesetSheetBuild(byDefinition);
+    const rested = applyRulesetSheetOp(
+      byDefinition,
+      byBuild,
+      { wounds: { harm: { marks: ["tear"], overflow: 3 } } },
+      { op: "rest", rest: "breather" },
+    );
+    assert.ok(rested.ok, `the rest must apply: ${rested.ok ? "" : rested.reason}`);
+    const after = readRulesetLive(byDefinition, byBuild, rested.live).tracks.find((entry) => entry.id === "harm");
+    assert.deepEqual(after?.wound?.marks, ["tear"], "the box is untouched, because spill comes off first");
+    assert.equal(after?.wound?.overflow, 1, "and both points the rest asked for came off the spill");
+  }
+
   // ── The penalty takes dice OFF the pool, and never below `pool.min` ──
   {
     // The shipped example EXPLODES its dice, so a rolled pool does not report the number of dice it

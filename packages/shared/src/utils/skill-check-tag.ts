@@ -374,7 +374,10 @@ export function parseSkillCheckTagBody(body: string): SkillCheckTag | null {
     if (pool && Number.isInteger(amount) && amount > 0) tag.spend = { pool: pool.slice(0, 100), amount };
   }
   const useEntry = values.get("use")?.trim();
-  if (useEntry) tag.useEntry = useEntry.slice(0, 100);
+  // A catalog entry's label may be 120 characters, and this is the name that has to match one, so
+  // the cut is the schema's own limit rather than the 100 the rest of these use: a shorter one
+  // would make an entry with a long label impossible to name.
+  if (useEntry) tag.useEntry = useEntry.slice(0, 120);
   const who = values.get("who")?.trim();
   if (who) tag.who = who.slice(0, 100);
   const withAbility = values.get("with")?.trim();

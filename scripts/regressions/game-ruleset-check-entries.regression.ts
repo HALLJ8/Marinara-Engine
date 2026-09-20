@@ -298,6 +298,10 @@ try {
     assert.equal(parseSkillCheckTagBody(`skill="Nerve" dc="2" use="Steady Hand"`)?.useEntry, "Steady Hand");
     assert.equal(parseSkillCheckTagBody(`skill="Nerve" dc="2" use=""`)?.useEntry, undefined);
     assert.equal(parseSkillCheckTagBody(`skill="Nerve" dc="2"`)?.useEntry, undefined);
+    // A catalog entry's label may be 120 characters, so a name that long still arrives whole: a
+    // shorter cut here would make an entry with a long label impossible to name at all.
+    const longest = "L".repeat(120);
+    assert.equal(parseSkillCheckTagBody(`skill="Nerve" dc="2" use="${longest}"`)?.useEntry, longest);
   }
 
   // ── Refusals at import ──
