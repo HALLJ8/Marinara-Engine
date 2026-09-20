@@ -1498,12 +1498,11 @@ const combatConditionSchema = z
     failsSaves: z.array(sheetId).min(1).max(12).optional(),
     /** Which saves the save effects above are about. All of them when this is left out. */
     saves: z.array(sheetId).min(1).max(12).optional(),
-    /** Its effects count only while whoever applied it is in sight. Without a board, always: a
-     *  fight that measures nothing has no line to break. */
     /**
      * Only while whoever applied this is in sight. `true` gates the whole condition; a list gates
      * only the effects it names and leaves the rest standing, which is what a fright that stops you
-     * walking closer whether or not you can see it needs.
+     * walking closer whether or not you can see it needs. Without a board it is always in sight: a
+     * fight that measures nothing has no line to break.
      */
     whileSourceInSight: z.union([z.literal(true), z.array(combatConditionEffectSchema).min(1).max(12)]).optional(),
     /** It comes off the moment whoever applied it goes down. */
