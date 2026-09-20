@@ -20,7 +20,14 @@ import {
 } from "../video/video-generation.js";
 
 /** Bind each package to the live host services, including their queues, security checks and logging. */
-export function createCapabilityIntegrationHost(): CapabilityIntegrationHost {
+export function createCapabilityIntegrationHost(permissions: readonly string[]): CapabilityIntegrationHost {
+  const granted = new Set(permissions);
+  const guarded =
+    <Args extends unknown[], Result>(permission: "network" | "storage", operation: (...args: Args) => Result) =>
+    (...args: Args): Result => {
+      if (!granted.has(permission)) throw new Error(`Package integrations require ${permission} permission.`);
+      return operation(...args);
+    };
   const providers = new WeakMap<CapabilityIntegrationProvider, BaseLLMProvider>();
   const expose = (provider: BaseLLMProvider): CapabilityIntegrationProvider => {
     const facade = Object.freeze({
@@ -39,8 +46,10 @@ export function createCapabilityIntegrationHost(): CapabilityIntegrationHost {
   };
   return Object.freeze({
     llm: Object.freeze({
-      createProvider: (...args: Parameters<typeof createLLMProvider>) => expose(createLLMProvider(...args)),
-      localSidecar: () => expose(getLocalSidecarProvider()),
+      createProvider: guarded("network", (...args: Parameters<typeof createLLMProvider>) =>
+        expose(createLLMProvider(...args)),
+      ),
+      localSidecar: guarded("network", () => expose(getLocalSidecarProvider())),
       withFallback(options: Parameters<CapabilityIntegrationHost["llm"]["withFallback"]>[0]) {
         const primary = providers.get(options.primary);
         if (!primary) throw new Error("Fallback requires a provider created by this package's host integrations.");
@@ -48,17 +57,17 @@ export function createCapabilityIntegrationHost(): CapabilityIntegrationHost {
       },
     }),
     images: Object.freeze({
-      generate: generateImage,
-      save: saveImageToDisk,
-      remove: removeSavedImageFromDisk,
-      stage: stageImageToDisk,
-      sweepStaged: sweepStagedImages,
+      generate: guarded("network", generateImage),
+      save: guarded("storage", saveImageToDisk),
+      remove: guarded("storage", removeSavedImageFromDisk),
+      stage: guarded("storage", stageImageToDisk),
+      sweepStaged: guarded("storage", sweepStagedImages),
       resolveNovelAiRequestSize,
     }),
     videos: Object.freeze({
-      generate: generateVideo,
-      save: saveVideoToDisk,
-      remove: removeSavedVideoFromDisk,
+      generate: guarded("network", generateVideo),
+      save: guarded("storage", saveVideoToDisk),
+      remove: guarded("storage", removeSavedVideoFromDisk),
       resolveDuration: resolveVideoRequestDuration,
       resolveReferenceUpload: resolveVideoReferencePublicUploadOptions,
     }),

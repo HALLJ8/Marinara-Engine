@@ -43,16 +43,27 @@ try {
   const base = `http://127.0.0.1:${address.port}`;
   const { createCapabilityIntegrationHost } =
     await import("../../packages/server/src/services/capability-packages/capability-integrations.service.js");
-  const image = await import("../../packages/server/src/services/image/image-generation.js");
-  const video = await import("../../packages/server/src/services/video/video-generation.js");
-  const host = createCapabilityIntegrationHost();
-  assert.equal(
-    host.images.generate,
-    image.generateImage,
-    "Packages must share the host's provider implementation and queue",
+  const denied = createCapabilityIntegrationHost([]);
+  assert.throws(() => denied.llm.createProvider("openai", `${base}/v1`, "fixture"), /network permission/);
+  assert.throws(() => denied.llm.localSidecar(), /network permission/);
+  assert.throws(() => denied.images.generate("openai", base, "", "openai", { prompt: "denied" }), /network permission/);
+  assert.throws(
+    () =>
+      denied.videos.generate("openai", base, "", "openai", {
+        prompt: "denied",
+        durationSeconds: 5,
+        aspectRatio: "16:9",
+      }),
+    /network permission/,
   );
-  assert.equal(host.videos.generate, video.generateVideo);
-  assert.equal(host.videos.save, video.saveVideoToDisk);
+  assert.throws(() => denied.images.save("fixture", png, "png"), /storage permission/);
+  assert.throws(() => denied.images.stage("fixture", png, "png"), /storage permission/);
+  assert.throws(() => denied.images.sweepStaged(), /storage permission/);
+  assert.throws(() => denied.images.remove("fixture.png"), /storage permission/);
+  assert.throws(() => denied.videos.save("fixture", ""), /storage permission/);
+  assert.throws(() => denied.videos.remove("fixture.mp4"), /storage permission/);
+  assert.equal(requests.length, 0, "Denied packages must not reach a provider");
+  const host = createCapabilityIntegrationHost(["network", "storage"]);
   assert.equal(host.videos.resolveDuration("xai", "xai", { durationSeconds: 30 }), 15);
 
   const provider = host.llm.createProvider("openai", `${base}/v1`, "fixture-secret", 8192, null, 512, false, false, {
@@ -107,7 +118,7 @@ try {
   assert.ok(requests.some((value) => value.path.startsWith("/fallback/")));
   assert.throws(
     () =>
-      createCapabilityIntegrationHost().llm.withFallback({
+      createCapabilityIntegrationHost(["network", "storage"]).llm.withFallback({
         primary: provider,
         primaryConnectionId: "foreign",
         fallbackBaseUrl: "",

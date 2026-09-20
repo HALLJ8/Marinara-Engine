@@ -93,7 +93,7 @@ async function createCapabilityRuntimeHost(
     isDebugAgentsEnabled,
     json: Object.freeze({ parseJsonish: parseGameJsonish }),
     languageModels: createCapabilityLanguageModelHost(app.db),
-    integrations: createCapabilityIntegrationHost(),
+    integrations: createCapabilityIntegrationHost(permissions),
     logger: Object.freeze({
       debug: (message: string, ...args: CapabilityRuntimeLogArgument[]) =>
         Reflect.apply(logger.debug, logger, [message, ...args]),

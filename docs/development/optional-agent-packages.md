@@ -995,11 +995,12 @@ older hosts cannot interpret this setup declaration.
 
 ### Capability API 1.31: host generation integrations
 
-Server packages can call `api.runtime.integrations` to use the current Engine's LLM, image and video services. Declare capability API 1.31 in the package manifest and check that the integration host is available during activation. Older Engines reject the newer API requirement before activating the package.
+Server packages can call `api.runtime.integrations` to use the current Engine's LLM, image and video services. Declare capability API 1.31 in the package manifest and check that the integration host is available during activation. Older Engines reject the newer API requirement before activating the package. Provider operations require the `network` permission; saving, staging and removing media require `storage`.
 
 - `llm.createProvider(...)` accepts the same connection settings as Engine's provider factory, including custom request parameters and headers. The returned provider supports `chat`, `chatComplete`, `embed`, `maxContextValue` and `maxTokensOverrideValue`. It exposes no credential properties.
+- `llm.localSidecar()` returns the host's local sidecar provider through the same facade.
 - `llm.withFallback(...)` wraps a provider created by the same package host. It preserves Engine's admission, fallback notifications and provider selection behavior.
 - `images.generate(...)` and `videos.generate(...)` use the live Engine implementations, including cancellation, request logging, network checks and media queues. Forward the caller's `signal` and UI `debugMode` when present.
-- `images.save`, `images.remove`, `images.stage` and `images.sweepStaged` reuse the gallery's safe writes and staged-file lifecycle. `videos.save` and `videos.remove` reuse the video storage path. Video duration and public reference-upload normalization are also available through `videos.resolveDuration` and `videos.resolveReferenceUpload`.
+- `images.save`, `images.remove`, `images.stage` and `images.sweepStaged` reuse the gallery's safe writes and staged-file lifecycle. `videos.save` and `videos.remove` reuse the video storage path. `images.resolveNovelAiRequestSize` reuses the host's NovelAI size normalization. Video duration and public reference-upload normalization are also available through `videos.resolveDuration` and `videos.resolveReferenceUpload`.
 
 Shared request/result types are exported by `@marinara-engine/shared`. Keep package-specific prompt building and orchestration in the package; call these host entrypoints for provider I/O instead of copying Engine service implementations. Pure helpers and types may still be bundled.
