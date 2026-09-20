@@ -282,6 +282,11 @@
               "minItems": 1,
               "maxItems": 12
             },
+            "penaltyFrom": {
+              "type": "string",
+              "maxLength": 40,
+              "pattern": "^[a-z][a-z0-9_]*$"
+            },
             "advantage": {
               "type": "boolean",
               "default": false
@@ -541,6 +546,68 @@
               },
               "minItems": 1,
               "maxItems": 12
+            },
+            "penaltyFrom": {
+              "type": "string",
+              "maxLength": 40,
+              "pattern": "^[a-z][a-z0-9_]*$"
+            },
+            "spend": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "pool": {
+                    "type": "string",
+                    "maxLength": 40,
+                    "pattern": "^[a-z][a-z0-9_]*$"
+                  },
+                  "amount": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 100
+                  },
+                  "successes": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 10
+                  },
+                  "dice": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 10
+                  },
+                  "perCheck": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 10
+                  },
+                  "$comment": {}
+                },
+                "required": [
+                  "pool",
+                  "amount",
+                  "perCheck"
+                ],
+                "additionalProperties": false,
+                "allOf": [
+                  {
+                    "anyOf": [
+                      {
+                        "required": [
+                          "successes"
+                        ]
+                      },
+                      {
+                        "required": [
+                          "dice"
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              },
+              "maxItems": 2
             },
             "pool": {
               "type": "object",
@@ -2454,6 +2521,64 @@
                   "default": {
                     "type": "integer"
                   },
+                  "levels": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "label": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 80
+                        },
+                        "penalty": {
+                          "type": "integer",
+                          "minimum": -1000,
+                          "maximum": 0
+                        },
+                        "$comment": {}
+                      },
+                      "required": [
+                        "label",
+                        "penalty"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "minItems": 1,
+                    "maxItems": 16
+                  },
+                  "kinds": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "maxLength": 40,
+                          "pattern": "^[a-z][a-z0-9_]*$"
+                        },
+                        "label": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 16
+                        },
+                        "severity": {
+                          "type": "integer",
+                          "minimum": -100,
+                          "maximum": 100
+                        },
+                        "$comment": {}
+                      },
+                      "required": [
+                        "id",
+                        "label",
+                        "severity"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "minItems": 1,
+                    "maxItems": 6
+                  },
                   "$comment": {}
                 },
                 "required": [
@@ -2462,7 +2587,15 @@
                   "min",
                   "max"
                 ],
-                "additionalProperties": false
+                "additionalProperties": false,
+                "dependencies": {
+                  "kinds": [
+                    "levels"
+                  ],
+                  "levels": [
+                    "kinds"
+                  ]
+                }
               },
               "maxItems": 30,
               "default": []
@@ -3202,15 +3335,19 @@
                           "$comment": {}
                         },
                         "additionalProperties": false,
-                        "anyOf": [
+                        "allOf": [
                           {
-                            "required": [
-                              "dice"
-                            ]
-                          },
-                          {
-                            "required": [
-                              "flat"
+                            "anyOf": [
+                              {
+                                "required": [
+                                  "dice"
+                                ]
+                              },
+                              {
+                                "required": [
+                                  "flat"
+                                ]
+                              }
                             ]
                           }
                         ]
@@ -3282,6 +3419,77 @@
                         "$comment": {}
                       },
                       "additionalProperties": false
+                    },
+                    "check": {
+                      "type": "object",
+                      "properties": {
+                        "reroll": {
+                          "type": "object",
+                          "properties": {
+                            "upTo": {
+                              "type": "integer",
+                              "minimum": 1,
+                              "maximum": 999
+                            },
+                            "mode": {
+                              "type": "string",
+                              "enum": [
+                                "once",
+                                "until"
+                              ]
+                            },
+                            "$comment": {}
+                          },
+                          "required": [
+                            "upTo",
+                            "mode"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "dice": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 10
+                        },
+                        "successes": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 10
+                        },
+                        "threshold": {
+                          "type": "integer",
+                          "minimum": 2,
+                          "maximum": 1000
+                        },
+                        "$comment": {}
+                      },
+                      "additionalProperties": false,
+                      "allOf": [
+                        {
+                          "anyOf": [
+                            {
+                              "required": [
+                                "reroll"
+                              ]
+                            },
+                            {
+                              "required": [
+                                "dice"
+                              ]
+                            },
+                            {
+                              "required": [
+                                "successes"
+                              ]
+                            },
+                            {
+                              "required": [
+                                "threshold"
+                              ]
+                            }
+                          ]
+                        }
+                      ]
                     },
                     "concentration": {
                       "type": "boolean"
@@ -3579,15 +3787,19 @@
                           },
                           "additionalProperties": false,
                           "description": "rider-amount",
-                          "anyOf": [
+                          "allOf": [
                             {
-                              "required": [
-                                "dice"
-                              ]
-                            },
-                            {
-                              "required": [
-                                "flat"
+                              "anyOf": [
+                                {
+                                  "required": [
+                                    "dice"
+                                  ]
+                                },
+                                {
+                                  "required": [
+                                    "flat"
+                                  ]
+                                }
                               ]
                             }
                           ]
@@ -3902,15 +4114,19 @@
                                     "$comment": {}
                                   },
                                   "additionalProperties": false,
-                                  "anyOf": [
+                                  "allOf": [
                                     {
-                                      "required": [
-                                        "dice"
-                                      ]
-                                    },
-                                    {
-                                      "required": [
-                                        "flat"
+                                      "anyOf": [
+                                        {
+                                          "required": [
+                                            "dice"
+                                          ]
+                                        },
+                                        {
+                                          "required": [
+                                            "flat"
+                                          ]
+                                        }
                                       ]
                                     }
                                   ]
@@ -3920,15 +4136,19 @@
                               "$comment": {}
                             },
                             "additionalProperties": false,
-                            "anyOf": [
+                            "allOf": [
                               {
-                                "required": [
-                                  "dice"
-                                ]
-                              },
-                              {
-                                "required": [
-                                  "flat"
+                                "anyOf": [
+                                  {
+                                    "required": [
+                                      "dice"
+                                    ]
+                                  },
+                                  {
+                                    "required": [
+                                      "flat"
+                                    ]
+                                  }
                                 ]
                               }
                             ]
@@ -4286,15 +4506,19 @@
                             },
                             "additionalProperties": false,
                             "description": "rider-amount",
-                            "anyOf": [
+                            "allOf": [
                               {
-                                "required": [
-                                  "dice"
-                                ]
-                              },
-                              {
-                                "required": [
-                                  "flat"
+                                "anyOf": [
+                                  {
+                                    "required": [
+                                      "dice"
+                                    ]
+                                  },
+                                  {
+                                    "required": [
+                                      "flat"
+                                    ]
+                                  }
                                 ]
                               }
                             ]
@@ -4419,19 +4643,38 @@
       "type": "object",
       "properties": {
         "health": {
-          "type": "object",
-          "properties": {
-            "pool": {
-              "type": "string",
-              "maxLength": 40,
-              "pattern": "^[a-z][a-z0-9_]*$"
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "pool": {
+                  "type": "string",
+                  "maxLength": 40,
+                  "pattern": "^[a-z][a-z0-9_]*$"
+                },
+                "$comment": {}
+              },
+              "required": [
+                "pool"
+              ],
+              "additionalProperties": false
             },
-            "$comment": {}
-          },
-          "required": [
-            "pool"
-          ],
-          "additionalProperties": false
+            {
+              "type": "object",
+              "properties": {
+                "track": {
+                  "type": "string",
+                  "maxLength": 40,
+                  "pattern": "^[a-z][a-z0-9_]*$"
+                },
+                "$comment": {}
+              },
+              "required": [
+                "track"
+              ],
+              "additionalProperties": false
+            }
+          ]
         },
         "energy": {
           "type": "object",
@@ -4542,19 +4785,38 @@
           "const": "attack-vs-defense"
         },
         "health": {
-          "type": "object",
-          "properties": {
-            "pool": {
-              "type": "string",
-              "maxLength": 40,
-              "pattern": "^[a-z][a-z0-9_]*$"
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "pool": {
+                  "type": "string",
+                  "maxLength": 40,
+                  "pattern": "^[a-z][a-z0-9_]*$"
+                },
+                "$comment": {}
+              },
+              "required": [
+                "pool"
+              ],
+              "additionalProperties": false
             },
-            "$comment": {}
-          },
-          "required": [
-            "pool"
-          ],
-          "additionalProperties": false
+            {
+              "type": "object",
+              "properties": {
+                "track": {
+                  "type": "string",
+                  "maxLength": 40,
+                  "pattern": "^[a-z][a-z0-9_]*$"
+                },
+                "$comment": {}
+              },
+              "required": [
+                "track"
+              ],
+              "additionalProperties": false
+            }
+          ]
         },
         "defense": {
           "type": "object",
@@ -5670,6 +5932,41 @@
             "maxLength": 40
           },
           "maxItems": 40
+        },
+        "damageKinds": {
+          "type": "object",
+          "properties": {
+            "default": {
+              "type": "string",
+              "maxLength": 40,
+              "pattern": "^[a-z][a-z0-9_]*$"
+            },
+            "byType": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string",
+                "maxLength": 40,
+                "pattern": "^[a-z][a-z0-9_]*$"
+              },
+              "properties": {
+                "$comment": {}
+              }
+            },
+            "marks": {
+              "type": "string",
+              "enum": [
+                "per-blow",
+                "per-point"
+              ]
+            },
+            "$comment": {}
+          },
+          "required": [
+            "default",
+            "marks"
+          ],
+          "additionalProperties": false,
+          "description": "Required when `health` names a wound track, and refused when it names a pool. The import check decides which, because it reads the sheet the id points at."
         },
         "threat": {
           "type": "object",

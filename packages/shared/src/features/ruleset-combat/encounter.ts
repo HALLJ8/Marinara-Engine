@@ -80,19 +80,54 @@ export interface RulesetCombatHealth {
   temp: number;
 }
 
-/** Health as it stands. A party member's lives in their sheet, so it is read from there every time
- *  rather than copied into the encounter, and a reload mid-fight is exact. */
+/**
+ * Health as it stands. A party member's lives in their sheet, so it is read from there every time
+ * rather than copied into the encounter, and a reload mid-fight is exact.
+ *
+ * A WOUND TRACK is reported as the levels it has LEFT: `value` is how many boxes are still clear
+ * and `max` is the track's length. That is deliberate and it is what keeps the rest of the fight
+ * written in its own words: "down" is a combatant at zero, and a full track is a combatant with no
+ * boxes left, so `dropToZero`, the dying rules, the recap and the screen all keep asking the one
+ * question they already ask. A track carries no buffer, so `temp` is always 0 on one.
+ */
 export function rulesetCombatHealth(
   definition: RulesetDefinition,
   combat: RulesetCombat,
   combatant: RulesetCombatant,
 ): RulesetCombatHealth {
   // A copy, always: an opponent's health lives in the state, and a caller that read it before a
-  // blow has to still be holding what it was before.
+  // blow has to still be holding what it was before. An opponent is written in plain numbers
+  // whichever shape the party's health takes: a stat block has no character sheet to mark.
   if (!combatant.sheet) return { ...(combatant.health ?? { value: 0, max: 0, temp: 0 }) };
   const live = readRulesetLive(definition, combatant.sheet.build, combatant.sheet.live);
-  const pool = live.pools.find((entry) => !entry.listId && entry.key === combat.health.pool);
+  const health = combat.health;
+  if ("track" in health) {
+    const track = live.tracks.find((entry) => entry.id === health.track);
+    if (!track?.wound) return { value: 0, max: 0, temp: 0 };
+    return { value: track.wound.levels.length - track.wound.marks.length, max: track.wound.levels.length, temp: 0 };
+  }
+  const pool = live.pools.find((entry) => !entry.listId && entry.key === health.pool);
   return pool ? { value: pool.value, max: pool.max, temp: pool.temp } : { value: 0, max: 0, temp: 0 };
+}
+
+/**
+ * Which kind of mark this fight's damage is, on a ruleset whose health is a wound track.
+ *
+ * The mapping is the ruleset's own and nothing here guesses: a type it names lands as the kind it
+ * named, and everything else, a blow with no type included, lands as the declared `default`. The
+ * match ignores case, exactly as a creature's resistances and the block's own `damageTypes` do.
+ *
+ * The empty string is returned only for a ruleset whose health is a pool, where nobody asks.
+ */
+export function rulesetCombatDamageKind(combat: RulesetCombat, damageType: string | undefined): string {
+  const kinds = combat.damageKinds;
+  if (!kinds) return "";
+  const wanted = damageType?.trim().toLowerCase();
+  if (!wanted) return kinds.default;
+  for (const [type, kind] of Object.entries(kinds.byType ?? {})) {
+    if (type.trim().toLowerCase() === wanted) return kind;
+  }
+  return kinds.default;
 }
 
 /** One command through the sheet's own rules. A refusal changes nothing and says so, exactly as it

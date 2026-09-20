@@ -17,6 +17,7 @@ import {
   rulesetCombatConditions,
   rulesetCombatEffects,
   rulesetCombatFailsSave,
+  rulesetCombatDamageKind,
   rulesetCombatHealth,
   rulesetCombatStanding,
   rulesetMovementAllowance,
@@ -178,7 +179,12 @@ interface RulesetDamageInput {
  * what follows a blow (the conditions damage ends, concentration, going down) is `afterBlow`'s, and
  * is done once for the lot.
  */
-function applyDamage(ctx: RulesetCombatContext, target: RulesetCombatant, input: RulesetDamageInput): number {
+function applyDamage(
+  ctx: RulesetCombatContext,
+  target: RulesetCombatant,
+  input: RulesetDamageInput,
+  deferWound = false,
+): number {
   const before = healthOf(ctx, target);
   const type = input.damageType?.trim().toLowerCase();
   let dealt = Math.max(0, Math.floor(input.amount));
@@ -210,9 +216,9 @@ function applyDamage(ctx: RulesetCombatContext, target: RulesetCombatant, input:
   }
   const toTemp = Math.min(before.temp, dealt);
   if (dealt > 0) {
-    if (target.sheet)
-      writeRulesetSheet(ctx.definition, target, { op: "damage", pool: ctx.combat.health.pool, amount: dealt });
-    else if (target.health) {
+    if (target.sheet) {
+      if (!deferWound) writeHealthLoss(ctx, target, dealt, input.damageType);
+    } else if (target.health) {
       target.health.temp = before.temp - toTemp;
       target.health.value = Math.max(0, before.value - (dealt - toTemp));
     }
@@ -271,6 +277,58 @@ function afterBlow(
   }
 }
 
+/**
+ * What a landing blow does to the sheet's health, whichever shape it takes.
+ *
+ * A POOL loses the points, temporary buffer first, exactly as it always has.
+ *
+ * A WOUND TRACK is marked by the rule its ruleset declared in `combat.damageKinds.marks`, because
+ * the two honest answers are opposite ones. Where a damage roll counts health levels, a blow for
+ * three ticks three boxes (`per-point`), which is how the tracked systems are played and the whole
+ * reason soaking a blow down matters. Where a blow simply lands or does not, it ticks one box
+ * however hard it hit (`per-blow`). Either way the rolled amount still decides whether the blow
+ * lands AT ALL, so a miss and a blow softened to nothing mark nothing. Which KIND it marks is the
+ * same block's own answer, never a guess.
+ *
+ * Resistances, vulnerabilities and immunities are not in the picture here: they live on a stat
+ * block, and a combatant with a stat block has no sheet to mark. They still do exactly what they
+ * always did to an opponent's own numbers, above.
+ */
+function writeHealthLoss(
+  ctx: RulesetCombatContext,
+  target: RulesetCombatant,
+  dealt: number,
+  damageType: string | undefined,
+): void {
+  const health = ctx.combat.health;
+  if (!("track" in health)) {
+    writeRulesetSheet(ctx.definition, target, { op: "damage", pool: health.pool, amount: dealt });
+    return;
+  }
+  writeRulesetSheet(ctx.definition, target, {
+    op: "damage",
+    track: health.track,
+    kind: rulesetCombatDamageKind(ctx.combat, damageType),
+    amount: ctx.combat.damageKinds?.marks === "per-point" ? Math.max(1, Math.floor(dealt)) : 1,
+  });
+}
+
+/** And the other way: a pool gets the points back, a wound track has ONE mark cleared, lightest
+ *  first, by the same rule the player's own sheet clears one. */
+function writeHealthGain(ctx: RulesetCombatContext, target: RulesetCombatant, amount: number): void {
+  const health = ctx.combat.health;
+  if (!("track" in health)) {
+    writeRulesetSheet(ctx.definition, target, { op: "restore", pool: health.pool, amount });
+    return;
+  }
+  writeRulesetSheet(ctx.definition, target, {
+    op: "damage",
+    track: health.track,
+    kind: rulesetCombatDamageKind(ctx.combat, undefined),
+    amount: -1,
+  });
+}
+
 function dealHeal(
   ctx: RulesetCombatContext,
   target: RulesetCombatant,
@@ -279,8 +337,7 @@ function dealHeal(
   const before = healthOf(ctx, target);
   const amount = Math.max(0, Math.floor(input.amount));
   if (amount > 0) {
-    if (target.sheet)
-      writeRulesetSheet(ctx.definition, target, { op: "restore", pool: ctx.combat.health.pool, amount });
+    if (target.sheet) writeHealthGain(ctx, target, amount);
     else if (target.health) target.health.value = Math.min(target.health.max, before.value + amount);
   }
   const after = healthOf(ctx, target);
@@ -305,8 +362,12 @@ function grantTemporary(
 ): void {
   const amount = Math.max(0, Math.floor(input.amount));
   const before = healthOf(ctx, target);
-  if (amount > before.temp) {
-    if (target.sheet) writeRulesetSheet(ctx.definition, target, { op: "temp", pool: ctx.combat.health.pool, amount });
+  // A wound track carries no buffer, and there is nothing sensible a temporary point could be on
+  // one, so a ruleset whose health is a track is refused a `temporary` at IMPORT. This branch is
+  // what makes that refusal honest at runtime too: nothing is written and nothing is invented.
+  const health = ctx.combat.health;
+  if (amount > before.temp && !("track" in health)) {
+    if (target.sheet) writeRulesetSheet(ctx.definition, target, { op: "temp", pool: health.pool, amount });
     else if (target.health) target.health.temp = amount;
   }
   ctx.events.push({
@@ -1296,9 +1357,24 @@ function resolveAction(
     // target had before the FIRST of them is what decides whether the blow put them down.
     let before: { value: number } | null = null;
     let dealt = 0;
+    const health = ctx.combat.health;
+    const woundTrack =
+      target.sheet && "track" in health && ctx.combat.damageKinds?.marks === "per-blow"
+        ? ctx.definition.sheet.live.tracks.find((track) => track.id === health.track)
+        : undefined;
+    let woundKind: { id: string; severity: number } | undefined;
+    const blowEventStart = ctx.events.length;
     const land = (part: RulesetDamageInput) => {
       before ??= healthOf(ctx, target);
-      dealt += applyDamage(ctx, target, part);
+      const partDealt = applyDamage(ctx, target, part, !!woundTrack);
+      dealt += partDealt;
+      // A compound hit marks once, using the most severe kind that actually landed.
+      if (woundTrack && partDealt > 0) {
+        const kind = woundTrack.kinds?.find(
+          (entry) => entry.id === rulesetCombatDamageKind(ctx.combat, part.damageType),
+        );
+        if (kind && (!woundKind || kind.severity > woundKind.severity)) woundKind = kind;
+      }
     };
     if (damage && action.damage) {
       const rolled = damage();
@@ -1355,6 +1431,13 @@ function resolveAction(
         ...(halved ? { saved: true } : {}),
         ...(critical ? { critical: true } : {}),
       });
+    }
+    if (woundKind && "track" in health) {
+      writeRulesetSheet(ctx.definition, target, { op: "damage", track: health.track, kind: woundKind.id, amount: 1 });
+      const remaining = healthOf(ctx, target).value;
+      for (const event of ctx.events.slice(blowEventStart)) {
+        if (event.type === "damage" && event.targetId === target.id) event.health = remaining;
+      }
     }
     if (before) afterBlow(ctx, target, before, dealt, critical);
     if (heal) {

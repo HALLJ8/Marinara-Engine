@@ -15,7 +15,7 @@ Both are described in full under [Resolution kinds](#resolution-kinds).
 
 A mechanic that does not fit either shape cannot be written in a ruleset file. Taking the highest die of a pool, roll-under percentile checks, symbol dice, and opposed pools are examples. Each of those needs a new resolution kind inside the Engine, which is a code contribution with tests, not a JSON file. If your system needs one, open a feature request on the Engine repository and describe the mechanic with a few worked rolls. Those worked rolls become the tests.
 
-Combat is in between. Battles you can play today run on Marinara's own combat, in whichever Combat Preference the game was created with, and a ruleset cannot change how one of those is resolved. What it can do is lend the battle the numbers on its character sheets, with an optional `battle` block: see [Battles](#battles-lending-the-sheet-to-marinaras-combat). A ruleset may ALSO describe how a fight would be resolved by its own rules, with an optional `combat` block: see [Combat](#combat-a-fight-your-own-rules-resolve). That block is written and checked in full today, and nothing plays on it yet.
+Game Mode can resolve a fight using Marinara's own combat or your ruleset's rules. An optional `battle` block lends Marinara's combat the numbers on your character sheets: see [Battles](#battles-lending-the-sheet-to-marinaras-combat). An optional `combat` block instead defines how the ruleset resolves the fight: see [Combat](#combat-a-fight-your-own-rules-resolve). The Engine plays those rules today. The game's Combat Preference selects the Classic presentation or, when the ruleset defines distance, a Tactical battlefield.
 
 ## Quickstart
 
@@ -158,7 +158,47 @@ Each of these needs its own resolution kind, because none of them can be express
 - **Roll-under and open-ended percentile** compare in the other direction.
 - **Sum pools with a wild die** (as in OpenD6) add the dice up and treat one of them specially.
 
-Two things this kind does not model are re-rolls bought with a resource and automatic successes. The closest the Game Master can get is `bonus=` dice together with a `[sheet:]` command that spends the resource, which keeps both visible on the sheet and in the log. That is an approximation: extra dice are not a re-roll of one die and do not guarantee a success.
+Both of the things this kind used to leave out are modelled now, and Spending to change a roll below says how. A rule of the system itself, "spend a point for a success", is `resolution.spend`, which buys successes or dice and never a re-roll. A re-roll belongs to something a character picked, so it is `mechanics.check` on a catalog entry, bought with that entry's own cost.
+
+### Spending to change a roll
+
+Some systems let a player pay for a roll they are about to make: a point of will for an automatic success. `resolution.spend` says so, as a standing rule of the system rather than as something a character went and bought:
+
+```json
+"spend": [{ "pool": "resolve", "amount": 1, "successes": 1, "perCheck": 2 }]
+```
+
+- `pool` is one of your `live.pools`. It cannot be a pool that starts empty, because there would be nothing in it to spend when play begins.
+- `amount` is what ONE purchase costs. `successes` and `dice` are what it buys, and a purchase has to buy at least one of them. Successes are added after the dice are counted, and after any cancelling, because nobody rolled them. Dice are thrown with the pool, inside the pool's own range.
+- `perCheck` is how many purchases one check may make, so the most a check can buy is `amount * perCheck` points' worth. That cap is what stops a full pool buying an unlosable roll.
+- Only a `dice-pool` ruleset can have one: a summed roll has no successes to add and no pool to add dice to, so a `dice-sum` ruleset that declares `spend` is refused at import.
+- Two entries may not name the same pool, or a check could not say which of them it meant.
+
+**It goes on the check itself.** The Game Master writes `[skill_check: skill="Nerve" dc="2" spend="resolve:1"]`, not a separate `[sheet:]` command, because the dice are thrown before sheet commands are applied and there would be nothing left to change. One resolution rolls the dice and pays for what changed them.
+
+### A charm that changes a roll
+
+`resolution.spend` is a rule of the system. An entry a character actually PICKED can change a check too, with `mechanics.check` on the catalog entry:
+
+```json
+"mechanics": {
+  "kind": "utility",
+  "cost": [{ "pool": "blood", "amount": 1 }],
+  "perCostStep": { "flat": 1 },
+  "check": { "reroll": { "upTo": 1, "mode": "once" }, "successes": 1 }
+}
+```
+
+- `reroll` throws the dice at or below `upTo` again. `once` replaces each of them one time and the new face stands; `until` keeps going. `upTo` has to be a face below your die's top one, or it would throw the whole pool again for ever, and the Engine caps how many dice one check may re-throw whatever the file says.
+- `dice` adds dice before the pool is thrown, `successes` adds successes after it is counted, and `threshold` sets the per-die target for that one roll, inside the range your `target` allows.
+- At least one of the four, or the entry says nothing and is refused.
+- Only a `dice-pool` ruleset can honour any of it, so a `dice-sum` ruleset with a `mechanics.check` is refused at import.
+
+**What it costs is the entry's own `cost`,** paid through exactly the machinery that pays for using anything else: the pool, and one use of every counter the same entry wrote. `perCostStep` is what says the entry SCALES; an entry that declares one is bought as many times over as the price was paid, and one that does not is bought once however much was offered.
+
+**The Game Master names it on the check:** `[skill_check: skill="Brawl" dc="3" use="Potence" spend="blood:3"]`. Not a separate sheet command, for the same reason as above: the dice are thrown before any bookkeeping runs.
+
+**All or nothing.** If the pool cannot cover it, the purchase does not happen and nothing is deducted: the roll is exactly the one it would have been. Points that are not a whole number of purchases buy nothing either. Asking for more than `perCheck` is clamped rather than refused, and only the cap is paid for. The Engine works all of this out; the Game Master names what the player said they were spending and never touches the dice. The record says what was really paid, which entry was applied, how many successes nobody rolled and how many dice were thrown again. A charm the character has not picked, or one the Engine cannot read the catalog for, does nothing at all rather than being applied on trust.
 
 ### The sheet
 
@@ -167,15 +207,76 @@ Two things this kind does not model are re-rolls bought with a resource and auto
 - `fields` are single values. Types: `number`, `text`, `longtext`, `boolean`, `enum` (a fixed list of choices), and `dice` (text such as `1d8`).
 - `derived` values are worked out from other values and cannot be typed over. The operations are `sum`, `min`, `max`, `scale` (multiply and round), and `stepTable` (look a value up in thresholds, the way a level gives a proficiency bonus).
 - `lists` are tables with your own columns, such as gear, spells, or features. A list with `pools` turns every row into a resource with its own maximum, for class features with limited uses.
-- `live` is what changes during play: `pools` (hit points, spell slots, Grit), `tracks` (a number on a scale, such as exhaustion), `text` (short notes such as what a character is concentrating on), and `conditions`.
+- `live` is what changes during play: `pools` (hit points, spell slots, Grit), `tracks` (a number on a scale, such as exhaustion, or a wound track of boxes you tick), `text` (short notes such as what a character is concentrating on), and `conditions`.
 
 Anything that reads a number names it with a value reference, which is an object with exactly one key: `const`, `field`, `derived`, `abilityScore`, `abilityMod`, `abilityModFromField`, `skillMod`, or `saveMod`. For example, a pool whose maximum is a derived value: `"max": { "derived": "grit_max" }`.
 
 `hideWhen` hides a field, a list, or a pool when another field has a given value. The 5e file uses it to hide spell slots from a character who does not cast spells.
 
+### Wound tracks: health that is a track, not a number
+
+Plenty of systems do not count hit points at all. They have a column of boxes, each worse than the last, and you tick one when you get hurt. Give a `live.tracks` entry `levels` and `kinds` and it stops being a number on a scale and becomes one of those:
+
+```json
+{
+  "id": "harm",
+  "label": "Harm",
+  "min": 0,
+  "max": 4,
+  "levels": [
+    { "label": "Scuffed", "penalty": 0 },
+    { "label": "Winded", "penalty": -1 },
+    { "label": "Bleeding", "penalty": -3 },
+    { "label": "Down", "penalty": -99 }
+  ],
+  "kinds": [
+    { "id": "knock", "label": "K", "severity": 0 },
+    { "id": "tear", "label": "T", "severity": 1 }
+  ]
+}
+```
+
+- `levels` is 1 to 16 rungs, best first and worst last. Each has a `label` and an integer `penalty` at or below 0. A large negative number is how these systems say "you are out of it", so `-99` is fine.
+- `kinds` is 1 to 6 sorts of harm the track can take, each with an `id`, a short `label` for the box, and a `severity`. The severities have to be distinct; the numbers themselves mean nothing beyond their order, so space them however you like.
+- The two go together. `kinds` without `levels` is refused, because there would be nothing to mark, and `levels` without `kinds` is refused, because a mark has to be of something.
+- **Keep the two words apart.** `kinds` is what your ruleset says a mark may BE. A MARK is one of those kinds sitting on the track during play. The definition holds kinds; a character's sheet holds marks.
+- A wound track's length is its levels, so its `min` is 0 and its `max` is `levels.length`. A file that says anything else is refused rather than quietly corrected, so the file can never carry two disagreeing lengths.
+
+**The rules, exactly**, because a vague reading produces the wrong track:
+
+- Marks are held sorted, **most severe first**. A track of seven levels holds at most seven marks.
+- A mark is **placed in severity order** among the marks already there, never added to the end. It takes the highest level its severity earns and pushes lighter marks down.
+- The penalty in force is the one on the **lowest marked level**, never the sum of the marked ones. Three marks on the track above read `-3`, not `0 + -1 + -3`.
+- An `amount` is a number of marks of one kind, **applied one at a time**, so a track that fills partway through is handled by the same rule as one that was already full.
+- Marking a **full** track **upgrades its lowest-severity mark by one step** instead of adding a mark. One step up your own ladder of kinds, whatever kind the new mark was.
+- A mark that would upgrade past your highest severity is kept at the highest, and the one that could not land is counted as an **overflow**. Overflow is stored, so a reload does not forget harm somebody already took.
+- **Healing is the same command with a negative amount.** It clears the lightest marks first, and it clears overflow before it clears any mark.
+
+**Marking it in play.** The Game Master writes `[sheet: op="damage" track="harm" kind="knock" amount="1"]`, and heals with a negative `amount`. The pool form of `damage`, which names `pool=` instead, is unchanged. The plain `track` command is refused on a wound track: a bare number cannot say what the new marks are. The player can also mark and clear boxes by hand on the sheet, which is what these systems expect.
+
+**A fight can mark one too.** Point `combat.health` at the track instead of a pool and the fight
+marks it: a blow that lands marks the boxes `combat.damageKinds.marks` says it does, of the kind
+that block maps its damage type onto, and a character whose track is full is down, which is what
+your dying rule reads. Healing clears one mark. Temporary points are refused, because a track has no buffer for them to sit in. The Engine
+reads a track as the levels it has LEFT, so everything else about a fight, going down, being
+revived, the log and the recap, is unchanged.
+
+**A rest can heal a wound track.** A restore step naming one with `"to"` clears it down to that many marks, overflow and all; one naming it with `"by"` clears that many, overflow first. A step that would ADD marks does nothing, because a rest names no kind to mark with.
+
+### The penalty on your rolls
+
+`resolution.penaltyFrom` names the wound track whose penalty applies to every check this ruleset rolls. It is declared rather than assumed, so a ruleset that leaves it out rolls exactly as it did before wound tracks existed.
+
+What the penalty DOES is your resolution kind's business, exactly like the sheet's own number:
+
+- Under `dice-pool` it is **dice off the pool**, floored at your own `pool.min`. A `pool.min` of 1 means even somebody on the bottom rung throws one die; a `pool.min` of 0 means they throw none and fail without rolling.
+- Under `dice-sum` it is a **flat modifier on the roll**, folded into the same number your ability and training already add.
+
+The track it names has to be a wound track. A plain track carries no penalty to apply, and naming one is refused at import. The result says which penalty was applied, so a player can see why they rolled fewer dice, and the Game Master's own sheet block shows the rung and what it costs.
+
 ### Rests
 
-A rest is a list of restore steps and things to clear. Each step names one target (`pool`, `poolGroup`, `listPools`, or `track`) and either sets it (`"to": "max"`, `"to": "min"`, or a number) or changes it (`"by": { "const": 1 }`, or `"by": { "fractionOfMax": 0.5 }`).
+A rest is a list of restore steps and things to clear. Each step names one target (`pool`, `poolGroup`, `listPools`, or `track`) and either sets it (`"to": "max"`, `"to": "min"`, or a number) or changes it (`"by": { "const": 1 }`, or `"by": { "fractionOfMax": 0.5 }`). A step naming a wound track can only heal it; see above.
 
 ### Game Master text
 
@@ -307,7 +408,7 @@ Because a picked row keeps its mark, the sheet editor can tell a player when you
 
 What is compared is deliberately narrow:
 
-- Only `text`, `longtext`, `dice` and `enum` columns. A `number` or a `boolean` is where the player's own state lives (prepared, proficient, a magic weapon's bonus, a maximum they set by hand), and there is no stored base to merge against, so a difference there is never offered. A scaled column is never part of it either: it already follows the sheet.
+- Existing values are compared only in `text`, `longtext`, `dice` and `enum` columns. Existing `number` and `boolean` values belong to the player and are preserved, including 0 and false. A column the row does not yet contain can be offered with its typed value, including numbers and switches. A scaled column is excluded because it already follows the sheet.
 - Only columns your entry sets. A column your entry leaves out is never touched, whatever the sheet holds in it.
 - A value the column itself would refuse, such as an `enum` value you no longer offer or text past its `maxLength`, is skipped rather than written.
 - A row is matched to the entry row it came from by position among the rows carrying the same mark in that list, which holds while the sheet still has as many of them as your entry writes. Otherwise it works only when your entry writes a single row for that list. If a player deleted one row of a two-row entry, that entry is left alone rather than guessed at.
@@ -317,11 +418,11 @@ So rewording or renaming an entry can reach characters who already picked it, if
 
 ### `mechanics`: what an entry does in numbers
 
-An entry may carry an optional `mechanics` block that says what it does in numbers: `kind` (`attack`, `heal`, `buff`, `debuff`, `utility`), `range`, `area`, `targets`, `targetCount`, `friendlyFire`, `amount` (dice such as `2d6`, or a flat number), `damageType`, `attackRoll`, `autoHit`, `save` (one of your sheet's saves, and what a success does), `applies` (conditions it puts on what it touches), `temporary` (temporary points on the health pool), `scales` (an amount that grows with the sheet), `cost` (which pool using it spends), `perCostStep`, `budget` (which part of the action economy it spends), `concentration`, and `reaction`.
+An entry may carry an optional `mechanics` block that says what it does in numbers: `kind` (`attack`, `heal`, `buff`, `debuff`, `utility`, `rider`), `range`, `area`, `targets`, `targetCount`, `friendlyFire`, `amount` (dice such as `2d6`, or a flat number), `damageType`, `attackRoll`, `autoHit`, `save` (one of your sheet's saves, and what a success does), `applies` (conditions it puts on what it touches), `temporary` (temporary points on the health pool), `scales` (an amount that grows with the sheet), `cost` (which pool using it spends), `perCostStep`, `budget` (which part of the action economy it spends), `concentration`, `reaction`, `plus`, `free`, `gives`, `standard`, `rider` and `check`.
 
 The picker shows this block as one line. Who reads the rest depends on which block your ruleset opted in with:
 
-- With a [`combat` block](#combat-a-fight-your-own-rules-resolve), all of it is read except `range`, `area`, `friendlyFire` and `reaction`, which wait for the slices that give a fight positions and reaction windows.
+- With a [`combat` block](#combat-a-fight-your-own-rules-resolve), the fight reads its combat effects. `range`, `area` and `friendlyFire` apply on a battlefield with positions; `reaction` still waits for reaction windows. `check` applies to skill checks, as described above.
 - With only a [`battle` block](#battles-lending-the-sheet-to-marinaras-combat), a battle reads `kind`, `range`, `area`, `friendlyFire`, `amount`, `damageType` and `cost`, because those are the parts Marinara's own combat has somewhere to put.
 
 The vocabulary is closed, so a key or a value that is not in the list above is refused instead of being quietly ignored.
@@ -545,8 +646,9 @@ same keys for a d20 system:
 ### Every key
 
 - `kind`: `"attack-vs-defense"`. One side rolls dice against the other's defense; a hit does damage.
-- `health`: required. The live pool a fight takes away, as `battle.health` is. Its temporary buffer,
-  if the pool allows one, is what damage drains first.
+- `health`: required. What a fight takes away. Either `{ "pool": "grit" }`, a live pool it counts
+  down, whose temporary buffer if it has one is what damage drains first; or `{ "track": "harm" }`,
+  a wound track it MARKS. A track needs `damageKinds` beside it, and grants no temporary points.
 - `defense`: required, a value reference. A field the player enters, or a derived value you compute.
 - `initiative`: required. The dice rolled once at the start, and an optional modifier reference. A
   tie goes to the higher modifier, and then to the order the fight was set up in.
@@ -646,6 +748,17 @@ same keys for a d20 system:
   costs (`damageWhileDown`, `criticalWhileDown`) and the `condition` a downed character is in.
   Without this block a character at zero is simply down, and healing brings them back.
 - `damageTypes`: optional. The types your system has, matched without case.
+- `damageKinds`: required when `health` names a wound track, and refused when it names a pool. It
+  says which of the track's `kinds` a blow marks and how many boxes it ticks. `default` is what
+  anything unmapped lands as, including a blow that carries no type at all, and `byType` maps your
+  own `damageTypes` onto kinds, with its keys matched without case as the types themselves are, so
+  `"Fire"` and `"fire"` are one key and naming both is refused. `marks` has no default because the
+  two answers are opposite:
+  `"per-point"` where your damage roll counts health levels, so a blow for three ticks three boxes
+  and softening one is worth doing, and `"per-blow"` where a blow either lands or does not, so it
+  ticks one box however hard it hit. A blow with several damage clauses still marks one box, using
+  the most severe kind that landed. Say which your system is.
+  `{ "default": "bashing", "byType": { "fire": "aggravated" }, "marks": "per-point" }`.
 - `threat`: optional, and needed by a bestiary. `tiers`, the scale an opponent is picked from: an id,
   a label, a `health` band, a `defense`, a `toHit`, a `damagePerRound` band and a `saveDifficulty`.
   Every creature you ship names one of these tiers, and an opponent nobody wrote is pulled onto the
@@ -1046,6 +1159,10 @@ Said plainly, because a ruleset should not claim what the Engine does not do:
 - Conditions do what the closed effect list can say and no more. A condition that gives
   disadvantage on ability CHECKS, or one that gets worse in levels the way exhaustion does, is a
   plain record on the sheet today.
+- **Creature stat-block resistances, vulnerabilities and immunities do not describe a wound track.** They live on an
+  opponent's stat block, and an opponent has no sheet to mark, so a ruleset whose health is a track
+  cannot soften a blow by its kind. What each kind of harm MARKS is `damageKinds`, which is a
+  different question from how much of it lands. A condition with `resist-all` can still reduce damage before it marks a wound.
 - **A rider fires by itself.** Choosing when to spend one is a window, so the first qualifying hit
   of the period takes it. `on` has one value, `hit`; the rest of the moments arrive with reactions.
 

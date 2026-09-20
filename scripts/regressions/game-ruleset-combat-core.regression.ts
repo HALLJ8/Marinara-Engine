@@ -2747,7 +2747,10 @@ const labels = (definition: RulesetDefinition, state: RulesetEncounterState, id:
 
   // ── Capability API 1.29 ──
   {
-    assert.deepEqual(supportedCapabilityApi, { major: 1, minor: 29 }, "the host advertises the turn-economy seam");
+    assert.ok(
+      supportedCapabilityApi.major > 1 || supportedCapabilityApi.minor >= 29,
+      "the host supports the turn-economy seam",
+    );
     const { getCapabilityPackageInstallIssue } =
       await import("../../packages/server/src/services/capability-packages/package-manager.service.js");
     const manifest = (minor: number) =>

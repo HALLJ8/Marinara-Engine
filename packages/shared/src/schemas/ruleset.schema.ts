@@ -201,6 +201,29 @@ const proficiencyTierSchema = z
   })
   .strict();
 
+/** How many automatic successes, or extra dice, one purchase may be worth. An Engine ceiling rather
+ *  than an author's choice: past this the roll stops being a roll. */
+const SPEND_EFFECT_MAX = 10;
+
+/** One thing a check may buy by spending a pool. `amount` is what ONE purchase costs; `perCheck` is
+ *  how many purchases a single check may make, so the ceiling is `amount * perCheck` points. */
+const resolutionSpendSchema = z
+  .object({
+    pool: sheetId,
+    amount: z.number().int().min(1).max(100),
+    /** Successes added after the dice are counted. */
+    successes: z.number().int().min(1).max(SPEND_EFFECT_MAX).optional(),
+    /** Dice added to the pool before it is thrown. */
+    dice: z.number().int().min(1).max(SPEND_EFFECT_MAX).optional(),
+    perCheck: z.number().int().min(1).max(SPEND_EFFECT_MAX),
+  })
+  .strict()
+  .superRefine((spend, ctx) => {
+    if (spend.successes === undefined && spend.dice === undefined) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "A spend buys successes, dice, or both" });
+    }
+  });
+
 /** The sheet math every resolution kind shares: how a score becomes a modifier, and what training
  *  is worth. Declared once and spread into each kind, so two kinds can never grow different rules
  *  for the same number and the cross-checks below run for all of them. What the resulting number
@@ -212,6 +235,16 @@ const sheetMathShape = {
   proficiency: z.object({ bonus: rulesetValueRefSchema }).strict().optional(),
   /** The first tier is the untrained default for a skill or save the sheet does not mention. */
   proficiencyTiers: z.array(proficiencyTierSchema).min(1).max(12),
+  /** The wound track whose penalty applies to this ruleset's rolls, named rather than assumed. A
+   *  ruleset that leaves it out rolls exactly as it did before wound tracks existed. What the
+   *  penalty DOES is the kind's business, the same way the sheet's own number is: `dice-sum` adds
+   *  it to the roll, `dice-pool` takes that many dice off the pool and never below `pool.min`. */
+  penaltyFrom: sheetId.optional(),
+  /** What a player may BUY on a check, as a standing rule of the system rather than as something
+   *  a character went and acquired: "spend a point of will for an automatic success". It has no
+   *  catalog entry to hang on, so it lives beside the rest of the sheet math. `perCheck` is what
+   *  stops a full pool buying an unlosable roll. */
+  spend: z.array(resolutionSpendSchema).max(2).optional(),
 };
 
 /** One rung of a summed ladder. Hoisted out of the kind because a layer may swap the whole ladder
@@ -452,8 +485,42 @@ const livePoolSchema = z
   })
   .strict();
 
+/** How many levels one wound track may have. A track is a column of boxes on a sheet, so this is a
+ *  ceiling on something a player reads at a glance rather than on anything the Engine computes. */
+export const RULESET_TRACK_LEVELS_MAX = 16;
+/** How many kinds of harm one wound track may take. Three (bashing, lethal, aggravated) is the
+ *  usual number; six leaves room without turning a track into a table. */
+export const RULESET_TRACK_KINDS_MAX = 6;
+
+/** One rung of a wound track, best first and worst last. `penalty` is what being marked down to
+ *  this level does to a roll: 0 for a scratch, and a large negative is how these systems say "you
+ *  are out of it", so it is bounded wide rather than tight. */
+const liveTrackLevelSchema = z.object({ label, penalty: z.number().int().min(-1000).max(0) }).strict();
+
+/** One kind of harm the track may take. `severity` orders them; the numbers themselves mean
+ *  nothing beyond their order, so a ruleset may space them however it likes. */
+const liveTrackKindSchema = z
+  .object({ id: sheetId, label: promptSafeText(16), severity: z.number().int().min(-100).max(100) })
+  .strict();
+
+/** A track is a bounded integer (exhaustion, death saves). A track that declares `levels` is a
+ *  WOUND TRACK instead: a column of boxes, each with a label and a penalty, that a MARK sits on.
+ *  `kinds` is what the ruleset says a mark may BE; a mark is one of those kinds on the track in
+ *  play. The definition holds kinds, the live state holds marks, and the two words never swap.
+ *
+ *  A wound track's length is `levels.length`, so `min` and `max` say nothing about it. The
+ *  cross-checks below hold a wound track to `min: 0` and `max: levels.length` rather than ignoring
+ *  what the author wrote, so the file cannot carry two disagreeing lengths. */
 const liveTrackSchema = z
-  .object({ id: sheetId, label, min: z.number().int(), max: z.number().int(), default: z.number().int().optional() })
+  .object({
+    id: sheetId,
+    label,
+    min: z.number().int(),
+    max: z.number().int(),
+    default: z.number().int().optional(),
+    levels: z.array(liveTrackLevelSchema).min(1).max(RULESET_TRACK_LEVELS_MAX).optional(),
+    kinds: z.array(liveTrackKindSchema).min(1).max(RULESET_TRACK_KINDS_MAX).optional(),
+  })
   .strict();
 
 const liveSchema = z
@@ -836,6 +903,36 @@ const catalogMechanicsSchema = z
       .optional(),
     /** What one step of a higher cost adds, for systems that let a player pay more. */
     perCostStep: z.object(catalogAmountShape).strict().optional(),
+    /** What using this entry does to a CHECK the character is about to make, rather than to a
+     *  fight. A charm that lets a roll be re-thrown, or that simply hands out successes. Only a
+     *  pool ruleset can honour any of it, and the cross-checks say so at import. */
+    check: z
+      .object({
+        /** Throw the dice at or below `upTo` again. `once` replaces each of them one time and
+         *  lets the new face stand; `until` keeps going, under the Engine's own hard ceiling. */
+        reroll: z
+          .object({ upTo: z.number().int().min(1).max(999), mode: z.enum(["once", "until"]) })
+          .strict()
+          .optional(),
+        /** Dice added to the pool before it is thrown. */
+        dice: z.number().int().min(1).max(SPEND_EFFECT_MAX).optional(),
+        /** Successes added after the dice are counted. */
+        successes: z.number().int().min(1).max(SPEND_EFFECT_MAX).optional(),
+        /** The per-die target this one check counts with, inside what the ruleset allows. */
+        threshold: z.number().int().min(2).max(1000).optional(),
+      })
+      .strict()
+      .superRefine((check, ctx) => {
+        if (
+          !check.reroll &&
+          check.dice === undefined &&
+          check.successes === undefined &&
+          check.threshold === undefined
+        ) {
+          ctx.addIssue({ code: z.ZodIssueCode.custom, message: "A check effect does something, or is left out" });
+        }
+      })
+      .optional(),
     concentration: z.boolean().optional(),
     reaction: z.boolean().optional(),
     /** How many targets one use may take. One unless it says otherwise. */
@@ -1329,6 +1426,25 @@ const catalogSchema = z
 /** One live pool, named. Its own object so the block reads the same wherever a pool is wanted. */
 const battlePoolSchema = z.object({ pool: sheetId }).strict();
 
+/** What a fight takes away: one live POOL, or one WOUND TRACK. A pool counts points down; a track
+ *  is marked, and "out of it" is the track being full rather than a number reaching zero. Both
+ *  shapes are read through `rulesetCombatHealth`, which reports a track as the levels it has LEFT,
+ *  so every rule that already asks "is this combatant still above zero" keeps its own words. */
+const combatHealthSchema = z.union([battlePoolSchema, z.object({ track: sheetId }).strict()]);
+
+/**
+ * How a fight's damage reaches a wound track: which kind of harm it is, and how a rolled amount
+ * becomes marks. Declared rather than assumed, because only the ruleset knows whether its fire is a
+ * bruise or a wound, and `default` is what anything unmapped lands as, including a blow that carries
+ * no type at all. `marks` has no safe default either, because the two answers are opposite and each
+ * is right for half the systems: where a damage roll counts health levels, a blow for three ticks
+ * three boxes (`per-point`); where a blow either lands or does not, it ticks one however hard it
+ * hit (`per-blow`). A ruleset says which, rather than the Engine guessing.
+ */
+const combatDamageKindsSchema = z
+  .object({ default: sheetId, byType: z.record(sheetId).optional(), marks: z.enum(["per-blow", "per-point"]) })
+  .strict();
+
 /** A sheet list that contributes combat skills. Only rows carrying the `_catalog` mark count, and
  *  only when the entry they came from has `mechanics`: a hand-typed row says nothing in numbers.
  *  `onlyWhen` is the boolean column a row must have set (5e's "prepared"); `alwaysWhen` lets a row
@@ -1348,7 +1464,7 @@ const battleSkillsSchema = z
  *  is why `coverage.combat` keeps its own meaning and nothing here reads it. */
 const battleSchema = z
   .object({
-    health: battlePoolSchema,
+    health: combatHealthSchema,
     energy: battlePoolSchema.optional(),
     slots: z
       .array(z.object({ pool: sheetId, level: z.number().int().min(1).max(9) }).strict())
@@ -1580,7 +1696,7 @@ const combatSchema = z
   .object({
     /** The closed registry of combat kinds. Adding one is an Engine PR with regressions. */
     kind: z.literal("attack-vs-defense"),
-    health: battlePoolSchema,
+    health: combatHealthSchema,
     /** What an attack is rolled against. */
     defense: rulesetValueRefSchema,
     initiative: z.object({ dice: combatDiceSchema, modifier: rulesetValueRefSchema.optional() }).strict(),
@@ -1648,6 +1764,14 @@ const combatSchema = z
     dying: combatDyingSchema.optional(),
     /** The damage types this system has. Matched without case, so "Fire" and "fire" are one type. */
     damageTypes: z.array(promptSafeText(40)).max(40).optional(),
+    /** Required when `health` names a wound track, and refused when it names a pool. Which of the
+     *  two it is depends on the sheet the id points at, so no JSON Schema can decide it and the
+     *  rule is said in words here for an author's editor and enforced at import. */
+    damageKinds: combatDamageKindsSchema
+      .describe(
+        "Required when `health` names a wound track, and refused when it names a pool. The import check decides which, because it reads the sheet the id points at.",
+      )
+      .optional(),
     threat: z
       .object({ tiers: z.array(combatThreatTierSchema).min(1).max(40) })
       .strict()
@@ -1905,6 +2029,79 @@ function refineRulesetDefinition(def: RulesetDefinitionBase, ctx: z.RefinementCt
   }
   for (const [index, pool] of sheet.live.pools.entries()) {
     if (tracks.has(pool.id)) issue(["sheet", "live", "pools", index, "id"], `"${pool.id}" is already a track id`);
+  }
+
+  // Wound tracks. `kinds` says what a mark may be, so it needs `levels` for a mark to sit on, and
+  // the severities have to be distinct or "the lowest-severity mark" would name two boxes at once.
+  const woundTracks = new Set<string>();
+  sheet.live.tracks.forEach((track, index) => {
+    const path = ["sheet", "live", "tracks", index];
+    if (!track.levels) {
+      if (track.kinds) issue([...path, "kinds"], "kinds needs levels beside it: there is nothing to mark");
+      return;
+    }
+    woundTracks.add(track.id);
+    if (!track.kinds) {
+      issue([...path, "levels"], "A track with levels needs kinds beside it: a mark has to be of something");
+    }
+    // A wound track's length is its levels, so the two numbers beside them cannot say anything else.
+    if (track.min !== 0) issue([...path, "min"], "A wound track starts unmarked, so its min is 0");
+    if (track.max !== track.levels.length) {
+      issue([...path, "max"], `A wound track holds one mark per level, so its max is ${track.levels.length}`);
+    }
+    if (track.default !== undefined && track.default !== 0) {
+      issue([...path, "default"], "A wound track starts unmarked, so it declares no default");
+    }
+    // Best first, worst last, which is the order the boxes are marked in and the order that makes
+    // "the penalty on the lowest marked level" the worst one in force. A ladder that gets better as
+    // it fills would read backwards on the sheet and surprise every rule that reads it.
+    track.levels?.forEach((level, levelIndex) => {
+      const before = track.levels?.[levelIndex - 1];
+      if (before && level.penalty > before.penalty) {
+        issue(
+          [...path, "levels", levelIndex, "penalty"],
+          "A wound track's levels run best first, so a level is never kinder than the one above it",
+        );
+      }
+    });
+    unique(track.kinds ?? [], [...path, "kinds"], "wound kind");
+    const severities = new Set<number>();
+    track.kinds?.forEach((kind, kindIndex) => {
+      if (severities.has(kind.severity)) {
+        issue([...path, "kinds", kindIndex, "severity"], `Duplicate severity ${kind.severity}`);
+      }
+      severities.add(kind.severity);
+    });
+  });
+
+  // What a check may buy. Successes and dice are pool words: a summed roll has no successes to add
+  // and no pool to add dice to, so a kind that cannot honour the rule is told here rather than
+  // silently ignoring it in play.
+  resolution.spend?.forEach((spend, index) => {
+    const path = ["resolution", "spend", index];
+    if (resolution.kind !== "dice-pool") {
+      issue(path, `A ${resolution.kind} ruleset has no successes or pool dice to buy`);
+    }
+    if (!pools.has(spend.pool)) {
+      issue([...path, "pool"], `Unknown live pool "${spend.pool}"`);
+    } else if (sheet.live.pools.find((pool) => pool.id === spend.pool)?.start === "empty") {
+      // A pool that counts UP has nothing in it to spend at the start of play, so buying from it
+      // would be free for exactly as long as the character is unstressed.
+      issue([...path, "pool"], `"${spend.pool}" starts empty, so there is nothing in it to spend`);
+    }
+  });
+  if (resolution.spend && new Set(resolution.spend.map((spend) => spend.pool)).size !== resolution.spend.length) {
+    issue(["resolution", "spend"], "Two spends on one pool: a check could not say which it meant");
+  }
+
+  // The track whose penalty rides on every roll. A plain track has no penalty to read, so naming
+  // one is an author saying something the resolver could never honour.
+  if (resolution.penaltyFrom !== undefined) {
+    const path = ["resolution", "penaltyFrom"];
+    if (!tracks.has(resolution.penaltyFrom)) issue(path, `Unknown track "${resolution.penaltyFrom}"`);
+    else if (!woundTracks.has(resolution.penaltyFrom)) {
+      issue(path, `"${resolution.penaltyFrom}" has no levels, so it carries no penalty to apply`);
+    }
   }
 
   sheet.abilities.forEach((ability, index) => {
@@ -2258,20 +2455,42 @@ function refineRulesetDefinition(def: RulesetDefinitionBase, ctx: z.RefinementCt
     return list;
   };
 
+  /** A health block: one declared live POOL that counts down, or one WOUND TRACK that is marked.
+   *  Returns the track id when it named one, so the rules that only make sense for a track can be
+   *  checked against it. Shared by `battle` and `combat`, which mean the same thing by health. */
+  const checkHealth = (health: { pool: string } | { track: string }, path: (string | number)[]): string | null => {
+    if ("track" in health) {
+      if (!tracks.has(health.track)) {
+        issue([...path, "track"], `Unknown track "${health.track}"`);
+        return null;
+      }
+      // A plain track is a bounded integer with no levels to fill, so "out of it" would be a number
+      // the fight picked rather than one the ruleset declared.
+      if (!woundTracks.has(health.track)) {
+        issue([...path, "track"], `"${health.track}" has no levels, so a fight has nothing to mark on it`);
+        return null;
+      }
+      return health.track;
+    }
+    declaredPool(health.pool, [...path, "pool"]);
+    // A pool that starts empty counts UP (stress, corruption), so as health it would put every
+    // fresh character into their first fight already down.
+    if (sheet.live.pools.find((pool) => pool.id === health.pool)?.start === "empty") {
+      issue([...path, "pool"], `"${health.pool}" starts empty, so it cannot be the health pool`);
+    }
+    return null;
+  };
+
   if (def.battle) {
     const battle = def.battle;
     const battlePool = declaredPool;
-    battlePool(battle.health.pool, ["battle", "health", "pool"]);
-    // A pool that starts empty counts UP (stress, corruption), so as health it would put every
-    // fresh character into their first fight already down.
-    if (sheet.live.pools.find((pool) => pool.id === battle.health.pool)?.start === "empty") {
-      issue(["battle", "health", "pool"], `"${battle.health.pool}" starts empty, so it cannot be the health pool`);
-    }
+    checkHealth(battle.health, ["battle", "health"]);
+    const battleHealthId = "track" in battle.health ? battle.health.track : battle.health.pool;
     if (battle.energy) {
       battlePool(battle.energy.pool, ["battle", "energy", "pool"]);
       // Health is not spendable as energy: the Engine drains hit points as damage and spends the
       // energy pool as a cost, and one pool cannot be both.
-      if (battle.energy.pool === battle.health.pool) {
+      if (battle.energy.pool === battleHealthId) {
         issue(["battle", "energy", "pool"], "The energy pool cannot also be the health pool");
       }
     }
@@ -2280,7 +2499,7 @@ function refineRulesetDefinition(def: RulesetDefinitionBase, ctx: z.RefinementCt
     battle.slots?.forEach((slot, index) => {
       const path = ["battle", "slots", index];
       battlePool(slot.pool, [...path, "pool"]);
-      if (slot.pool === battle.health.pool || slot.pool === battle.energy?.pool) {
+      if (slot.pool === battleHealthId || slot.pool === battle.energy?.pool) {
         issue([...path, "pool"], `"${slot.pool}" is already the health or energy pool`);
       }
       if (slotPools.has(slot.pool)) issue([...path, "pool"], `Duplicate slot pool "${slot.pool}"`);
@@ -2299,12 +2518,7 @@ function refineRulesetDefinition(def: RulesetDefinitionBase, ctx: z.RefinementCt
   if (def.combat) {
     const combat = def.combat;
     const at = (...path: (string | number)[]) => ["combat", ...path];
-    declaredPool(combat.health.pool, at("health", "pool"));
-    // A pool that starts empty counts UP (stress, corruption), so as health it would put every
-    // fresh character into their first fight already down.
-    if (sheet.live.pools.find((pool) => pool.id === combat.health.pool)?.start === "empty") {
-      issue(at("health", "pool"), `"${combat.health.pool}" starts empty, so it cannot be the health pool`);
-    }
+    const healthTrack = checkHealth(combat.health, at("health"));
     checkRef(combat.defense, at("defense"), derivedIds);
     if (combat.initiative.modifier) checkRef(combat.initiative.modifier, at("initiative", "modifier"), derivedIds);
     // The same rule the check dice follow: an extreme face is only a face when one die was thrown.
@@ -2454,6 +2668,10 @@ function refineRulesetDefinition(def: RulesetDefinitionBase, ctx: z.RefinementCt
       const dying = combat.dying;
       for (const key of ["successes", "failures"] as const) {
         if (!tracks.has(dying[key])) issue(at("dying", key), `Unknown track "${dying[key]}"`);
+        // These two count rolls, and the fight sets them by number. A wound track is marked with
+        // kinds instead, so it could never hold a count of successful death saves.
+        else if (woundTracks.has(dying[key]))
+          issue(at("dying", key), `"${dying[key]}" is a wound track, not a counter`);
       }
       if (dying.successes === dying.failures) {
         issue(at("dying", "failures"), "Successes and failures are counted on two different tracks");
@@ -2469,10 +2687,51 @@ function refineRulesetDefinition(def: RulesetDefinitionBase, ctx: z.RefinementCt
 
     const damageTypes = new Set<string>();
     combat.damageTypes?.forEach((type, index) => {
-      const key = type.toLowerCase();
+      // Trimmed as well as lowered, which is how a creature's resistances and a fight's own lookup
+      // read a type: a declaration written with a stray space would otherwise be a type nothing
+      // could name, including the block's own `damageKinds.byType`.
+      const key = type.trim().toLowerCase();
       if (damageTypes.has(key)) issue(at("damageTypes", index), `Duplicate damage type "${type}"`);
       damageTypes.add(key);
     });
+
+    // How a fight's damage type becomes a mark. Only a wound track has kinds, so the mapping and
+    // the track go together in both directions: without it a fight would have to guess what kind
+    // of harm a blow is, and with a pool there is nothing for it to say.
+    if (healthTrack) {
+      const kinds = new Set(
+        (sheet.live.tracks.find((track) => track.id === healthTrack)?.kinds ?? []).map((kind) => kind.id),
+      );
+      if (!combat.damageKinds) {
+        issue(
+          at("damageKinds"),
+          `Health is the wound track "${healthTrack}", so the block says what kind of harm its damage is`,
+        );
+      } else {
+        if (!kinds.has(combat.damageKinds.default)) {
+          issue(at("damageKinds", "default"), `"${combat.damageKinds.default}" is not a kind of "${healthTrack}"`);
+        }
+        // A damage type is matched without case, so "Fire" and "fire" are one type here as they are
+        // everywhere else. Two keys that say the same type would map one blow onto two kinds of
+        // harm, and whichever won would be whichever the file happened to list second.
+        const mapped = new Set<string>();
+        for (const [type, kind] of Object.entries(combat.damageKinds.byType ?? {})) {
+          const wanted = type.trim().toLowerCase();
+          if (mapped.has(wanted)) issue(at("damageKinds", "byType", type), `Duplicate damage type "${type}"`);
+          mapped.add(wanted);
+          // Only checked where the ruleset says what its types are, exactly as a creature's
+          // resistances are: one that declares none reads a type as free text.
+          if (damageTypes.size > 0 && !damageTypes.has(wanted)) {
+            issue(at("damageKinds", "byType", type), `Unknown damage type "${type}"`);
+          }
+          if (!kinds.has(kind)) {
+            issue(at("damageKinds", "byType", type), `"${kind}" is not a kind of "${healthTrack}"`);
+          }
+        }
+      }
+    } else if (combat.damageKinds) {
+      issue(at("damageKinds"), "damageKinds maps damage onto a wound track's kinds, and health is a pool");
+    }
 
     if (combat.threat) {
       unique(combat.threat.tiers, at("threat", "tiers"), "threat tier");
@@ -2622,6 +2881,12 @@ export type RulesetSheetSchema = RulesetDefinition["sheet"];
 export type RulesetField = z.infer<typeof rulesetFieldSchema>;
 export type RulesetListColumn = z.infer<typeof rulesetListColumnSchema>;
 export type RulesetDerived = z.infer<typeof rulesetDerivedSchema>;
+export type RulesetLiveTrack = RulesetSheetSchema["live"]["tracks"][number];
+/** One rung of a wound track. Absent on a plain track, which is a bounded integer. */
+export type RulesetTrackLevel = z.infer<typeof liveTrackLevelSchema>;
+/** One kind of harm a wound track may take. The DEFINITION holds kinds; a MARK is one of them
+ *  sitting on the track in play, and lives in the live state. */
+export type RulesetTrackKind = z.infer<typeof liveTrackKindSchema>;
 export type RulesetRest = RulesetDefinition["rests"][number];
 /** The opt-in battle block. Absent on a ruleset that does not lend its sheet to battles. */
 export type RulesetBattle = NonNullable<RulesetDefinition["battle"]>;
@@ -3036,6 +3301,49 @@ export function rulesetCatalogEntryIssues(
           );
         }
       });
+    }
+    // What an entry does to a CHECK. Successes, pool dice, a per-die target and a re-throw are all
+    // pool words, so a summed ruleset can honour none of them, and each number is held to the same
+    // range the ruleset's own dice are.
+    if (mechanics?.check) {
+      const check = mechanics.check;
+      const path = [index, "mechanics", "check"];
+      const resolution = definition.resolution;
+      if (resolution.kind !== "dice-pool") {
+        add(path, `A ${resolution.kind} ruleset has no pool for a check effect to change`);
+      } else {
+        if (check.reroll && (check.reroll.upTo < 1 || check.reroll.upTo >= resolution.die.sides)) {
+          // At the top face it would throw the whole pool again for ever, which is a different
+          // rule wearing this one's name.
+          add(
+            [...path, "reroll", "upTo"],
+            `This ruleset throws d${resolution.die.sides}, so a re-throw is on a face from 1 to ${resolution.die.sides - 1}`,
+          );
+        }
+        if (
+          check.threshold !== undefined &&
+          (check.threshold < resolution.target.min || check.threshold > resolution.target.max)
+        ) {
+          add([...path, "threshold"], `This ruleset counts on ${resolution.target.min} to ${resolution.target.max}`);
+        }
+      }
+    }
+    // Temporary points are a buffer damage drains first, and a wound track has no buffer: it has
+    // boxes, and a box is either marked or it is not. Rather than invent a meaning (a free level? a
+    // mark that clears itself?) a ruleset whose fights are fought on a track is refused the key.
+    // Either block may point health at one: `battle` lends the Engine's own fights the sheet's
+    // numbers and reads a track as the levels still clear, with no buffer either.
+    const trackHealth =
+      definition.combat && "track" in definition.combat.health
+        ? definition.combat.health.track
+        : definition.battle && "track" in definition.battle.health
+          ? definition.battle.health.track
+          : null;
+    if (mechanics?.temporary && trackHealth) {
+      add(
+        [index, "mechanics", "temporary"],
+        `Health is the wound track "${trackHealth}", which carries no buffer for temporary points`,
+      );
     }
     if (mechanics?.budget !== undefined && budgets && !budgets.has(mechanics.budget)) {
       add([index, "mechanics", "budget"], `Unknown budget "${mechanics.budget}"`);

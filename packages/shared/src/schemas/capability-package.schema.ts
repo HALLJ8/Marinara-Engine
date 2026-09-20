@@ -296,7 +296,14 @@ const capabilityPackageManifestBaseSchema = z
 //        1.28: an Engine that cannot read these keys refuses the whole ruleset file, or the
 //        catalog file that holds them, so a package that ships any of them declares 1.29.
 //        No permission.
-export const supportedCapabilityApi = Object.freeze({ major: 1, minor: 29 } as const);
+// 1.30: wound tracks. A ruleset's `live.tracks` entry may declare `levels` (a column of boxes, each
+//        with a label and a penalty) and `kinds` (what a mark on it may be), which turns the track
+//        from a bounded integer into a wound track that is marked rather than counted; and
+//        `resolution.penaltyFrom` names the track whose penalty rides on every roll, taking dice
+//        off a pool or adding a flat modifier to a sum. Not a soft seam, for the same reason as
+//        1.20 through 1.29: an Engine that cannot read these keys refuses the whole ruleset file,
+//        so a package that ships any of them declares 1.30. No permission.
+export const supportedCapabilityApi = Object.freeze({ major: 1, minor: 30 } as const);
 
 const capabilityApiVersionSchema = z
   .object({
