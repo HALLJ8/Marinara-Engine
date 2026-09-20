@@ -11,6 +11,7 @@ import {
   useCallback,
   useMemo,
   useState,
+  type CSSProperties,
   type MouseEvent as ReactMouseEvent,
 } from "react";
 import { useTranslation, useTranslation as useUiTranslation } from "react-i18next";
@@ -49,6 +50,7 @@ import {
 import { useThrottledStreamBuffer } from "../../hooks/use-throttled-stream-buffer";
 import { useConversationCustomEmojis } from "../../hooks/use-conversation-custom-emojis";
 import { useConversationCustomStickers } from "../../hooks/use-conversation-custom-stickers";
+import { useReducedAmbientEffects } from "../../hooks/use-reduced-ambient-effects";
 import type { CharacterMap, MessageSelectionToggle, PersonaInfo } from "./chat-area.types";
 import {
   normalizeTextForMatch,
@@ -282,6 +284,41 @@ function splitAssistantContentLines(content: string, charName?: string | null): 
 const globalSeenKeys = new Set<string>();
 const MAX_GLOBAL_SEEN_KEYS = 5_000;
 
+function getBackgroundBlurStyle(blurPx: number): Pick<CSSProperties, "filter" | "transform"> {
+  if (blurPx <= 0) return {};
+  return {
+    filter: `blur(${blurPx}px)`,
+    transform: `scale(${Math.min(1.08, 1 + blurPx * 0.0025)})`,
+  };
+}
+
+function ConversationBackground({
+  url,
+  blurPx,
+  opacity,
+  reduceMotion,
+}: {
+  url: string | null;
+  blurPx: number;
+  opacity: number;
+  reduceMotion: boolean;
+}) {
+  const backgroundBlurStyle = getBackgroundBlurStyle(blurPx);
+  return url ? (
+    <img
+      src={url}
+      alt=""
+      draggable={false}
+      className="mari-background pointer-events-none absolute inset-0 h-full w-full select-none object-cover object-center"
+      style={{
+        opacity,
+        transition: reduceMotion ? "none" : "opacity 180ms ease-out, filter 180ms ease-out, transform 180ms ease-out",
+        ...backgroundBlurStyle,
+      }}
+    />
+  ) : null;
+}
+
 export function ConversationView({
   chatId,
   messages,
@@ -433,6 +470,10 @@ export function ConversationView({
   // default stops without collapsing Marinara's two-color background.
   const convoGradient = useUIStore((s) => s.convoGradient);
   const theme = useUIStore((s) => s.theme);
+  const chatBackground = useUIStore((s) => s.chatBackground);
+  const chatBackgroundBlur = useUIStore((s) => s.chatBackgroundBlur);
+  const conversationBackgroundImageOpacity = useUIStore((s) => s.conversationBackgroundImageOpacity);
+  const reduceAmbientEffects = useReducedAmbientEffects();
   const gradientStyle = useMemo(() => {
     const g = convoGradient[theme];
     const defaults = theme === "dark" ? { from: "#0a0a0e", to: "#1c2133" } : { from: "#f2eff7", to: "#eae6f0" };
@@ -1259,6 +1300,21 @@ export function ConversationView({
       data-chat-mode="conversation"
       style={{ ...gradientStyle, isolation: "isolate" }}
     >
+      {chatBackground ? (
+        <div className="pointer-events-none absolute inset-0 -z-10 overflow-hidden" aria-hidden="true">
+          <ConversationBackground
+            url={chatBackground}
+            blurPx={chatBackgroundBlur}
+            opacity={conversationBackgroundImageOpacity / 100}
+            reduceMotion={reduceAmbientEffects}
+          />
+          <div
+            data-conversation-background-gradient-veil
+            className="pointer-events-none absolute inset-0"
+            style={{ ...gradientStyle, opacity: 0.35 }}
+          />
+        </div>
+      ) : null}
       {/* ── Messages scroll area ── */}
       <div
         ref={scrollRef}
