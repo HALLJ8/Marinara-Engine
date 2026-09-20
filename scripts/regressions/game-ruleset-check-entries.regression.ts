@@ -192,6 +192,42 @@ try {
     assert.equal(plain.written, null);
   }
 
+  for (const counterOnly of [false, true]) {
+    const document = JSON.parse(gravewatchText);
+    delete document.layers;
+    const entry = document.catalogs[0].entries[0];
+    delete entry.mechanics.cost;
+    delete entry.mechanics.perCostStep;
+    if (counterOnly) {
+      document.sheet.lists[0].columns.push({ id: "uses", label: "Uses", type: "number", min: 0, max: 1 });
+      document.sheet.lists[0].pools = { nameColumn: "name", maxColumn: "uses" };
+      entry.rows[0].values.uses = 1;
+    }
+    const parsedEntry = parseRulesetDefinition(document);
+    assert.ok(parsedEntry.ok, JSON.stringify(parsedEntry));
+    const definition = parsedEntry.definition;
+    const selected = definition.catalogs![0]!.entries![0]!;
+    const selectedBuild = defaultRulesetSheetBuild(definition);
+    selectedBuild.lists.charms = rowsFromCatalogEntry("charms", selected).map(({ row }) => row);
+    const selectedCards = [{ name: "Bram", rulesetSheet: { v: 1, build: selectedBuild } }];
+    const context: SkillCheckModifierContext = {
+      ...contextFor(null),
+      ruleset: buildSkillCheckRulesetContext(definition, selectedCards, selectedCards[0], null, { charms: [selected] }),
+    };
+    const applied = roll(context, { skill: "Nerve", dc: 1, useEntry: "Steady Hand" });
+    assert.equal(applied.result.used, "Steady Hand", "An entry does not need a live-pool cost to affect a check");
+    assert.equal(applied.result.autoSuccesses, 1);
+    if (counterOnly) {
+      const remaining = readRulesetLive(definition, selectedBuild, applied.written?.bram).pools.find(
+        (pool) => pool.listId === "charms",
+      );
+      assert.equal(remaining?.value, 0, "Counter-only effects still persist their charge");
+      assert.equal(applied.result.spent?.amount, 1);
+    } else {
+      assert.equal(applied.result.spent, undefined, "A free check effect must not invent a payment");
+    }
+  }
+
   // ── `perCostStep` is what makes it scale, and the cost scales with it ──
   {
     const twice = roll(contextFor(null), {
