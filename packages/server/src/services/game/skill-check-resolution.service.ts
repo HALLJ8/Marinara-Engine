@@ -437,7 +437,7 @@ function planRulesetEntryCheck(
   const scales = !!entry.mechanics?.perCostStep;
   const steps =
     scales && offered && price && price.amount > 0 && offered.amount % price.amount === 0
-      ? Math.min(MAX_ENTRY_CHECK_STEPS, offered.amount / price.amount)
+      ? Math.max(1, Math.min(MAX_ENTRY_CHECK_STEPS, offered.amount / price.amount))
       : 1;
 
   // Paid through the same plan a `[sheet:]` `use` goes through, so an entry's counters and its

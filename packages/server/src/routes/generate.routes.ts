@@ -71,6 +71,7 @@ import {
   estimateTextTokens,
   type APIProvider,
   type MacroContext,
+  type RulesetCatalogEntriesById,
 } from "@marinara-engine/shared";
 import type {
   AgentContext,
@@ -2348,6 +2349,7 @@ export async function generateRoutes(app: FastifyInstance) {
       // The pinned ruleset follows the same rule: the resolution the reminder was rendered with is
       // the one the turn's sheet commands are checked against. Undefined until a game turn resolves it.
       let turnGameRuleset: ResolvedGameRuleset | null | undefined;
+      let turnRulesetCatalogs: RulesetCatalogEntriesById | undefined;
       const getGmVerbTable = async (): Promise<ResolvedGmVerbTable | null> => {
         if (gmVerbTableResolved) return gmVerbTable;
         gmVerbTableResolved = true;
@@ -4142,7 +4144,7 @@ export async function generateRoutes(app: FastifyInstance) {
             pinnedGameRuleset?.status === "ok" &&
             pinnedGameRuleset.definition.resolution.kind === "dice-pool" &&
             !input.impersonate
-              ? await loadTurnRulesetCatalogs(
+              ? (turnRulesetCatalogs ??= await loadTurnRulesetCatalogs(
                   {
                     definition: pinnedGameRuleset.definition,
                     packageId: pinnedGameRuleset.packageId,
@@ -4154,7 +4156,7 @@ export async function generateRoutes(app: FastifyInstance) {
                   },
                   "",
                   { force: true },
-                )
+                ))
               : {};
           // The pool block is rendered from the same session the readers spend out of, and
           // from the same modifier context the resolver uses, so the block and the engine
@@ -8303,12 +8305,13 @@ export async function generateRoutes(app: FastifyInstance) {
               // the Engine's own arithmetic.
               ...(chatMeta.gameRuleset != null ? { rulesetPinned: true } : {}),
               ...(dicePoolSession ? { pool: dicePoolSession } : {}),
-              // Only ever called for a check that names an entry with `use=`, so an ordinary turn
-              // reads no catalog file at all. The sheet pass below loads its own for a `[sheet:]`
-              // `use`, which is a different command in a different place.
+              // The prompt, check and sheet passes share the same catalog entries for this turn.
               loadCatalogs: async () => {
+                if (turnRulesetCatalogs) return turnRulesetCatalogs;
                 const context = await loadGameRulesetSheetContext(app.db, input.chatId, turnGameRuleset);
-                return context ? await loadTurnRulesetCatalogs(context, fullResponse, { force: true }) : {};
+                return (turnRulesetCatalogs = context
+                  ? await loadTurnRulesetCatalogs(context, fullResponse, { force: true })
+                  : {});
               },
             });
             // A check that BOUGHT something (a point of will for an automatic success) paid for it
@@ -8444,7 +8447,7 @@ export async function generateRoutes(app: FastifyInstance) {
                   // The same turn-start state the check pass read, with whatever it already spent
                   // laid over it, so the two passes of one turn cannot begin from two balances.
                   withSpends(await turnStartRulesetLive()),
-                  await loadTurnRulesetCatalogs(sheetContext, fullResponse),
+                  turnRulesetCatalogs ?? (await loadTurnRulesetCatalogs(sheetContext, fullResponse)),
                 );
                 if (rulesetSheetTurn.content !== fullResponse) {
                   fullResponse = rulesetSheetTurn.content;

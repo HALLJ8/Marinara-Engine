@@ -303,7 +303,8 @@ const capabilityPackageManifestBaseSchema = z
 //        off a pool or adding a flat modifier to a sum. Not a soft seam, for the same reason as
 //        1.20 through 1.29: an Engine that cannot read these keys refuses the whole ruleset file,
 //        so a package that ships any of them declares 1.30. No permission.
-export const supportedCapabilityApi = Object.freeze({ major: 1, minor: 30 } as const);
+// 1.31: live host LLM, image and video integrations for downloadable packages.
+export const supportedCapabilityApi = Object.freeze({ major: 1, minor: 31 } as const);
 
 const capabilityApiVersionSchema = z
   .object({
