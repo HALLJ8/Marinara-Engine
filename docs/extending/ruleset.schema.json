@@ -3636,7 +3636,34 @@
                   "required": [
                     "kind"
                   ],
-                  "additionalProperties": false
+                  "additionalProperties": false,
+                  "allOf": [
+                    {
+                      "if": {
+                        "properties": {
+                          "kind": {
+                            "const": "rider"
+                          }
+                        },
+                        "required": [
+                          "kind"
+                        ]
+                      },
+                      "then": {
+                        "required": [
+                          "rider"
+                        ]
+                      }
+                    },
+                    {
+                      "not": {
+                        "required": [
+                          "free",
+                          "budget"
+                        ]
+                      }
+                    }
+                  ]
                 },
                 "creature": {
                   "type": "object",

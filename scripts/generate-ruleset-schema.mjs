@@ -154,7 +154,26 @@ function requireDistanceForMeasured(node) {
   ];
 }
 
+/**
+ * Two rules a catalog entry's mechanics keep that the shape alone does not say: an entry of the
+ * kind `rider` has to carry the `rider` that describes it, and something `free` spends no budget so
+ * it names none. Zod refuses both at import; an author's editor should refuse them while typing.
+ */
+function requireMechanicsPairs(node) {
+  if (Array.isArray(node)) return node.forEach(requireMechanicsPairs);
+  if (!node || typeof node !== "object") return;
+  Object.values(node).forEach(requireMechanicsPairs);
+  const properties = node.properties;
+  if (node.type !== "object" || !properties?.kind || !properties.rider || !properties.free) return;
+  node.allOf = [
+    ...(node.allOf ?? []),
+    { if: { properties: { kind: { const: "rider" } }, required: ["kind"] }, then: { required: ["rider"] } },
+    { not: { required: ["free", "budget"] } },
+  ];
+}
+
 const schema = zodToJsonSchema(rulesetDefinitionSchema, { $refStrategy: "none", target: "jsonSchema7" });
+requireMechanicsPairs(schema);
 requireOneCatalogSource(schema);
 requireOneEntryContent(schema);
 requireCatalogFeeds(schema);
