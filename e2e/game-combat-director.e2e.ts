@@ -643,13 +643,19 @@ test("Combat director ruleset on a board: the walk, the log in paces, and the sw
     // Movement may be spent before and after an action, so the menu simply comes back with what is
     // left; a turn that runs out of it ends and the next one starts with a full allowance.
     const axe = page.getByRole("button", { name: /^Road axe/ });
+    // The axe sits on the menu whether or not anybody is in reach, because the board says so in its
+    // own line instead. So the swing below is only asked for when a fresh state really offers it.
+    let inReach = false;
     for (let guard = 0; guard < 30; guard++) {
       const state = await request.get(`/api/game/combat/director/state?chatId=${chatId}&anchor=${anchor}`);
       expect(state.ok(), await state.text()).toBeTruthy();
       s = (await state.json()).session;
       if (s.outcome) break;
       const reach = s.ruleset?.options?.find((option) => option.kind === "attack" && option.targetIds.length > 0);
-      if (reach) break;
+      if (reach) {
+        inReach = true;
+        break;
+      }
       const walk = s.ruleset?.options?.find((option) => option.kind === "move" && (option.cells?.length ?? 0) > 0);
       if (!walk || s.ruleset?.controller !== "manual") {
         await command({ type: "continue" });
@@ -661,16 +667,26 @@ test("Combat director ruleset on a board: the walk, the log in paces, and the sw
           Math.max(Math.abs(left.x - foe.x!), Math.abs(left.y - foe.y!)) -
           Math.max(Math.abs(right.x - foe.x!), Math.abs(right.y - foe.y!)),
       )[0]!;
+      // `command` replaces `s` with what came back, so everything below reads what the WALK left
+      // behind rather than the menu from before it: movement may be spent either side of an action,
+      // so the turn only ends when the walk found nobody to hit.
       await command({ type: "ruleset", optionId: walk.id, targetIds: [], to: { x: closest.x, y: closest.y } });
       const end = s.ruleset?.options?.find((option) => option.kind === "end-turn");
       const stillOffered = s.ruleset?.options?.some(
         (option) => option.kind === "attack" && option.targetIds.length > 0,
       );
-      if (!stillOffered && end) await command({ type: "ruleset", optionId: end.id, targetIds: [] });
+      if (stillOffered) {
+        inReach = true;
+        break;
+      }
+      if (end) await command({ type: "ruleset", optionId: end.id, targetIds: [] });
     }
     await page.reload();
     await expect(board).toBeVisible({ timeout: 45000 });
-    if (!s.outcome) {
+    // Eight paces a turn on a board this size does not always close the distance inside the guard,
+    // and a fight that ended while walking has nobody left to swing at. Either way the walk above is
+    // what this case is for, and the swing is asked for only when the rules really offer it.
+    if (inReach && !s.outcome) {
       await expect(axe).toBeVisible({ timeout: 45000 });
       await axe.click();
       const target = board.locator('button[aria-label*="Can be chosen as a target"]');
