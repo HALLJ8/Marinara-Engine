@@ -683,6 +683,19 @@ function renderRulesetSkillCheckLine(
             `Add bonus="+N" or bonus="-N" to add or take dice for this check, from ${situationalDice.min} to ${situationalDice.max}.`,
           ]
         : []),
+      ...(resolution.spend ?? []).map((spend) => {
+        const pool = ruleset.sheet.live.pools.find((entry) => entry.id === spend.pool);
+        const buys = [
+          spend.successes ? `${spend.successes} automatic ${spend.successes === 1 ? "success" : "successes"}` : "",
+          spend.dice ? `${spend.dice} extra ${spend.dice === 1 ? "die" : "dice"}` : "",
+        ]
+          .filter(Boolean)
+          .join(" and ");
+        // Taught only where this ruleset declares it, so the prompt never offers a purchase the
+        // resolver would then ignore. What it costs and what it buys are said in the ruleset's own
+        // words; the engine works out both, and a pool that cannot cover it buys nothing.
+        return `When the player spends to change a roll, add spend="${spend.pool}:N" to that same check: every ${spend.amount} ${pool?.label ?? spend.pool} buys ${buys}, up to ${spend.perCheck} ${spend.perCheck === 1 ? "time" : "times"} per check. Do not also write a sheet command for it, and do not change the dice yourself.`;
+      }),
       ...withClause,
       `Do NOT write rolls, modifier, total or result: the engine rolls the pool from the character sheet and counts the successes.`,
       ...branchClause,

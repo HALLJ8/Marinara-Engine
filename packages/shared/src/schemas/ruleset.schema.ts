@@ -201,6 +201,29 @@ const proficiencyTierSchema = z
   })
   .strict();
 
+/** How many automatic successes, or extra dice, one purchase may be worth. An Engine ceiling rather
+ *  than an author's choice: past this the roll stops being a roll. */
+const SPEND_EFFECT_MAX = 10;
+
+/** One thing a check may buy by spending a pool. `amount` is what ONE purchase costs; `perCheck` is
+ *  how many purchases a single check may make, so the ceiling is `amount * perCheck` points. */
+const resolutionSpendSchema = z
+  .object({
+    pool: sheetId,
+    amount: z.number().int().min(1).max(100),
+    /** Successes added after the dice are counted. */
+    successes: z.number().int().min(1).max(SPEND_EFFECT_MAX).optional(),
+    /** Dice added to the pool before it is thrown. */
+    dice: z.number().int().min(1).max(SPEND_EFFECT_MAX).optional(),
+    perCheck: z.number().int().min(1).max(SPEND_EFFECT_MAX),
+  })
+  .strict()
+  .superRefine((spend, ctx) => {
+    if (spend.successes === undefined && spend.dice === undefined) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "A spend buys successes, dice, or both" });
+    }
+  });
+
 /** The sheet math every resolution kind shares: how a score becomes a modifier, and what training
  *  is worth. Declared once and spread into each kind, so two kinds can never grow different rules
  *  for the same number and the cross-checks below run for all of them. What the resulting number
@@ -217,6 +240,11 @@ const sheetMathShape = {
    *  penalty DOES is the kind's business, the same way the sheet's own number is: `dice-sum` adds
    *  it to the roll, `dice-pool` takes that many dice off the pool and never below `pool.min`. */
   penaltyFrom: sheetId.optional(),
+  /** What a player may BUY on a check, as a standing rule of the system rather than as something
+   *  a character went and acquired: "spend a point of will for an automatic success". It has no
+   *  catalog entry to hang on, so it lives beside the rest of the sheet math. `perCheck` is what
+   *  stops a full pool buying an unlosable roll. */
+  spend: z.array(resolutionSpendSchema).max(2).optional(),
 };
 
 /** One rung of a summed ladder. Hoisted out of the kind because a layer may swap the whole ladder
@@ -1719,6 +1747,26 @@ function refineRulesetDefinition(def: RulesetDefinitionBase, ctx: z.RefinementCt
       severities.add(kind.severity);
     });
   });
+
+  // What a check may buy. Successes and dice are pool words: a summed roll has no successes to add
+  // and no pool to add dice to, so a kind that cannot honour the rule is told here rather than
+  // silently ignoring it in play.
+  resolution.spend?.forEach((spend, index) => {
+    const path = ["resolution", "spend", index];
+    if (resolution.kind !== "dice-pool") {
+      issue(path, `A ${resolution.kind} ruleset has no successes or pool dice to buy`);
+    }
+    if (!pools.has(spend.pool)) {
+      issue([...path, "pool"], `Unknown live pool "${spend.pool}"`);
+    } else if (sheet.live.pools.find((pool) => pool.id === spend.pool)?.start === "empty") {
+      // A pool that counts UP has nothing in it to spend at the start of play, so buying from it
+      // would be free for exactly as long as the character is unstressed.
+      issue([...path, "pool"], `"${spend.pool}" starts empty, so there is nothing in it to spend`);
+    }
+  });
+  if (resolution.spend && new Set(resolution.spend.map((spend) => spend.pool)).size !== resolution.spend.length) {
+    issue(["resolution", "spend"], "Two spends on one pool: a check could not say which it meant");
+  }
 
   // The track whose penalty rides on every roll. A plain track has no penalty to read, so naming
   // one is an author saying something the resolver could never honour.

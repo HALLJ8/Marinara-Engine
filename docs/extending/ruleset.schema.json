@@ -287,6 +287,47 @@
               "maxLength": 40,
               "pattern": "^[a-z][a-z0-9_]*$"
             },
+            "spend": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "pool": {
+                    "type": "string",
+                    "maxLength": 40,
+                    "pattern": "^[a-z][a-z0-9_]*$"
+                  },
+                  "amount": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 100
+                  },
+                  "successes": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 10
+                  },
+                  "dice": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 10
+                  },
+                  "perCheck": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 10
+                  },
+                  "$comment": {}
+                },
+                "required": [
+                  "pool",
+                  "amount",
+                  "perCheck"
+                ],
+                "additionalProperties": false
+              },
+              "maxItems": 2
+            },
             "advantage": {
               "type": "boolean",
               "default": false
@@ -551,6 +592,47 @@
               "type": "string",
               "maxLength": 40,
               "pattern": "^[a-z][a-z0-9_]*$"
+            },
+            "spend": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "pool": {
+                    "type": "string",
+                    "maxLength": 40,
+                    "pattern": "^[a-z][a-z0-9_]*$"
+                  },
+                  "amount": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 100
+                  },
+                  "successes": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 10
+                  },
+                  "dice": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 10
+                  },
+                  "perCheck": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 10
+                  },
+                  "$comment": {}
+                },
+                "required": [
+                  "pool",
+                  "amount",
+                  "perCheck"
+                ],
+                "additionalProperties": false
+              },
+              "maxItems": 2
             },
             "pool": {
               "type": "object",

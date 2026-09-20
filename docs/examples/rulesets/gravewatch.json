@@ -19,7 +19,7 @@
     "summary": "A pool of ten-sided dice against a target number, three ratings, six trades and one vigil."
   },
   "resolution": {
-    "$comment": "The sheet's number for a check is the SIZE of the pool, not a bonus on top of it. A rating of 3 and a trade worth 2 throw five dice. penaltyFrom names the wound track whose penalty rides on every roll; under this kind that is dice OFF the pool, floored at pool.min, so even a bleeding warden throws one die.",
+    "$comment": "The sheet's number for a check is the SIZE of the pool, not a bonus on top of it. A rating of 3 and a trade worth 2 throw five dice. penaltyFrom names the wound track whose penalty rides on every roll; under this kind that is dice OFF the pool, floored at pool.min, so even a bleeding warden throws one die. spend is a standing rule of the system rather than anything a warden went and bought: one point of Resolve buys one automatic success, twice per check at most, and the Engine pays for it on the same check that uses it.",
     "kind": "dice-pool",
     "die": { "sides": 10 },
     "abilityModifier": { "op": "identity" },
@@ -32,6 +32,14 @@
       { "id": "rating_5", "label": "Gravewise", "flat": 5 }
     ],
     "penaltyFrom": "harm",
+    "spend": [
+      {
+        "pool": "resolve",
+        "amount": 1,
+        "successes": 1,
+        "perCheck": 2
+      }
+    ],
     "pool": { "min": 1, "max": 15 },
     "target": { "default": 7, "min": 5, "max": 9 },
     "explode": { "from": 10 },
@@ -130,7 +138,7 @@
   ],
   "gm": {
     "checkGuidance": "This game uses the Gravewatch rules. When a warden tries something the barrow roads could punish, call for a check with one of the trades on the sheet and pick a difficulty from the ladder. The Engine throws the warden's own pool of ten-sided dice, counts the successes and reports what happened. Never write dice or results yourself.",
-    "sheetGuidance": "The character sheets below are authoritative. Resolve is what a warden spends to steady themselves when the dark answers back, and it only comes back when the vigil ends. Harm is a track of four rungs rather than a number: mark it with a sheet command whose op is damage, naming the track and a kind of knock or tear, and heal it with a negative amount. The rung a warden is marked down to comes off every pool they throw, and the Engine applies it, so never take dice off yourself.",
+    "sheetGuidance": "The character sheets below are authoritative. Resolve is what a warden spends to steady themselves when the dark answers back, and it only comes back when the vigil ends. A warden may spend it to steady one roll: say so on the check itself with a spend of resolve and a number of points, up to two, and never write a separate command for it or change the dice yourself. Harm is a track of four rungs rather than a number: mark it with a sheet command whose op is damage, naming the track and a kind of knock or tear, and heal it with a negative amount. The rung a warden is marked down to comes off every pool they throw, and the Engine applies it, so never take dice off yourself.",
     "sheetSummary": {
       "fields": ["post"],
       "derived": ["resolve_max"]

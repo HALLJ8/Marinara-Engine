@@ -160,6 +160,24 @@ Each of these needs its own resolution kind, because none of them can be express
 
 Two things this kind does not model are re-rolls bought with a resource and automatic successes. The closest the Game Master can get is `bonus=` dice together with a `[sheet:]` command that spends the resource, which keeps both visible on the sheet and in the log. That is an approximation: extra dice are not a re-roll of one die and do not guarantee a success.
 
+### Spending to change a roll
+
+Some systems let a player pay for a roll they are about to make: a point of will for an automatic success. `resolution.spend` says so, as a standing rule of the system rather than as something a character went and bought:
+
+```json
+"spend": [{ "pool": "resolve", "amount": 1, "successes": 1, "perCheck": 2 }]
+```
+
+- `pool` is one of your `live.pools`. It cannot be a pool that starts empty, because there would be nothing in it to spend when play begins.
+- `amount` is what ONE purchase costs. `successes` and `dice` are what it buys, and a purchase has to buy at least one of them. Successes are added after the dice are counted, and after any cancelling, because nobody rolled them. Dice are thrown with the pool, inside the pool's own range.
+- `perCheck` is how many purchases one check may make, so the most a check can buy is `amount * perCheck` points' worth. That cap is what stops a full pool buying an unlosable roll.
+- Only a `dice-pool` ruleset can have one: a summed roll has no successes to add and no pool to add dice to, so a `dice-sum` ruleset that declares `spend` is refused at import.
+- Two entries may not name the same pool, or a check could not say which of them it meant.
+
+**It goes on the check itself.** The Game Master writes `[skill_check: skill="Nerve" dc="2" spend="resolve:1"]`, not a separate `[sheet:]` command, because the dice are thrown before sheet commands are applied and there would be nothing left to change. One resolution rolls the dice and pays for what changed them.
+
+**All or nothing.** If the pool cannot cover it, the purchase does not happen and nothing is deducted: the roll is exactly the one it would have been. Points that are not a whole number of purchases buy nothing either. Asking for more than `perCheck` is clamped rather than refused, and only the cap is paid for. The Engine works all of this out; the Game Master names what the player said they were spending and never touches the dice. The record says what was really paid and how many successes nobody rolled.
+
 ### The sheet
 
 - `sections` group things in the editor.

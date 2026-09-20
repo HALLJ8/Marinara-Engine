@@ -115,6 +115,7 @@ import {
   isRoleplayCommandAllowed,
   getRoleplayCommandActivity,
   type RoleplayCommandActivity,
+  type RulesetLiveStates,
 } from "@marinara-engine/shared";
 import { prepareRoleplayRoll } from "../services/generation/roleplay-rolls.js";
 import {
@@ -7690,6 +7691,9 @@ export async function generateRoutes(app: FastifyInstance) {
           let contentReplaced = false;
           let gameOutcomeNarrationFailed = false;
           let gameDiceTurnNotice: GameDiceTurnNotice | null = null;
+          /** Live sheet state after any check in this turn bought something with a pool. Set by the
+           *  check pass and read by the sheet-command pass, which is the order they happened in. */
+          let checkSpendLive: RulesetLiveStates | null = null;
 
           // Some models inline reasoning blocks instead of using provider-native
           // thinking channels. Lift those blocks into message.extra.thinking.
@@ -8206,6 +8210,10 @@ export async function generateRoutes(app: FastifyInstance) {
               ...(chatMeta.gameRuleset != null ? { rulesetPinned: true } : {}),
               ...(dicePoolSession ? { pool: dicePoolSession } : {}),
             });
+            // A check that BOUGHT something (a point of will for an automatic success) paid for it
+            // before the dice were thrown, so the points are already gone. That state is what the
+            // sheet-command pass below has to start from, or its own writes would put them back.
+            if (rolled.live) checkSpendLive = rolled.live;
             const generalRolls = resolveGameDiceRequests(
               rolled.content,
               toolDiceRollResults,
@@ -8322,6 +8330,10 @@ export async function generateRoutes(app: FastifyInstance) {
           // has. That is what keeps a swipe or a regenerated turn from spending twice.
           let rulesetSheetTurn: GameRulesetSheetTurn | null = null;
           if (chatMode === "game" && !input.impersonate && chatMeta.gameRuleset != null) {
+            // Purchases the checks above already paid for, folded onto the turn's starting state
+            // one character at a time, so a member nobody spent for is untouched.
+            const withSpends = (base: RulesetLiveStates | null) =>
+              checkSpendLive ? { ...(base ?? {}), ...checkSpendLive } : base;
             try {
               const sheetContext = await loadGameRulesetSheetContext(app.db, input.chatId, turnGameRuleset);
               if (sheetContext) {
@@ -8337,7 +8349,7 @@ export async function generateRoutes(app: FastifyInstance) {
                 rulesetSheetTurn = applyGameRulesetSheetTurn(
                   sheetContext,
                   fullResponse,
-                  parseStoredRulesetLive((continuedRow ?? baseGameStateSnapshot)?.rulesetLive),
+                  withSpends(parseStoredRulesetLive((continuedRow ?? baseGameStateSnapshot)?.rulesetLive)),
                   await loadTurnRulesetCatalogs(sheetContext, fullResponse),
                 );
                 if (rulesetSheetTurn.content !== fullResponse) {

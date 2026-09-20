@@ -76,6 +76,14 @@ export interface SkillCheckTag {
    * situational dice at all is decided by the resolver.
    */
   bonusDice?: number;
+  /**
+   * `spend="willpower:1"` as the GM wrote it, read into a pool name and a whole number of points.
+   *
+   * What the player said they were spending on THIS check, so one resolution both rolls the dice
+   * and pays for what changed them. Carried, never judged: whether the ruleset offers such a spend,
+   * whether the pool covers it and what it buys are all the resolver's business.
+   */
+  spend?: { pool: string; amount: number };
   /** `pool=` exactly as written, for the mismatch log. Present whenever `poolDeclared` is. */
   poolRaw?: string;
   /**
@@ -346,6 +354,16 @@ export function parseSkillCheckTagBody(body: string): SkillCheckTag | null {
   if (bonusValue) {
     const bonus = Number(bonusValue);
     if (Number.isInteger(bonus)) tag.bonusDice = bonus;
+  }
+  // `spend="<pool>:<points>"`. Read on the same terms as `threshold=` and `bonus=`: written at all,
+  // not necessarily usable. A body with no colon, an empty pool name or a number that is not a
+  // whole positive one has declared nothing the Engine could act on.
+  const spendValue = values.get("spend")?.trim();
+  if (spendValue) {
+    const at = spendValue.lastIndexOf(":");
+    const pool = at > 0 ? spendValue.slice(0, at).trim() : "";
+    const amount = at > 0 ? Number(spendValue.slice(at + 1).trim()) : Number.NaN;
+    if (pool && Number.isInteger(amount) && amount > 0) tag.spend = { pool: pool.slice(0, 100), amount };
   }
   const who = values.get("who")?.trim();
   if (who) tag.who = who.slice(0, 100);

@@ -86,6 +86,10 @@ export interface SkillCheckTagExtras {
   with?: string;
   /** `bonus="+2"` — dice a pool ruleset added or took for this check. Written only by that path. */
   bonus?: number;
+  /** `spend="willpower:1"` — what the check actually paid, never what the model asked to pay. */
+  spend?: string;
+  /** `auto="2"` — successes a spend added that nobody rolled, so a reader can tell them apart. */
+  auto?: number;
 }
 
 function serializeSkillCheckExtras(extras: SkillCheckTagExtras | undefined): string {
@@ -99,6 +103,8 @@ function serializeSkillCheckExtras(extras: SkillCheckTagExtras | undefined): str
   if (extras.bonus != null && Number.isFinite(extras.bonus)) {
     parts.push(`bonus="${extras.bonus > 0 ? "+" : ""}${extras.bonus}"`);
   }
+  if (extras.spend) parts.push(`spend="${serializeSkillCheckAttribute(extras.spend)}"`);
+  if (extras.auto != null && Number.isFinite(extras.auto) && extras.auto > 0) parts.push(`auto="${extras.auto}"`);
   return parts.length > 0 ? ` ${parts.join(" ")}` : "";
 }
 
@@ -133,6 +139,8 @@ export function serializeResolvedSkillCheckTag(result: SkillCheckResult, extras?
     ...(result.who ? { who: result.who } : {}),
     ...(result.withAbility ? { with: result.withAbility } : {}),
     ...(result.bonusDice ? { bonus: result.bonusDice } : {}),
+    ...(result.spent ? { spend: `${result.spent.pool}:${result.spent.amount}` } : {}),
+    ...(result.autoSuccesses ? { auto: result.autoSuccesses } : {}),
     // An extra a caller left undefined is absent, not an instruction to erase what the result says.
     ...Object.fromEntries(Object.entries(extras ?? {}).filter(([, value]) => value !== undefined)),
   };
