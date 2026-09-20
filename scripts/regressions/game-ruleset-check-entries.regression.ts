@@ -172,7 +172,12 @@ try {
     // injected die stands in only for a d20 and this ruleset throws d10s, so what the pool shows
     // here is the real generator's and nothing about it can be asserted on. What IS asserted is
     // that the charm reached the roll at all: the effect it was read into, and the cost it paid.
-    assert.equal(typeof bought.result.rerolled, bought.result.rerolled === undefined ? "undefined" : "number");
+    // Either the charm threw some dice again and says how many, or it says nothing at all. Anything
+    // else is the field meaning something it should not.
+    assert.ok(
+      bought.result.rerolled === undefined || Number.isInteger(bought.result.rerolled),
+      `rerolled is a count or nothing, not ${JSON.stringify(bought.result.rerolled)}`,
+    );
     assert.equal(resolveLeft(bought.written), full - 1, "the point really left the sheet");
 
     // Named by the row's own name on the sheet, which is the other half of the same match.
@@ -320,7 +325,6 @@ try {
         difficultyLadder: [{ label: "Plain work", dc: 10 }],
       };
       delete doc.sheet.live.tracks;
-      doc.sheet.live.pools = doc.sheet.live.pools;
     }, /no pool for a check effect to change/);
 
     // A re-throw outside the die's faces. This ruleset throws d10, so 10 would throw everything.

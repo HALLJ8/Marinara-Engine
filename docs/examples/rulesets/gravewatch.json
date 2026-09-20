@@ -161,7 +161,10 @@
           "rows": [
             {
               "list": "charms",
-              "values": { "name": "Steady Hand", "notes": "Throw the dice that fell wrong again." }
+              "values": {
+                "name": "Steady Hand",
+                "notes": "Throw the dice that fell wrong again, and steady your hand for one success you did not roll."
+              }
             }
           ],
           "mechanics": {

@@ -158,7 +158,7 @@ Each of these needs its own resolution kind, because none of them can be express
 - **Roll-under and open-ended percentile** compare in the other direction.
 - **Sum pools with a wild die** (as in OpenD6) add the dice up and treat one of them specially.
 
-Automatic successes bought with a resource ARE modelled: see Spending to change a roll below. What this kind still does not model is a re-roll bought with one. The closest the Game Master can get to that is `bonus=` dice together with a `[sheet:]` command that spends the resource, which keeps both visible on the sheet and in the log. That is an approximation: extra dice are not a re-roll of one die.
+Both of the things this kind used to leave out are modelled now, and Spending to change a roll below says how. A rule of the system itself, "spend a point for a success", is `resolution.spend`, which buys successes or dice and never a re-roll. A re-roll belongs to something a character picked, so it is `mechanics.check` on a catalog entry, bought with that entry's own cost.
 
 ### Spending to change a roll
 
@@ -1030,10 +1030,10 @@ Said plainly, because a ruleset should not claim what the Engine does not do:
   one turn and the next arrives with reactions.
 - Conditions do what the closed effect list can say and no more. A condition that gives
   disadvantage on ability checks, or resistance to everything, is a plain record on the sheet today.
-- **A fight marks a wound track once per blow, not once per point.** That is what a track is for,
-  but it does mean the size of a hit changes nothing about what it does: a hit for 3 and a hit for
-  30 both mark one box. Resistances and immunities never reach a track either, because they live on
-  an opponent's stat block and an opponent has no sheet.
+- **Resistances, vulnerabilities and immunities never reach a wound track.** They live on an
+  opponent's stat block, and an opponent has no sheet to mark, so a ruleset whose health is a track
+  cannot soften a blow by its kind. What each kind of harm MARKS is `damageKinds`, which is a
+  different question from how much of it lands.
 
 ## Layers: variants of your own ruleset
 

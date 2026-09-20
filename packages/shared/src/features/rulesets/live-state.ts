@@ -16,6 +16,7 @@ import {
   RULESET_CATALOG_ROW_KEY,
   RULESET_TRACK_LEVELS_MAX,
   type RulesetCatalogEntriesById,
+  type RulesetCatalogEntry,
   type RulesetDefinition,
   type RulesetList,
   type RulesetLiveTrack,
@@ -819,6 +820,43 @@ export interface RulesetUseStep {
   label: string;
 }
 
+/**
+ * The ONE rule for which picked entry a name means, so everything that acts on a named entry acts
+ * on the same one: a row answers to the name the sheet shows it under and to the label of the entry
+ * it came from, and a name two rows answer to is refused rather than guessed at.
+ */
+export function rulesetEntryNamed(
+  definition: RulesetDefinition,
+  build: RulesetSheetBuild,
+  catalogs: RulesetCatalogEntriesById,
+  wanted: string,
+): { ok: true; ref: string; entry: RulesetCatalogEntry } | { ok: false; reason: RulesetSheetRefusal } {
+  const byRef = rulesetCatalogEntriesByRef(catalogs);
+  const matched = new Set<string>();
+  for (const list of definition.sheet.lists) {
+    const rows = build.lists?.[list.id];
+    if (!Array.isArray(rows)) continue;
+    const nameColumn = listNameColumn(definition, list);
+    for (const row of rows) {
+      if (!row || typeof row !== "object") continue;
+      const cells = row as Record<string, unknown>;
+      const ref = own(cells, RULESET_CATALOG_ROW_KEY);
+      if (typeof ref !== "string") continue;
+      const name = nameColumn ? own(cells, nameColumn) : undefined;
+      const label = byRef.get(ref)?.label;
+      if ((typeof name === "string" && sameName(name, wanted)) || (label && sameName(label, wanted))) {
+        matched.add(ref);
+      }
+    }
+  }
+  if (matched.size === 0) return { ok: false, reason: "unknown-entry" };
+  if (matched.size > 1) return { ok: false, reason: "ambiguous-entry" };
+  const ref = [...matched][0]!;
+  const entry = byRef.get(ref);
+  if (!entry) return { ok: false, reason: "unknown-entry" };
+  return { ok: true, ref, entry };
+}
+
 export type RulesetUsePlan =
   | { ok: true; label: string; steps: RulesetUseStep[] }
   | { ok: false; reason: RulesetSheetRefusal };
@@ -851,32 +889,9 @@ export function planRulesetUse(
   const wanted = op.name.trim();
   if (!wanted) return { ok: false, reason: "unknown-entry" };
 
-  const byRef = rulesetCatalogEntriesByRef(catalogs);
-
-  // Which entry was meant. A row answers to the name the sheet shows it under and to the label of
-  // the entry it came from, so the Game Master's own wording and the ruleset's both work.
-  const matched = new Set<string>();
-  for (const list of definition.sheet.lists) {
-    const rows = build.lists?.[list.id];
-    if (!Array.isArray(rows)) continue;
-    const nameColumn = listNameColumn(definition, list);
-    for (const row of rows) {
-      if (!row || typeof row !== "object") continue;
-      const cells = row as Record<string, unknown>;
-      const ref = own(cells, RULESET_CATALOG_ROW_KEY);
-      if (typeof ref !== "string") continue;
-      const name = nameColumn ? own(cells, nameColumn) : undefined;
-      const label = byRef.get(ref)?.label;
-      if ((typeof name === "string" && sameName(name, wanted)) || (label && sameName(label, wanted))) {
-        matched.add(ref);
-      }
-    }
-  }
-  if (matched.size === 0) return { ok: false, reason: "unknown-entry" };
-  if (matched.size > 1) return { ok: false, reason: "ambiguous-entry" };
-  const ref = [...matched][0]!;
-  const entry = byRef.get(ref);
-  if (!entry) return { ok: false, reason: "unknown-entry" };
+  const found = rulesetEntryNamed(definition, build, catalogs, wanted);
+  if (!found.ok) return found;
+  const { ref, entry } = found;
 
   const resolved = readRulesetLive(definition, build, stored);
   const declared = resolved.pools.filter((pool) => !pool.listId);

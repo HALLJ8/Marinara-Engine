@@ -15,7 +15,7 @@
 import {
   applyRulesetSheetOp,
   planRulesetUse,
-  rulesetCatalogEntriesByRef,
+  rulesetEntryNamed,
   createSkillCheckTagRegex,
   formatPoolSlotName,
   readGmTagAttributes,
@@ -405,11 +405,15 @@ function planRulesetEntryCheck(
   const build = key ? ruleset.builds.get(key) : undefined;
   if (!key || !build) return null;
 
-  const byRef = rulesetCatalogEntriesByRef(ruleset.catalogs);
-  const entry = [...byRef.values()].find((candidate) => candidate.label.trim().toLowerCase() === wanted.toLowerCase());
+  // The SAME matcher the payment uses, so the effect and the cost can never come from two different
+  // entries: a row answers to its name on the sheet as well as to the catalog's label, and a name
+  // two rows answer to is refused here exactly as it is refused there.
+  const found = rulesetEntryNamed(ruleset.definition, build, ruleset.catalogs, wanted);
+  if (!found.ok) return null;
+  const entry = found.entry;
   // The entry has to say something about checks, or using it here would spend for nothing.
-  const effect = entry?.mechanics?.check;
-  if (!entry || !effect) return null;
+  const effect = entry.mechanics?.check;
+  if (!effect) return null;
 
   // How many times over the price was paid. One use unless the entry scales and the Game Master
   // said more was spent, and never past the Engine's own ceiling.

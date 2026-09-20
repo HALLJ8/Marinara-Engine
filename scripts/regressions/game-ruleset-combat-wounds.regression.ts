@@ -32,6 +32,8 @@ import {
   rulesetCombatant,
   rulesetCombatDamageKind,
   rulesetCombatHealth,
+  advanceRulesetTurn,
+  currentRulesetActor,
   rulesetCombatOptions,
   rulesetEncounterSummary,
   rulesetSheetBuildSchema,
@@ -309,8 +311,6 @@ const marksOf = (definition: RulesetDefinition, state: RulesetEncounterState, id
   // Ember Roads declares no dying block, so a downed member is simply down.
   assert.equal(down.dying, !!wounded.combat!.dying);
 
-  // A blow while the track is already full still marks: a full track upgrades its lightest mark
-  // rather than refusing, which is the wound track's own rule, not a thing the fight decides.
   // A blow while the track is already full still lands, exactly as a blow on somebody whose pool is
   // already at zero does. The track's own rule decides what happens to it: every mark is already
   // the worst kind here, so the blow becomes an overflow rather than an upgrade.
@@ -363,6 +363,50 @@ const marksOf = (definition: RulesetDefinition, state: RulesetEncounterState, id
   assert.equal(juno.health, 0);
   assert.equal(juno.maxHealth, 3);
   assert.equal(juno.temp, 0, "a track carries no buffer, so a recap never claims one");
+
+  // And a real mending in a real fight clears ONE mark, which is what brings them back: the dying
+  // rule reads the track having room again exactly as it read a pool climbing off zero.
+  const knacks = (JSON.parse(emberText).catalogs ?? []).find((catalog: Record<string, any>) => catalog.id === "knacks");
+  const lastEmber = (knacks?.entries ?? []).find((entry: Record<string, any>) => entry.id === "last-ember");
+  assert.ok(lastEmber, "the example still ships the knack this case mends with");
+  const mender = {
+    id: "pell",
+    name: "Pell",
+    side: "party" as const,
+    build: buildOf({
+      abilities: { brawn: 1, wits: 2, heart: 1 },
+      fields: { calling: "Scout", toughness: 1 },
+      lists: { knacks: [{ name: "Last Ember", notes: "Mend", _catalog: "knacks/last-ember" }] },
+    }),
+    live: { pools: { grit: { value: 6 } } },
+    catalogs: { knacks: [lastEmber] },
+  };
+  let mending = createRulesetEncounter({
+    definition: wounded,
+    seed: 4242,
+    combatants: [traveller({ wounds: { harm: { marks: ["cut", "cut", "cut"] } } }), mender],
+    roller: dice(1, 6, 1, 1, 1, 1),
+  });
+  assert.equal(who(mending, "juno").down, true, "a full track is somebody who is down");
+  if (currentRulesetActor(mending)?.id !== "pell") {
+    mending = advanceRulesetTurn(wounded, mending, dice(1, 1, 1, 1)).state;
+  }
+  assert.equal(currentRulesetActor(mending)?.id, "pell", "the mender is up");
+  const ember = rulesetCombatOptions(wounded, mending, "pell").find((option) => option.label === "Last Ember");
+  assert.ok(ember, "and can mend");
+  const mended = applyRulesetCombatChoice(
+    wounded,
+    mending,
+    { actorId: "pell", optionId: ember.id, targetIds: ["juno"] },
+    dice(3, 3, 3, 3),
+  );
+  assert.deepEqual(
+    marksOf(wounded, mended.state, "juno").marks,
+    ["cut", "cut"],
+    "mending clears one mark, however much it healed",
+  );
+  assert.equal(rulesetCombatHealth(wounded, wounded.combat!, who(mended.state, "juno")).value, 1, "so there is room");
+  assert.equal(who(mended.state, "juno").down, false, "and they are on their feet again");
 }
 
 // ── The `battle` bridge: a share of the track's LENGTH, and marks on the way back ──
