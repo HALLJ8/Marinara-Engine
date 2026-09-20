@@ -24,6 +24,7 @@ import {
   evaluateRulesetSheet,
   matchRulesetCheckTarget,
   parseDiceNotation,
+  readRulesetWoundPenalty,
   rollDicePoolCheck,
   rulesetPoolMaxSuccesses,
   rollDiceSumCheck,
@@ -32,6 +33,7 @@ import {
   type EvaluatedRulesetSheet,
   type RPGAttributes,
   type RulesetDefinition,
+  type RulesetLiveStates,
   type SkillCheckResult,
   type SkillCheckTag,
 } from "@marinara-engine/shared";
@@ -43,7 +45,7 @@ import type { GameDicePoolSession } from "./dice-pool.service.js";
 import { logPoolDcFit } from "./dice-pool.service.js";
 import { createCharactersStorage } from "../storage/characters.storage.js";
 import { createChatsStorage } from "../storage/chats.storage.js";
-import { createGameStateStorage } from "../storage/game-state.storage.js";
+import { createGameStateStorage, parseStoredRulesetLive } from "../storage/game-state.storage.js";
 import { rollDieSecurely } from "./dice-rng.js";
 import { normalizeCharacterLookupName } from "./name-normalization.js";
 import { loadRulesetRegistry, resolveGameRuleset } from "./ruleset-registry.service.js";
@@ -88,6 +90,10 @@ export interface SkillCheckRulesetContext {
   playerKey: string | null;
   /** Evaluated sheet per normalized card name. */
   sheets: Map<string, EvaluatedRulesetSheet>;
+  /** What the wound track named by `resolution.penaltyFrom` costs each card's rolls, per normalized
+   *  card name. Always negative or 0, worked out once per turn like the sheets beside it. Empty for
+   *  a ruleset that names no penalty track, which is every ruleset written before they existed. */
+  penalties: Map<string, number>;
   /** The ruleset's blank default build, for a party member (or a player) who has no sheet yet.
    *  It is what setup would have copied for them. A `who=` that names NOBODY in the party does
    *  not get this: it rolls with no modifier at all, because a ruleset's defaults are not neutral
@@ -231,7 +237,14 @@ export async function loadSkillCheckModifierContext(db: DB, chatId: string): Pro
         skills: null,
         attributes: null,
         sheetAttributes: {},
-        ruleset: buildSkillCheckRulesetContext(pinned.definition, cards, playerCard),
+        // The live state of this chat's sheets, off the snapshot already read above: it is where a
+        // wound track's marks live, and a check cannot know what a wound costs without them.
+        ruleset: buildSkillCheckRulesetContext(
+          pinned.definition,
+          cards,
+          playerCard,
+          parseStoredRulesetLive(snapshot?.rulesetLive),
+        ),
       };
     }
     // A pin the install cannot honour must not be answered with another system's arithmetic.
@@ -253,9 +266,14 @@ export function buildSkillCheckRulesetContext(
   definition: RulesetDefinition,
   cards: ReadonlyArray<Record<string, unknown>>,
   playerCard: Record<string, unknown> | undefined,
+  /** The game's live sheet state, keyed by normalized card name. Absent means nobody is marked,
+   *  which is what a game whose ruleset has no wound track always looks like. */
+  live?: RulesetLiveStates | null,
 ): SkillCheckRulesetContext {
   const blankBuild = defaultRulesetSheetBuild(definition);
   const sheets = new Map<string, EvaluatedRulesetSheet>();
+  const penalties = new Map<string, number>();
+  const penaltyTrack = definition.resolution.penaltyFrom;
   const playerKeyForCards = playerCard ? normalizeCharacterLookupName(readTrimmedString(playerCard.name)) : "";
   // Two cards that normalize to one name: `who=` cannot say which, so neither sheet answers it and
   // the check rolls unmodified. The player's own card is the exception; a name they share stays theirs.
@@ -278,13 +296,25 @@ export function buildSkillCheckRulesetContext(
       logger.warn("[game/skill-check] The ruleset sheet for %s is unreadable; rolling on a blank sheet", key);
     }
     sheets.set(key, evaluateRulesetSheet(definition, envelope.success ? envelope.data.build : blankBuild));
+    if (penaltyTrack) {
+      const penalty = readRulesetWoundPenalty(definition, live?.[key], penaltyTrack);
+      if (penalty !== 0) penalties.set(key, penalty);
+    }
   }
   return {
     definition,
     playerKey: playerKeyForCards || null,
     sheets,
+    penalties,
     blank: evaluateRulesetSheet(definition, blankBuild),
   };
+}
+
+/** What the roller's wound track costs this check. Always negative or 0, and 0 for a stranger, a
+ *  ruleset that names no penalty track and anybody who is not marked. */
+export function rulesetCheckPenaltyFor(ruleset: SkillCheckRulesetContext, who?: string): number {
+  const key = who ? normalizeCharacterLookupName(who) : ruleset.playerKey;
+  return (key ? ruleset.penalties.get(key) : undefined) ?? 0;
 }
 
 /** The sheet modifier a ruleset game applies for `who` (or the player) on the named check. Under
@@ -324,13 +354,23 @@ function resolveRulesetSkillCheck(
     );
   }
   const modifier = rulesetCheckModifierFor(ruleset, request.skill, request.who, request.withAbility);
+  // What the roller's wounds cost this check. It is applied the way the kind understands a number:
+  // `dice-sum` adds it to the roll, `dice-pool` takes that many dice off the pool and the roller's
+  // own clamp holds it at `pool.min`. Both go through the same `modifier` input, so there is one
+  // place a wound can be forgotten rather than two.
+  const penalty = rulesetCheckPenaltyFor(ruleset, request.who);
   // What the record may say about `with=`: the ability's own label, and only when the swap
   // happened. An ability check has no other ability to swap in, and an unknown name was ignored.
   const swapped =
     target && target.type !== "ability" && target.withAbility
       ? definition.sheet.abilities.find((ability) => ability.id === target.withAbility)?.label
       : undefined;
-  const applied = swapped ? { withAbility: swapped } : {};
+  const applied = {
+    ...(swapped ? { withAbility: swapped } : {}),
+    // Said even on a summed check, where it is also inside `modifier`: "-2 because you are Wounded"
+    // is not something a player can read out of one number.
+    ...(penalty !== 0 ? { penalty } : {}),
+  };
   // The injected d20 (tests, the sighted pool) stands in only where a d20 is what is rolled.
   const rollDie = (sides: number) => (sides === 20 && rollD20 ? rollD20() : rollDieSecurely(sides));
   const isSave = target?.type === "save";
@@ -343,7 +383,15 @@ function resolveRulesetSkillCheck(
     const dc = Math.min(rulesetPoolMaxSuccesses(resolution), Math.max(1, Math.round(request.dc)));
     const rolled = rollDicePoolCheck(
       definition,
-      { modifier, required: dc, isSave, threshold: request.threshold, bonusDice: request.bonusDice },
+      {
+        // Dice off the pool. The roller clamps into `pool`, so a large penalty stops at `pool.min`
+        // rather than at no dice at all, which is the ruleset's own floor for an empty pool.
+        modifier: modifier + penalty,
+        required: dc,
+        isSave,
+        threshold: request.threshold,
+        bonusDice: request.bonusDice,
+      },
       rollDie,
     );
     return {
@@ -361,10 +409,13 @@ function resolveRulesetSkillCheck(
   }
 
   const { sides, count } = resolution.dice;
+  // A flat modifier on the roll, which is what a penalty IS in a summed system, so it belongs in
+  // the number the record adds up rather than beside it.
+  const summed = modifier + penalty;
   const rolled = rollDiceSumCheck(
     definition,
     {
-      modifier,
+      modifier: summed,
       dc: request.dc,
       isSave,
       advantage: request.advantage,
@@ -376,7 +427,7 @@ function resolveRulesetSkillCheck(
   return {
     skill: request.skill,
     dc: request.dc,
-    modifier,
+    modifier: summed,
     resolution: "sum",
     ...rolled,
     ...applied,
@@ -428,7 +479,12 @@ function rulesetVouchesFor(ruleset: SkillCheckRulesetContext, tag: SkillCheckTag
         ? Math.max(first, sum(result.rolls.slice(count)))
         : Math.min(first, sum(result.rolls.slice(count)));
   if (result.usedRoll !== kept) return false;
-  if (result.modifier !== rulesetCheckModifierFor(ruleset, tag.skill, tag.who, tag.withAbility)) return false;
+  // The sheet's own number PLUS what the roller's wounds take off it, because that is the one
+  // number a summed check adds to the dice. A GM that wrote the unwounded modifier has not rolled
+  // this character's check.
+  const expected =
+    rulesetCheckModifierFor(ruleset, tag.skill, tag.who, tag.withAbility) + rulesetCheckPenaltyFor(ruleset, tag.who);
+  if (result.modifier !== expected) return false;
   if (result.usedRoll + result.modifier !== result.total) return false;
   const target = matchRulesetCheckTarget(ruleset.definition, tag.skill);
   const policy = target?.type === "save" ? resolution.naturals.save : resolution.naturals.check;

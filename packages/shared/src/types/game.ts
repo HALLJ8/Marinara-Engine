@@ -445,6 +445,14 @@ export interface SkillCheckResult {
    */
   withAbility?: string;
   bonusDice?: number;
+  /**
+   * What the roller's wound track took off this check, when the ruleset names one with
+   * `resolution.penaltyFrom` and the character is marked. Always negative, and absent when there
+   * was no penalty, so a record never claims a wound nobody has. A summed check has it folded into
+   * `modifier` as well, because it IS a modifier there; a pool check spent it on dice instead, so
+   * this is the only place the pool's missing dice are said.
+   */
+  penalty?: number;
 }
 
 // ── The sighted dice pool (opt-in, last) ──
