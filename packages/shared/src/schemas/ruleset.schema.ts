@@ -1738,6 +1738,18 @@ function refineRulesetDefinition(def: RulesetDefinitionBase, ctx: z.RefinementCt
     if (track.default !== undefined && track.default !== 0) {
       issue([...path, "default"], "A wound track starts unmarked, so it declares no default");
     }
+    // Best first, worst last, which is the order the boxes are marked in and the order that makes
+    // "the penalty on the lowest marked level" the worst one in force. A ladder that gets better as
+    // it fills would read backwards on the sheet and surprise every rule that reads it.
+    track.levels?.forEach((level, levelIndex) => {
+      const before = track.levels?.[levelIndex - 1];
+      if (before && level.penalty > before.penalty) {
+        issue(
+          [...path, "levels", levelIndex, "penalty"],
+          "A wound track's levels run best first, so a level is never kinder than the one above it",
+        );
+      }
+    });
     unique(track.kinds ?? [], [...path, "kinds"], "wound kind");
     const severities = new Set<number>();
     track.kinds?.forEach((kind, kindIndex) => {

@@ -162,11 +162,16 @@ function WoundTrack({
       <div className="flex flex-wrap gap-1">
         {wound.levels.map((level, index) => {
           const mark = wound.marks[index];
+          // Marks are held sorted, so a mark always lands at the end of the run and a clear always
+          // takes the last one. Only those two boxes do anything, and only those two are offered:
+          // a box that looked pressable but moved a DIFFERENT box would be lying about itself.
+          const adds = !mark && index === wound.marks.length && !!chosen;
+          const clears = !!mark && index === wound.marks.length - 1;
           return (
             <button
               key={`${track.id}-${index}`}
               type="button"
-              disabled={readOnly || (!mark && !chosen)}
+              disabled={readOnly || (!adds && !clears)}
               // A box says what it is, what it costs and what is on it, because a coloured square
               // says none of the three to somebody who cannot see it.
               aria-label={localizeUi("game.ruleset.sheet.wound.levelAria", {
@@ -182,7 +187,7 @@ function WoundTrack({
                 level: level.label,
                 penalty: level.penalty,
               })}
-              onClick={() => onMark(mark ?? chosen?.id ?? "", mark ? -1 : 1)}
+              onClick={() => onMark(clears ? mark! : (chosen?.id ?? ""), clears ? -1 : 1)}
               className={`flex h-9 w-9 shrink-0 flex-col items-center justify-center rounded-lg border text-[0.625rem] leading-none transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
                 mark
                   ? "border-[var(--primary)] bg-[var(--accent)] font-semibold text-[var(--foreground)]"

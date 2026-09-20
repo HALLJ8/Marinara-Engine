@@ -159,8 +159,39 @@ function requireLevelsWithKinds(node) {
   node.dependencies = { ...(node.dependencies ?? {}), kinds: ["levels"], levels: ["kinds"] };
 }
 
+/**
+ * A purchase on a check buys successes or dice, so an entry that names neither buys nothing. Zod
+ * refuses that at import; the published schema has to say it too, or an author's editor calls a
+ * useless entry valid.
+ */
+function requireSpendBuysSomething(node) {
+  if (Array.isArray(node)) return node.forEach(requireSpendBuysSomething);
+  if (!node || typeof node !== "object") return;
+  Object.values(node).forEach(requireSpendBuysSomething);
+  const properties = node.properties;
+  if (node.type !== "object" || !properties?.pool || !properties.perCheck) return;
+  if (!properties.successes && !properties.dice) return;
+  node.anyOf = [...(node.anyOf ?? []), { required: ["successes"] }, { required: ["dice"] }];
+}
+
+/**
+ * Only a pool counts successes, so only a `dice-pool` resolution may declare a `spend`. Zod refuses
+ * it on a sum at import; the published schema must not offer it there.
+ */
+function spendOnlyOnAPool(node) {
+  if (Array.isArray(node)) return node.forEach(spendOnlyOnAPool);
+  if (!node || typeof node !== "object") return;
+  Object.values(node).forEach(spendOnlyOnAPool);
+  const properties = node.properties;
+  if (node.type !== "object" || !properties?.spend || !properties.kind) return;
+  const kind = properties.kind.const ?? properties.kind.enum?.[0];
+  if (kind !== undefined && kind !== "dice-pool") delete properties.spend;
+}
+
 const schema = zodToJsonSchema(rulesetDefinitionSchema, { $refStrategy: "none", target: "jsonSchema7" });
 requireLevelsWithKinds(schema);
+requireSpendBuysSomething(schema);
+spendOnlyOnAPool(schema);
 requireOneCatalogSource(schema);
 requireOneEntryContent(schema);
 requireCatalogFeeds(schema);

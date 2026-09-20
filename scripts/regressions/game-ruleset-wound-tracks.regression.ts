@@ -262,8 +262,11 @@ try {
     // The bottom rung is -99, which is far past the pool. `pool.min` is 1, so one die is thrown.
     const down = roll(contextFor(marked("knock", 4)));
     assert.equal(down.penalty, -99);
-    assert.equal(down.rolls.length, plainDefinition.resolution.pool?.min ?? 1);
-    assert.equal(down.rolls.length, 1, "floored at the ruleset's own minimum, never at no dice at all");
+    // Read off the union's pool member rather than through an optional, so this says the RULESET's
+    // own floor and not whatever an absent field happened to mean.
+    const floor = plainDefinition.resolution.kind === "dice-pool" ? plainDefinition.resolution.pool.min : 1;
+    assert.equal(floor, 1, "this fixture's ruleset floors its pool at one die");
+    assert.equal(down.rolls.length, floor, "floored at the ruleset's own minimum, whatever it declared");
     assert.equal(down.modifier, 0, "a pool spends the penalty on dice, so nothing is added to the successes");
 
     // Somebody the game has no sheet for rolls unwounded, exactly as they always did.
