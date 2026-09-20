@@ -802,10 +802,14 @@ which a bow is not.
 
 A creature action may also carry the `area` it lands in, in your own unit: `{ "shape": "cone",
 "size": 15 }`, with `"friendlyFire": false` to spare its own side. That is how a breath weapon is a
-real cone on a board rather than a number of targets. Its `range` then says how far off it may be
-aimed; a shape with no range is aimed from where the creature stands, no further than it draws. A
-fight without a board ignores the shape and uses `targetCount`, so a creature entry can carry both
-and be honest either way.
+real cone on a board rather than a number of targets. A sequence carries no shape of its own; the
+actions it names carry theirs. A fight without a board ignores the shape and uses `targetCount`, so
+a creature entry can carry both and be honest either way.
+
+**How far a shape may be sent.** `range` says it: a ball thrown a hundred feet carries one. With no
+range, a burst goes off where it is set down, on the actor's own cell, and a cone or a line may be
+aimed anywhere within the length it draws, because there the cell only says which way it points.
+That holds for a catalog entry's `mechanics.area` as much as for a creature's.
 
 `ranged` says what a shot costs when it is taken past its ordinary `normal` distance, or with
 somebody on the other side in the next cell. Each is `"disadvantage"` or `"normal"`; leave the block

@@ -92,9 +92,12 @@ export function rulesetOptionReach(
   const action = actionOf(actor, optionId);
   if (!action) return { max: 1, normal: 1, shot: false, swing: 1 };
   if (action.area) {
-    // An area is aimed at a cell rather than at anybody, and one with no distance of its own reaches
-    // as far as the shape it draws.
-    const max = action.range?.long ?? action.range?.normal ?? action.area.size;
+    // An area is aimed at a cell rather than at anybody. With a distance of its own it may be sent
+    // that far off. With none, a BURST is centred on the actor, because a ball of fire with no range
+    // goes off where it is set down, while a cone or a line is aimed within its own size, because
+    // there the cell only says which way it points.
+    const carried = action.range?.long ?? action.range?.normal;
+    const max = carried ?? (action.area.shape === "burst" ? 0 : action.area.size);
     return { max, normal: action.range?.normal ?? max, shot: true, swing: 0 };
   }
   if (action.range) {

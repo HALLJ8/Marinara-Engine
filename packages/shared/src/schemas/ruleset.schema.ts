@@ -919,7 +919,16 @@ const creatureActionSchema = z
     if (action.sequence) {
       // A sequence is a container. Anything else on it would be a second thing the one budget also
       // did, with nothing to say when it happened.
-      for (const key of ["toHit", "autoHit", "damage", "save", "saveDifficulty", "applies", "targetCount"] as const) {
+      for (const key of [
+        "toHit",
+        "autoHit",
+        "damage",
+        "save",
+        "saveDifficulty",
+        "applies",
+        "targetCount",
+        "area",
+      ] as const) {
         if (action[key] !== undefined) {
           ctx.addIssue({
             code: z.ZodIssueCode.custom,

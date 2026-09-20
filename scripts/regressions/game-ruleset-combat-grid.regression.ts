@@ -32,6 +32,7 @@ import {
   RULESET_MOVE_OPTION,
   RULESET_STAND_OPTION,
   rulesetAimCells,
+  rulesetAimLegal,
   rulesetAreaCells,
   rulesetAreaTargets,
   rulesetCellDistance,
@@ -926,6 +927,40 @@ const cellsOf = (cells: Array<{ x: number; y: number }>) =>
       .sort(),
     ["brenna", "corwin"],
   );
+  // A BALL with no distance of its own goes off where it is set down: only the creature's own cell
+  // may be aimed at, where a cone with none may be aimed anywhere within the length it draws.
+  const cloudy = {
+    ...pack[0]!.combatant,
+    id: "squid",
+    name: "Ink Squid",
+    block: {
+      ...pack[0]!.combatant.block,
+      actions: [
+        {
+          id: "ink",
+          name: "Ink Cloud",
+          budget: "action",
+          save: { save: "dex_save", onSuccess: "half" },
+          saveDifficulty: 11,
+          damage: { count: 1, sides: 6, flat: 0, type: "poison" },
+          area: { shape: "burst" as const, size: 15, friendlyFire: false },
+        },
+      ],
+    },
+  };
+  const inky = fight(fiveE, [fighter(), cloudy], [4, 18], {
+    grid: open(8, 5),
+    placements: { brenna: { x: 2, y: 2 }, squid: { x: 0, y: 2 } },
+  });
+  const ink = optionNamed(fiveE, inky, "squid", "Ink Cloud");
+  assert.deepEqual(ink.area, { shape: "burst", size: 3, range: 0 });
+  assert.deepEqual(
+    (ink.aim ?? rulesetAimCells(inky, "squid", ink.id)).map((cell) => ({ x: cell.x, y: cell.y })),
+    [{ x: 0, y: 2 }],
+    "the only square it may be set down on is the one the squid stands on",
+  );
+  assert.equal(rulesetAimLegal(inky, "squid", ink.id, { x: 2, y: 2 }), false, "and it cannot be thrown at somebody");
+
   // Off a board the same creature still breathes, on as many as its entry says: the old fight.
   const theatre = fight(fiveE, [fighter(), wizard(), ...pack.map((entry) => entry.combatant)], [4, 3, 18, 17]);
   const flat = optionNamed(fiveE, theatre, "hound", "Scalding Breath");
