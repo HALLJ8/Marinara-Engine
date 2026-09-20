@@ -1886,8 +1886,8 @@
       {
         "condition": "frightened",
         "effects": ["own-attacks-disadvantage", "cannot-approach-source"],
-        "whileSourceInSight": true,
-        "$comment": "Disadvantage while whatever frightened them is in sight, and no walking any nearer to it. Both are gated on sight, which is what whileSourceInSight says."
+        "whileSourceInSight": ["own-attacks-disadvantage"],
+        "$comment": "SRD 5.1, Frightened: disadvantage on attacks \"while the source of its fear is within line of sight\", and it \"can't willingly move closer to the source\" at all. So only the first is gated on sight, which is why whileSourceInSight names it rather than saying true."
       },
       {
         "condition": "grappled",

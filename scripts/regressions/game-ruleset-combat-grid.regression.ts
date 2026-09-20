@@ -1761,7 +1761,12 @@ const cellsOf = (cells: Array<{ x: number; y: number }>) =>
     rulesetCombatant(hidden, "brenna")!.y = 0;
     rulesetCombatant(hidden, "dread")!.y = 0;
     assert.ok(!rulesetLineOfSight(grid, { x: 2, y: 0 }, { x: 6, y: 0 }), "the wall really is between them");
-    assert.equal(modeIn(hidden), "normal", "out of its sight, the condition counts for nothing");
+    assert.equal(modeIn(hidden), "normal", "out of its sight, only the effect the gate names goes");
+    // But not everything goes with it. A fright stops you walking nearer whether or not you can see
+    // what frightened you, so the effect the gate does NOT name still stands behind the wall.
+    const nearer = rulesetReachableCells(fiveE, hidden, "brenna").map((cell) => `${cell.x},${cell.y}`);
+    assert.ok(nearer.length > 0, "there is somewhere to walk at all");
+    assert.ok(!nearer.includes("3,0"), "and it is still not a cell nearer to what frightened them");
   }
 
   // Three strikes for one spend, with a walk between them: the walk is the board's own option and

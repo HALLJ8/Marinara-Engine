@@ -118,8 +118,6 @@ function requireDamageAmount(node) {
   const keys = Object.keys(node.properties ?? {}).filter((key) => key !== "$comment");
   const damageShaped =
     ["dice", "flat", "type"].every((key) => keys.includes(key)) && keys.every((key) => DAMAGE_KEYS.includes(key));
-  // A rider's amount carries no type of its own (it takes the blow's), so it is dice and flat alone.
-  // It still has to say one of them, exactly as a clause does, or it adds nothing.
   // A rider's amount carries no type of its own, so its keys alone look like every other pair of
   // dice and flat in the file, a creature's health included. The schema marks it by name instead.
   const riderAmountShaped = node.description === "rider-amount";

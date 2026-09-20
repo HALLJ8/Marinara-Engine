@@ -5449,7 +5449,39 @@
                 "maxItems": 12
               },
               "whileSourceInSight": {
-                "type": "boolean"
+                "anyOf": [
+                  {
+                    "type": "boolean",
+                    "const": true
+                  },
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "enum": [
+                        "own-attacks-advantage",
+                        "own-attacks-disadvantage",
+                        "attacks-against-advantage",
+                        "attacks-against-disadvantage",
+                        "attacks-against-adjacent-advantage",
+                        "attacks-against-far-disadvantage",
+                        "attacks-from-adjacent-critical",
+                        "cannot-act",
+                        "cannot-react",
+                        "speed-zero",
+                        "half-move-to-stand",
+                        "ends-on-damage",
+                        "own-saves-advantage",
+                        "own-saves-disadvantage",
+                        "resist-all",
+                        "cannot-target-source",
+                        "cannot-approach-source"
+                      ]
+                    },
+                    "minItems": 1,
+                    "maxItems": 12
+                  }
+                ]
               },
               "endsWhenSourceDown": {
                 "type": "boolean"

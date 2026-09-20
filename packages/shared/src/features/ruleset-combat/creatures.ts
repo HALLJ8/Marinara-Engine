@@ -513,7 +513,12 @@ export function clampRulesetStatBlock(
           );
           delete clause.save;
         }
-        if (clause.save && clause.save.difficulty > difficultyCap) clause.save.difficulty = difficultyCap;
+        if (clause.save && clause.save.difficulty > difficultyCap) {
+          // Said out loud like every other clamp: a Game Master who asked for a harder save deserves
+          // to be told it was lowered, whether it was the action's own or a clause of it.
+          adjusted.push(`The save against a clause of "${action.name}" was lowered to ${difficultyCap}.`);
+          clause.save.difficulty = difficultyCap;
+        }
       }
     }
     if (action.save && !saves.has(action.save.save)) {

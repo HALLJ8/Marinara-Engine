@@ -1500,7 +1500,12 @@ const combatConditionSchema = z
     saves: z.array(sheetId).min(1).max(12).optional(),
     /** Its effects count only while whoever applied it is in sight. Without a board, always: a
      *  fight that measures nothing has no line to break. */
-    whileSourceInSight: z.boolean().optional(),
+    /**
+     * Only while whoever applied this is in sight. `true` gates the whole condition; a list gates
+     * only the effects it names and leaves the rest standing, which is what a fright that stops you
+     * walking closer whether or not you can see it needs.
+     */
+    whileSourceInSight: z.union([z.literal(true), z.array(combatConditionEffectSchema).min(1).max(12)]).optional(),
     /** It comes off the moment whoever applied it goes down. */
     endsWhenSourceDown: z.boolean().optional(),
   })
@@ -2421,6 +2426,18 @@ function refineRulesetDefinition(def: RulesetDefinitionBase, ctx: z.RefinementCt
       for (const key of ["failsSaves", "saves"] as const) {
         entry[key]?.forEach((save, saveIndex) => {
           if (!saves.has(save)) issue([...path, key, saveIndex], `Unknown save "${save}"`);
+        });
+      }
+      // Gating an effect this condition does not have says nothing, and is nearly always a typo for
+      // one it does.
+      if (Array.isArray(entry.whileSourceInSight)) {
+        entry.whileSourceInSight.forEach((effect, effectIndex) => {
+          if (!entry.effects.includes(effect)) {
+            issue(
+              [...path, "whileSourceInSight", effectIndex],
+              `This condition does not have the effect "${effect}" to gate`,
+            );
+          }
         });
       }
     });

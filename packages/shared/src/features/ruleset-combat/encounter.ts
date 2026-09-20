@@ -155,9 +155,15 @@ export function rulesetActiveConditions(
   state?: RulesetEncounterState,
 ): Array<NonNullable<RulesetCombat["conditions"]>[number]> {
   const active = new Set(rulesetCombatConditions(definition, combatant));
-  return (combat.conditions ?? []).filter((entry) => {
-    if (!active.has(entry.condition)) return false;
-    return !entry.whileSourceInSight || sourceInSight(combatant, entry.condition, state);
+  return (combat.conditions ?? []).flatMap((entry) => {
+    if (!active.has(entry.condition)) return [];
+    const gate = entry.whileSourceInSight;
+    if (!gate || sourceInSight(combatant, entry.condition, state)) return [entry];
+    // Out of sight: `true` takes the whole condition off, and a list takes off only what it names,
+    // so an effect nobody has to see to suffer stays.
+    if (gate === true) return [];
+    const effects = entry.effects.filter((effect) => !gate.includes(effect));
+    return effects.length > 0 ? [{ ...entry, effects }] : [];
   });
 }
 
