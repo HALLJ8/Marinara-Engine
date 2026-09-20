@@ -68,9 +68,12 @@ for (const theme of ["light", "dark"] as const) {
         .toBe(80);
 
       await expect.poll(() => JSON.parse(syncedUi).conversationBackgroundImageOpacity).toBe(80);
+      await opacitySlider.scrollIntoViewIfNeeded();
+      await page.screenshot({ path: testInfo.outputPath(`background-control-${theme}.png`) });
       await page.reload();
       await expect(activeBackground).toHaveCSS("opacity", "0.8");
       await expect(page.locator("[data-conversation-background-gradient-veil]")).toHaveCSS("opacity", "0.35");
+      await page.locator('[data-tour="panel-settings"]').click();
       await page.screenshot({ path: testInfo.outputPath(`background-eighty-${theme}.png`) });
     } finally {
       if (chatId) await request.delete(`/api/chats/${chatId}?force=true`).catch(() => undefined);
