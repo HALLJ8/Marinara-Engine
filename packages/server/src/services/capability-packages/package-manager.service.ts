@@ -523,6 +523,17 @@ function entriesCarryCombatMechanics(entries: unknown): boolean {
   });
 }
 
+/** What a picked entry does to a CHECK rather than to a fight, which is `mechanics.check` and is
+ *  new in 1.30. Read the same structural way, for the same reason: an Engine that does not know the
+ *  key refuses the whole file that holds it, inline or in a catalog asset. */
+function entriesCarryCheckEffects(entries: unknown): boolean {
+  if (!Array.isArray(entries)) return false;
+  return entries.some((entry) => {
+    const mechanics = entry && typeof entry === "object" ? (entry as { mechanics?: unknown }).mechanics : undefined;
+    return !!mechanics && typeof mechanics === "object" && (mechanics as Record<string, unknown>).check !== undefined;
+  });
+}
+
 /** An opponent in place of rows: another new key in the same strict file, read structurally for the
  *  same reason the two above are. */
 function entriesCarryCreatures(entries: unknown): boolean {
@@ -623,6 +634,9 @@ export function getCapabilityPackageInstallIssue(
     // strict file. Same reading, same reason.
     const positionIssue =
       "A ruleset whose fights are measured in cells requires schemaVersion 2 and capabilityApi 1.28 or newer";
+    // And what a picked entry does to a check, which is new in 1.30 and needs no wound track at all.
+    const checkIssue =
+      "A ruleset whose catalog entries change a check requires schemaVersion 2 and capabilityApi 1.30 or newer";
     for (const catalog of catalogs) {
       const header =
         catalog && typeof catalog === "object"
@@ -633,6 +647,7 @@ export function getCapabilityPackageInstallIssue(
       if (entriesCarryCombatMechanics(header.entries) && !declaresApi(26)) return mechanicsIssue;
       if (entriesCarryCreatures(header.entries) && !declaresApi(27)) return creatureIssue;
       if (entriesCarryCreatureRanges(header.entries) && !declaresApi(28)) return positionIssue;
+      if (entriesCarryCheckEffects(header.entries) && !declaresApi(30)) return checkIssue;
       const asset = header.asset;
       if (typeof asset !== "string") continue;
       // A path that does not normalize is never a declared one, whatever else failed to normalize.
@@ -646,6 +661,7 @@ export function getCapabilityPackageInstallIssue(
       if (entriesCarryCombatMechanics(fileEntries) && !declaresApi(26)) return mechanicsIssue;
       if (entriesCarryCreatures(fileEntries) && !declaresApi(27)) return creatureIssue;
       if (entriesCarryCreatureRanges(fileEntries) && !declaresApi(28)) return positionIssue;
+      if (entriesCarryCheckEffects(fileEntries) && !declaresApi(30)) return checkIssue;
     }
   }
   // The battle block lives inside the ruleset file too, so it is read the same way and for the same
@@ -658,7 +674,7 @@ export function getCapabilityPackageInstallIssue(
   // `dice-sum` refuses the whole file, so the package would be installed with no rules at all.
   const resolution =
     ruleset?.resolution && typeof ruleset.resolution === "object"
-      ? (ruleset.resolution as { kind?: unknown; penaltyFrom?: unknown })
+      ? (ruleset.resolution as { kind?: unknown; penaltyFrom?: unknown; spend?: unknown })
       : undefined;
   if (resolution?.kind === "dice-pool" && !declaresApi(24)) {
     return "A ruleset with a dice-pool resolution requires schemaVersion 2 and capabilityApi 1.24 or newer";
@@ -712,6 +728,11 @@ export function getCapabilityPackageInstallIssue(
         )
       : false;
     if (marked || resolution?.penaltyFrom !== undefined) return woundIssue;
+    // A player spending a resource on a roll is the other half of 1.30 and depends on no track at
+    // all, so it is its own reason rather than being folded into the wound-track one.
+    if (resolution?.spend !== undefined) {
+      return "A ruleset that lets a check spend a resource requires schemaVersion 2 and capabilityApi 1.30 or newer";
+    }
   }
   return null;
 }

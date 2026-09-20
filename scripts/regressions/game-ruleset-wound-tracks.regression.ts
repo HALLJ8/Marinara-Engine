@@ -524,11 +524,38 @@ try {
     const document = JSON.parse(gravewatchText) as Record<string, any>;
     // The example also carries a layer and a pool resolution, which have gates of their own.
     delete document.layers;
+    // The example trips more than one of 1.30's rules at once, so the reason it gives is whichever
+    // the gate reads first; what matters here is that 29 is refused and 30 installs. Each rule's
+    // own wording is pinned below, on a document that trips only that one.
     assert.match(
       getCapabilityPackageInstallIssue(manifest(29) as never, document) ?? "",
-      /wound tracks requires schemaVersion 2 and capabilityApi 1\.30 or newer/,
+      /capabilityApi 1\.30 or newer/,
     );
     assert.equal(getCapabilityPackageInstallIssue(manifest(30) as never, document), null);
+    // The wound track on its own, with no charm and no spend beside it.
+    const tracked = {
+      sheet: {
+        live: {
+          tracks: [
+            {
+              id: "harm",
+              label: "Harm",
+              min: 0,
+              max: 2,
+              levels: [
+                { label: "Hurt", penalty: 0 },
+                { label: "Down", penalty: -2 },
+              ],
+              kinds: [{ id: "knock", label: "K", severity: 0 }],
+            },
+          ],
+        },
+      },
+    };
+    assert.match(
+      getCapabilityPackageInstallIssue(manifest(29) as never, tracked) ?? "",
+      /wound tracks requires schemaVersion 2 and capabilityApi 1\.30 or newer/,
+    );
 
     // `penaltyFrom` on its own is the same gate, because an older Engine refuses that key too.
     const named = { resolution: { kind: "dice-sum", penaltyFrom: "harm" } };
@@ -536,6 +563,33 @@ try {
       getCapabilityPackageInstallIssue(manifest(28) as never, named) ?? "",
       /wound tracks requires schemaVersion 2 and capabilityApi 1\.30 or newer/,
     );
+    // The other two halves of 1.30 need no track at all, so each is its own reason. Without these
+    // a package shipping either would install under an older number and then have its whole
+    // ruleset.json refused at parse time, which is the failure this gate exists to replace.
+    const spending = {
+      resolution: { kind: "dice-pool", spend: [{ pool: "resolve", amount: 1, successes: 1, perCheck: 2 }] },
+    };
+    assert.match(
+      getCapabilityPackageInstallIssue(manifest(29) as never, spending) ?? "",
+      /spend a resource requires schemaVersion 2 and capabilityApi 1\.30 or newer/,
+    );
+    assert.equal(getCapabilityPackageInstallIssue(manifest(30) as never, spending), null);
+    const charm = {
+      catalogs: [
+        {
+          id: "charms",
+          label: "Charms",
+          feeds: ["charms"],
+          entries: [{ id: "c", label: "C", mechanics: { kind: "utility", check: { successes: 1 } } }],
+        },
+      ],
+    };
+    assert.match(
+      getCapabilityPackageInstallIssue(manifest(29) as never, charm) ?? "",
+      /catalog entries change a check requires schemaVersion 2 and capabilityApi 1\.30 or newer/,
+    );
+    assert.equal(getCapabilityPackageInstallIssue(manifest(30) as never, charm), null);
+
     // A ruleset with only plain tracks installs on whatever it always needed.
     const plain = { sheet: { live: { tracks: [{ id: "exhaustion", label: "Exhaustion", min: 0, max: 6 }] } } };
     assert.equal(getCapabilityPackageInstallIssue(manifest(20) as never, plain), null);

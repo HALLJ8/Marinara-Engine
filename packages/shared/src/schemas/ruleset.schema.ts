@@ -2989,10 +2989,18 @@ export function rulesetCatalogEntryIssues(
     // Temporary points are a buffer damage drains first, and a wound track has no buffer: it has
     // boxes, and a box is either marked or it is not. Rather than invent a meaning (a free level? a
     // mark that clears itself?) a ruleset whose fights are fought on a track is refused the key.
-    if (mechanics?.temporary && definition.combat && "track" in definition.combat.health) {
+    // Either block may point health at one: `battle` lends the Engine's own fights the sheet's
+    // numbers and reads a track as the levels still clear, with no buffer either.
+    const trackHealth =
+      definition.combat && "track" in definition.combat.health
+        ? definition.combat.health.track
+        : definition.battle && "track" in definition.battle.health
+          ? definition.battle.health.track
+          : null;
+    if (mechanics?.temporary && trackHealth) {
       add(
         [index, "mechanics", "temporary"],
-        `Health is the wound track "${definition.combat.health.track}", which carries no buffer for temporary points`,
+        `Health is the wound track "${trackHealth}", which carries no buffer for temporary points`,
       );
     }
     if (mechanics?.budget !== undefined && budgets && !budgets.has(mechanics.budget)) {

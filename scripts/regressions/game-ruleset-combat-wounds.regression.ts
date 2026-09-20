@@ -529,6 +529,39 @@ const marksOf = (definition: RulesetDefinition, state: RulesetEncounterState, id
     entry.mechanics.temporary = { flat: 3 };
   }, /carries no buffer for temporary points/);
 
+  // And the `battle` block points at health the same way, so a ruleset that only lends the Engine's
+  // own fights a track is refused for the same reason: the bridge reads a track as the levels still
+  // clear and has no buffer to put temporary points in either.
+  {
+    const doc = JSON.parse(emberText) as Record<string, any>;
+    delete doc.layers;
+    delete doc.combat;
+    doc.id = "ember-roads-battle-track";
+    doc.sheet.live.tracks = [
+      ...(doc.sheet.live.tracks ?? []),
+      {
+        id: "wear",
+        label: "Wear",
+        min: 0,
+        max: 2,
+        levels: [
+          { label: "Worn", penalty: 0 },
+          { label: "Spent", penalty: -2 },
+        ],
+        kinds: [{ id: "scrape", label: "S", severity: 0 }],
+      },
+    ];
+    doc.battle.health = { track: "wear" };
+    const entry = doc.catalogs[0].entries.find((candidate: any) => candidate.mechanics);
+    entry.mechanics.temporary = { flat: 3 };
+    const result = parseRulesetDefinition(doc);
+    assert.equal(result.ok, false, "a battle block on a track refuses temporary points too");
+    assert.ok(
+      (result.ok ? [] : result.issues).some((issue) => /carries no buffer for temporary points/.test(issue)),
+      `expected the buffer refusal, got ${JSON.stringify(result.ok ? [] : result.issues)}`,
+    );
+  }
+
   // The same entry is fine on the shipped pool ruleset, which is what makes the refusal specific.
   {
     const doc = JSON.parse(emberText) as Record<string, any>;

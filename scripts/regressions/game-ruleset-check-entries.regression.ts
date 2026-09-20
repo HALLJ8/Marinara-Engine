@@ -254,6 +254,27 @@ try {
     assert.equal(without.result.used, undefined, "a charm nobody has does nothing");
     assert.equal(without.written, null);
 
+    // And a `spend=` beside a named charm is that charm's PRICE, not a standing purchase of its
+    // own. When the charm cannot be applied the points stay on the sheet: buying the ruleset's own
+    // spend with them would hand the player an effect nobody asked for and charge them for it.
+    const priced = roll(contextFor(null, catalogs, [{ name: "Bram", rulesetSheet: { v: 1, build: bare } }]), {
+      skill: "Nerve",
+      dc: 1,
+      useEntry: "Steady Hand",
+      spend: { pool: "resolve", amount: 1 },
+    });
+    assert.equal(priced.result.used, undefined, "the charm it named is the only thing that could be bought");
+    assert.equal(priced.result.spent, undefined, "so nothing was paid");
+    assert.equal(priced.result.autoSuccesses, undefined, "and no success was handed over in its place");
+    assert.equal(priced.written, null);
+    // The same spend with NO charm named is the ruleset's own, and still works.
+    const standing = roll(contextFor(null, catalogs, [{ name: "Bram", rulesetSheet: { v: 1, build: bare } }]), {
+      skill: "Nerve",
+      dc: 1,
+      spend: { pool: "resolve", amount: 1 },
+    });
+    assert.deepEqual(standing.result.spent, { pool: "resolve", amount: 1 }, "the standing spend is untouched");
+
     // Catalogs the caller could not read at all read as the character not having it.
     const blind = roll(contextFor(null, null), { skill: "Nerve", dc: 1, useEntry: "Steady Hand" });
     assert.equal(blind.result.used, undefined, "the Engine will not guess what a charm costs");

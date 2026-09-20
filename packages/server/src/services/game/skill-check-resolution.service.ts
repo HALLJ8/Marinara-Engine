@@ -573,10 +573,15 @@ function resolveRulesetSkillCheck(
   // An entry the player used outranks the ruleset's own standing spend, because it is the more
   // specific thing the Game Master named. Only ONE of the two is ever bought on one check: two
   // purchases out of one `spend=` would pay for it twice.
+  // And when a name WAS given, it is the only thing that can be bought. Beside a `use=`, the
+  // `spend=` is that entry's own price, which is what pays for a higher use of it; buying the
+  // ruleset's standing spend with it instead would take the points for an effect nobody asked for,
+  // on a check where the named charm did nothing.
   const purchase = !onSpend
     ? null
-    : (planRulesetEntryCheck(ruleset, request.useEntry, request.spend, request.who) ??
-      planRulesetCheckPurchase(ruleset, request.spend, request.who));
+    : request.useEntry?.trim()
+      ? planRulesetEntryCheck(ruleset, request.useEntry, request.spend, request.who)
+      : planRulesetCheckPurchase(ruleset, request.spend, request.who);
   if (purchase) onSpend!(purchase.key, purchase.live);
   // What the record may say about `with=`: the ability's own label, and only when the swap
   // happened. An ability check has no other ability to swap in, and an unknown name was ignored.
