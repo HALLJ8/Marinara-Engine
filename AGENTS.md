@@ -1,6 +1,6 @@
 # AGENTS.md
 
-This file is a thin maintainer note for contributors using Codex. Canonical workflow, validation, and release guidance lives in `CONTRIBUTING.md`.
+This is the repository guide for coding agents. Canonical workflow, validation, and release guidance lives in `CONTRIBUTING.md`.
 
 ## Agent Workflow Overlay
 
@@ -68,12 +68,16 @@ Android-specific rule:
 - `versionName` matches the app version.
 - `versionCode` increments for every shipped APK.
 
+Storage-format rule (separate from the app version — never touched by `version:sync`):
+
+- Root `storage-format.json` must equal `STORAGE_VERSION` in `packages/server/src/db/file-backed-store.ts`. It changes only when the on-disk storage layout changes; the launcher/updater downgrade guard reads it via `git show` on the update target, so a missed bump silently disables that protection. The launcher-format-guard regression pins the pairing.
+
 ## Safe Multi-File Updates
 
 - When changing version numbers, bump root `package.json` first, then run `pnpm version:sync -- --android-version-code <next-code>`.
 - When changing version numbers or preparing a release, run `pnpm credits:check`; if it fails, run `pnpm credits:sync` and include the Credits modal update.
 - Run `pnpm version:check` before tagging or publishing.
-- Keep `CONTRIBUTING.md` authoritative. Add Codex-specific notes here only when they are operationally useful and not already covered there.
+- Keep `CONTRIBUTING.md` authoritative. Add agent-specific notes here only when they are operationally useful and not already covered there.
 
 ## Logging
 
