@@ -1068,7 +1068,9 @@ function AuthorNotesButton({
     const handle = (e: PointerEvent) => {
       const target = e.target as Node;
       if (ref.current?.contains(target) || panelRef.current?.contains(target)) return;
-      if (target instanceof Element && target.closest("[data-macro-modal]")) return;
+      // The overflow menu also mounts a hidden desktop copy of this trigger.
+      // Let the visible trigger toggle shared state without another copy closing it first.
+      if (target instanceof Element && target.closest('[data-macro-modal], [data-chat-help="author-notes"]')) return;
       // On mobile, the virtual keyboard opening can synthesise a pointer/mouse
       // event outside the panel that would otherwise close it mid-edit; don't
       // dismiss while a field inside the panel is focused. Mobile-only: on desktop
@@ -1304,7 +1306,7 @@ type RoleplaySurfaceProps = {
     conversationStartForCharacterIds: string[],
   ) => void;
   onToggleHiddenFromAI: (messageId: string, hiddenFromAll: boolean, hiddenFromAICharacterIds?: string[]) => void;
-  onPeekPrompt: () => void;
+  onPeekPrompt: (messageId?: string) => void;
   onBranch?: (messageId: string) => void;
   onCloneSceneFromHere?: (messageId: string) => void;
   isCloneSceneFromHereDisabled?: boolean;
@@ -2655,7 +2657,7 @@ export function ChatRoleplaySurface({
                           onSetActiveSwipe={onSetActiveSwipe}
                           onToggleConversationStart={onToggleConversationStart}
                           onToggleHiddenFromAI={onToggleHiddenFromAI}
-                          onPeekPrompt={onPeekPrompt}
+                          onPeekPrompt={() => onPeekPrompt(msg.id)}
                           onBranch={onBranch}
                           onCloneSceneFromHere={onCloneSceneFromHere}
                           isCloneSceneFromHereDisabled={isCloneSceneFromHereDisabled}
@@ -2689,7 +2691,7 @@ export function ChatRoleplaySurface({
                           onSetActiveSwipe={onSetActiveSwipe}
                           onToggleConversationStart={onToggleConversationStart}
                           onToggleHiddenFromAI={onToggleHiddenFromAI}
-                          onPeekPrompt={onPeekPrompt}
+                          onPeekPrompt={() => onPeekPrompt(msg.id)}
                           onBranch={onBranch}
                           onCloneSceneFromHere={onCloneSceneFromHere}
                           isCloneSceneFromHereDisabled={isCloneSceneFromHereDisabled}

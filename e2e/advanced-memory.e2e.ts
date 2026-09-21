@@ -101,6 +101,89 @@ async function openChat(page: Page, chatId: string, openSettings = true) {
     });
 }
 
+for (const mode of ["roleplay", "conversation"] as const) {
+  test(`${mode} message Peek Prompt keeps its saved request after background updates`, async ({
+    page,
+    request,
+  }, info) => {
+    const fixture = await createFixture(request);
+    try {
+      expect((await request.patch(`/api/chats/${fixture.chat.id}`, { data: { mode } })).ok()).toBeTruthy();
+      const cachedPrompt = [
+        { role: "system", content: "You are Dottore. SAVED_CONSTANT. Character-only commands: [note]." },
+        { role: "user", content: "Keep the laboratory promise." },
+      ];
+      const savedExtra = {
+        cachedPrompt,
+        chatSummaryFingerprint: "summary-at-generation",
+        generationInfo: { model: "saved-request-fixture", provider: "custom" },
+      };
+      expect(
+        (
+          await request.patch(`/api/chats/${fixture.chat.id}/messages/${fixture.lastMessage.id}/extra`, {
+            data: savedExtra,
+          })
+        ).ok(),
+      ).toBeTruthy();
+      expect(
+        (
+          await request.patch(`/api/chats/${fixture.chat.id}/metadata`, {
+            data: { advancedMemory: { ...DEFAULT_ADVANCED_MEMORY_SETTINGS, enabled: mode === "roleplay" } },
+          })
+        ).ok(),
+      ).toBeTruthy();
+      await openChat(page, fixture.chat.id, false);
+      for (let attempt = 0; attempt < 2; attempt++) {
+        if (attempt) {
+          expect(
+            (
+              await request.patch(`/api/chats/${fixture.chat.id}/messages/${fixture.lastMessage.id}/extra`, {
+                data: { ...savedExtra, attachments: [{ type: "image", url: "/late-illustration.png" }] },
+              })
+            ).ok(),
+          ).toBeTruthy();
+          expect(
+            (
+              await request.patch(`/api/chats/${fixture.chat.id}/metadata`, {
+                data: {
+                  summary: "Changed after generation",
+                  summaryEntries: [],
+                  advancedMemory: { ...DEFAULT_ADVANCED_MEMORY_SETTINGS, enabled: true, summaryBudgetTokens: 12000 },
+                },
+              })
+            ).ok(),
+          ).toBeTruthy();
+        }
+        const message = page.locator(`[data-message-id="${fixture.lastMessage.id}"]`).first();
+        const peek = message.getByRole("button", { name: "Peek prompt", exact: true });
+        const mobile = info.project.name.includes("mobile");
+        // Touch actions remain pinned after closing Peek. Tapping the message
+        // again would toggle them off; desktop actions follow the pointer.
+        if (!mobile) await message.hover();
+        else if (!attempt) await message.getByText("I will remember the blue notebook.", { exact: true }).tap();
+        await expect(message.locator(".mari-message-actions")).toHaveCSS("opacity", "1");
+        const responsePromise = page.waitForResponse((response) =>
+          response.url().endsWith(`/chats/${fixture.chat.id}/peek-prompt`),
+        );
+        if (mobile) await peek.tap();
+        else await peek.click();
+        const response = await responsePromise;
+        expect(response.request().postDataJSON()).toEqual({ messageId: fixture.lastMessage.id });
+        expect(response.ok()).toBeTruthy();
+        expect(await response.json()).toMatchObject({ exact: true, source: "cached", messages: cachedPrompt });
+        await expect(page.getByText("Exact Text Model Request", { exact: true })).toBeVisible();
+        if (attempt) await captureThemes(page, info, `${mode}-saved-message-prompt`);
+        const close = page.getByRole("button", { name: "Close assembled prompt", exact: true });
+        if (mobile) await close.tap();
+        else await close.click();
+        await expect(close).toBeHidden();
+      }
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+}
+
 test("preset editor offers one combined Recalled Scenes marker and reads the legacy alias", async ({
   page,
   request,
