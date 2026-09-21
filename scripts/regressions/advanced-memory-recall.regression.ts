@@ -11,6 +11,7 @@ process.env.NODE_ENV = "test";
 process.env.LOG_LEVEL = "silent";
 process.env.MARINARA_LITE = "true";
 const calls: string[] = [];
+const summaryInputs: string[] = [];
 let stallQuery = false;
 const provider = createServer(async (request, response) => {
   const chunks: Buffer[] = [];
@@ -26,6 +27,7 @@ const provider = createServer(async (request, response) => {
   }
   const classification = body.messages[0].content.startsWith("Identify scene transitions");
   calls.push(classification ? "classify" : "summary");
+  if (!classification) summaryInputs.push(JSON.stringify(body.messages));
   const content = classification
     ? {
         starts: JSON.parse(body.messages[1].content)
@@ -43,8 +45,12 @@ const { createFileNativeDB } = await import("../../packages/server/src/db/file-b
 const { createChatsStorage } = await import("../../packages/server/src/services/storage/chats.storage.js");
 const { createConnectionsStorage } = await import("../../packages/server/src/services/storage/connections.storage.js");
 const { createAdvancedMemoryService } = await import("../../packages/server/src/services/advanced-memory.js");
-const { DEFAULT_ADVANCED_MEMORY_SETTINGS, normalizeAdvancedMemorySettings } =
-  await import("../../packages/shared/dist/index.js");
+const {
+  DEFAULT_ADVANCED_MEMORY_SETTINGS,
+  normalizeAdvancedMemorySettings,
+  createChatSummaryEntry,
+  estimateChatSummaryTokens,
+} = await import("../../packages/shared/dist/index.js");
 const db = await createFileNativeDB();
 const chats = createChatsStorage(db);
 const memory = createAdvancedMemoryService(db);
@@ -81,7 +87,19 @@ try {
     Array.from({ length: 65 }, (_, index) => ({
       role: index % 2 ? ("assistant" as const) : ("user" as const),
       content: `${index % 12 === 0 ? "SCENE_CHANGE " : ""}The silver compass promise led the travelers through the mountain pass. Turn ${index + 1}.`,
-      ...(index === 60 ? { extra: { isConversationStart: true } } : {}),
+      extra: {
+        ...(index === 60 ? { isConversationStart: true } : {}),
+        attachments: [
+          {
+            type: "image",
+            filename: "illustration_1.png",
+            url: "/gallery/illustration.png",
+            imageCaption: "ILLUSTRATION_CAPTION",
+          },
+          { type: "image/png", filename: "uploaded.png", data: "data:image/png;base64,AAAA" },
+          { type: "text/plain", filename: "clue.txt", data: "data:text/plain,READABLE_CLUE_TEXT" },
+        ],
+      },
     })),
   );
   await memory.initialize(chat.id);
@@ -112,6 +130,20 @@ try {
     /Present message range in the context is: #61–#65, with the last user message being #65\./u,
   );
   assert.equal(recalled.recalledScenes!.match(/SCENE_RECAP/g)?.length, 3);
+  assert.doesNotMatch(
+    recalled.recalledScenes!,
+    /illustration_1|uploaded\.png|ILLUSTRATION_CAPTION|content unavailable/u,
+  );
+  assert.match(recalled.recalledScenes!, /READABLE_CLUE_TEXT/u, "readable attachments remain in recalled excerpts");
+  assert.doesNotMatch(
+    summaryInputs.join("\n"),
+    /illustration_1|uploaded\.png|ILLUSTRATION_CAPTION|content unavailable/u,
+  );
+  assert.match(
+    summaryInputs.join("\n"),
+    /READABLE_CLUE_TEXT/u,
+    "new summaries still receive readable source attachments",
+  );
   assert.equal(recalled.recalledScenes!.match(/Excerpt:\nMessages #\d+–#\d+;/g)?.length, 3);
   for (const block of recalled.recalledScenes!.split("Scene summary:\n").slice(1)) {
     assert(block.indexOf("SCENE_RECAP") < block.indexOf("Excerpt:\n"), "each summary precedes its own excerpt");
@@ -120,6 +152,33 @@ try {
     assert.equal(block.match(/^#\d+ /gm)?.length, 3);
   }
   await memory.validatePrepared(chat.id, source, recalled.receipt);
+  const [intro, ...blocks] = recalled.recalledScenes!.split("Scene summary:\n");
+  const sceneSummaryTokens = blocks.reduce(
+    (total, block) => total + estimateChatSummaryTokens(`Scene summary:\n${block.split("\n\nExcerpt:\n")[0]!.trim()}`),
+    0,
+  );
+  await memory.updateSettings(chat.id, { retrieveMinMessages: 1 });
+  const summariesFirst = await memory.prepare({
+    ...input,
+    readOnly: true,
+    budgetTokens:
+      recalled.receipt.estimatedTokensAfter -
+      estimateChatSummaryTokens(recalled.recalledScenes!) +
+      sceneSummaryTokens +
+      estimateChatSummaryTokens(intro!.trim()) +
+      8,
+  });
+  assert.equal(
+    summariesFirst.receipt.recalledSceneIds.length,
+    3,
+    "all fitting scene summaries take priority over every scene excerpt",
+  );
+  assert.equal(
+    summariesFirst.receipt.recalledMessageIds.length,
+    0,
+    "excerpts use only the room left after scene summaries",
+  );
+  await memory.updateSettings(chat.id, { retrieveMinMessages: 3 });
   await memory.updateSettings(chat.id, { retrieveMaxScenes: 1 });
   const one = await memory.prepare({ ...input, readOnly: true });
   assert.equal(one.receipt.recalledSceneIds.length, 1);
@@ -154,11 +213,102 @@ try {
   assert(next.messageIds.includes(appended.id));
   assert.match(next.recalledScenes!, /last user message being #66\./u);
 
+  await memory.updateSettings(chat.id, { summaryBudgetTokens: 20_000 });
+  const constantEntries = [
+    [1, 12],
+    [13, 62],
+    [63, 66],
+  ].map(([start, end], index) =>
+    createChatSummaryEntry({
+      id: `constant-${index}`,
+      content: `CONSTANT_RANGE_${index} `.repeat(500),
+      enabled: true,
+      origin: "manual",
+      rangeStartIndex: start,
+      rangeEndIndex: end,
+    }),
+  );
+  await chats.patchMetadata(chat.id, {
+    summaryEntries: [
+      ...constantEntries,
+      createChatSummaryEntry({
+        id: "disabled",
+        content: "DISABLED_CONSTANT",
+        enabled: false,
+        origin: "manual",
+        rangeStartIndex: 1,
+        rangeEndIndex: 12,
+      }),
+      createChatSummaryEntry({
+        id: "future",
+        content: "FUTURE_CONSTANT",
+        enabled: true,
+        origin: "manual",
+        rangeStartIndex: 1,
+        rangeEndIndex: 100,
+      }),
+    ],
+  });
+  const withConstants = await memory.prepare({ ...input, messages: await chats.listMessages(chat.id), readOnly: true });
+  for (const entry of constantEntries)
+    assert(
+      withConstants.chatSummary!.includes(entry.content.trim()),
+      "all enabled constants survive archived, overlapping and live ranges",
+    );
+  assert.doesNotMatch(withConstants.chatSummary!, /DISABLED_CONSTANT|FUTURE_CONSTANT/u);
+  const tight = await memory.prepare({
+    ...input,
+    messages: await chats.listMessages(chat.id),
+    readOnly: true,
+    budgetTokens: estimateChatSummaryTokens(withConstants.chatSummary!) + 600,
+  });
+  assert.equal(
+    tight.chatSummary,
+    withConstants.chatSummary,
+    "optional recalled scenes cannot displace constant summaries",
+  );
+  assert(
+    tight.receipt.recalledSceneIds.length < withConstants.receipt.recalledSceneIds.length,
+    "recall yields when constants use the available request budget",
+  );
+  assert(tight.receipt.estimatedTokensAfter <= tight.receipt.budgetTokens);
+
   stallQuery = true;
   const started = Date.now();
   const fallback = await memory.prepare({ ...input, messages: await chats.listMessages(chat.id) });
   assert(Date.now() - started < 4000, "a stalled embedding provider cannot stall optional recall for minutes");
   assert(fallback.receipt.recalledSceneIds.length > 0, "bounded lexical recall survives a stalled embedding provider");
+  stallQuery = false;
+
+  const savedScenes = (await memory.status(chat.id)).records.filter(
+    (record) => record.kind === "scene" && record.content,
+  );
+  for (const record of savedScenes) {
+    await memory.updateRecord(chat.id, record.id, {
+      content: "The silver compass promise led the travelers through the mountain pass. ".repeat(68),
+    });
+  }
+  for (const summaryBudgetTokens of [3000, 6000]) {
+    await memory.updateSettings(chat.id, { summaryBudgetTokens });
+    const constant = createChatSummaryEntry({
+      id: "allocated-constant",
+      content: "CONSTANT ".repeat(Math.floor((summaryBudgetTokens * 0.65 * 4) / 9)),
+      enabled: true,
+      rangeStartIndex: 1,
+      rangeEndIndex: 12,
+    });
+    await chats.patchMetadata(chat.id, { summaryEntries: [constant] });
+    const allocated = await memory.prepare({ ...input, messages: await chats.listMessages(chat.id), readOnly: true });
+    assert(allocated.chatSummary!.includes(constant.content.trim()));
+    const memoryTokens =
+      estimateChatSummaryTokens(allocated.chatSummary!) + estimateChatSummaryTokens(allocated.recalledScenes!);
+    assert(memoryTokens > summaryBudgetTokens, "relevant scenes can use the extra allowance");
+    assert(
+      memoryTokens <= summaryBudgetTokens + 2000,
+      `total memory fits the user's ${summaryBudgetTokens} + 2k budget`,
+    );
+    assert.equal(allocated.receipt.recalledSceneIds.length, summaryBudgetTokens === 3000 ? 2 : 3);
+  }
   process.stdout.write(
     "Advanced Memory scene limits, paired excerpts, current-turn context and bounded retrieval passed.\n",
   );

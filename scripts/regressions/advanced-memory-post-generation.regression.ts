@@ -26,6 +26,7 @@ const {
   characterDataSchema,
   replaceBuiltInAgentDefinitions,
   createChatSummaryEntry,
+  estimateChatSummaryTokens,
 } = await import("../../packages/shared/dist/index.js");
 const calls: Array<{
   kind: string;
@@ -35,6 +36,15 @@ const calls: Array<{
   maxTokens?: number;
 }> = [];
 let summaryGate: Promise<void> | undefined;
+let summaryResponse: string | undefined;
+let closeLatestScene = false;
+const sceneDecision = (transcript: Array<{ messageNumber: number; content: string }>) => ({
+  ends: closeLatestScene
+    ? [{ messageNumber: transcript.at(-1)!.messageNumber }]
+    : transcript
+        .filter((message) => message.content.startsWith("SCENE_CHANGE"))
+        .map((message) => ({ messageNumber: message.messageNumber - 1 })),
+});
 let finishStream: (() => void) | undefined;
 let streamFinished = false;
 let streamGate: Promise<void> | undefined;
@@ -74,17 +84,33 @@ const provider = createServer(async (req, res) => {
     maxTokens: body.max_output_tokens ?? body.max_completion_tokens ?? body.max_tokens,
   });
   if (kind === "summary" && summaryGate) await summaryGate;
+  const bundledSceneCheck = messages.find((message: { content: string }) => message.content.includes("Transcript:\n"));
   const content =
     kind === "tracker"
-      ? '{"values":{"weather":"clear"}}'
+      ? JSON.stringify({
+          values: { weather: "clear" },
+          ...(bundledSceneCheck
+            ? {
+                __scene_check: sceneDecision(
+                  JSON.parse(bundledSceneCheck.content.split("Transcript:\n")[1].split("\n\nKeep")[0]),
+                ),
+              }
+            : {}),
+        })
       : kind === "scene"
-        ? JSON.stringify({
-            starts: JSON.parse(messages[1].content)
-              .filter((message: { content: string }) => message.content.startsWith("SCENE_CHANGE"))
-              .map((message: { messageId: string }) => ({ messageId: message.messageId })),
-          })
+        ? JSON.stringify(
+            messages[0].content.includes('"ends"')
+              ? sceneDecision(JSON.parse(messages[1].content))
+              : {
+                  starts: JSON.parse(messages[1].content)
+                    .filter((message: { content: string }) => message.content.startsWith("SCENE_CHANGE"))
+                    .map((message: { messageId: string }) => ({ messageId: message.messageId })),
+                },
+          )
         : kind === "summary"
-          ? '{"summary":"ARCHIVED_RECAP: The silver compass promise guided the travelers."}'
+          ? JSON.stringify({
+              summary: summaryResponse ?? "ARCHIVED_RECAP: The silver compass promise guided the travelers.",
+            })
           : "The character continues the silver compass journey.";
   const response = {
     id: "fixture",
@@ -213,6 +239,11 @@ try {
   assert(!JSON.stringify(sceneCall.messages).includes("UNRELATED_AUTHOR_NOTE"));
   const window = JSON.parse(sceneCall.messages[1]!.content);
   assert.equal(window.length, 5);
+  assert.deepEqual(
+    window.map((message: { messageNumber: number }) => message.messageNumber),
+    [1, 2, 3, 4, 5],
+  );
+  assert.match(sceneCall.messages[0]!.content, /"ends":\[\{"messageNumber":42\}\]/u);
   assert(window.at(-1).content.includes("continues the silver compass"), "the check includes the just-saved reply");
   assert(!(await memory.status(chat.id)).records.some((record) => record.content));
 
@@ -355,7 +386,7 @@ try {
   assert.doesNotMatch(
     trackerPrompt,
     /ARCHIVED_RECAP|Included below are recalled|__scene_check|__MARINARA_ADVANCED_MEMORY_/u,
-    "agent prompts never receive Advanced Recall output or a bundled scene-check request",
+    "out-of-cadence agent prompts receive neither Advanced Recall output nor a scene-check request",
   );
   const beforeRetry = JSON.parse((await chats.getById(chat.id))!.metadata).advancedMemoryState;
   calls.length = 0;
@@ -419,6 +450,91 @@ try {
     /ARCHIVED_RECAP|ARCHIVED_SOURCE_ONLY|LATEST_SWIPE_CACHE_MUST_NOT_WIN/u,
     "a saved recap cannot bypass changed source visibility",
   );
+  await memory.checkScenesAfterGeneration(chat.id);
+  const batchChat = await chats.create({
+    name: "Numbered tracker scene endings",
+    mode: "roleplay",
+    characterIds: [character.id],
+    connectionId: connection.id,
+  });
+  assert(batchChat);
+  chatIds.push(batchChat.id);
+  await createAgentsStorage(db).update(tracker.id, { settings: { ...trackerSettings, runInterval: 1 } });
+  await chats.patchMetadata(batchChat.id, {
+    enableAgents: true,
+    activeAgentIds: [tracker.type],
+    advancedMemory: {
+      ...DEFAULT_ADVANCED_MEMORY_SETTINGS,
+      enabled: true,
+      maxContextTokens: 8192,
+      helperConnectionId: connection.id,
+    },
+  });
+  await memory.initialize(batchChat.id);
+  closeLatestScene = true;
+  for (let scene = 0; scene < 2; scene++) {
+    await chats.createMessagesBatch(
+      batchChat.id,
+      Array.from({ length: 4 }, (_, index) => ({
+        role: "user" as const,
+        content: `Scene ${scene + 1} event ${index + 1}.`,
+      })),
+    );
+    calls.length = 0;
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/generate/",
+      payload: { chatId: batchChat.id, forCharacterId: character.id, streaming: true },
+    });
+    assert(!response.body.includes('"type":"error"'), response.body);
+    const source = await chats.listMessages(batchChat.id);
+    await waitFor(async () => {
+      const state = JSON.parse((await chats.getById(batchChat.id))!.metadata).advancedMemoryState;
+      return state.status === "ready" && state.sceneCheckMessageId === source.at(-1)!.id;
+    });
+    // Join background maintenance before inspecting its completed archive.
+    await memory.checkScenesAfterGeneration(batchChat.id);
+    assert.deepEqual(
+      calls.slice(0, 2).map((call) => call.kind),
+      ["main", "tracker"],
+    );
+    assert.equal(
+      calls.filter((call) => call.kind === "scene").length,
+      0,
+      "the tracker result avoids a second scene-helper call",
+    );
+    assert.equal(calls.filter((call) => call.kind === "summary").length, 1, "only the newly ended scene is summarized");
+    const trackerCall = calls.find((call) => call.kind === "tracker")!;
+    assert.match(JSON.stringify(trackerCall.messages), /__scene_check/u);
+    assert.doesNotMatch(JSON.stringify(trackerCall.messages), /ARCHIVED_RECAP|Included below are recalled/u);
+    const recaps = (await memory.status(batchChat.id)).records.filter(
+      (record) => record.kind === "scene" && record.content,
+    );
+    assert.deepEqual(
+      recaps.map((record) => [record.startIndex, record.endIndex, record.status]),
+      scene === 0
+        ? [[1, 5, "closed"]]
+        : [
+            [1, 5, "closed"],
+            [6, 10, "closed"],
+          ],
+    );
+    assert(
+      recaps.every((record) => record.embeddingStatus === "vectorized"),
+      "ended scenes are indexed after the main reply",
+    );
+    const prepared = await memory.prepare({
+      chatId: batchChat.id,
+      messages: source,
+      audienceCharacterIds: [],
+      audienceMode: "owner",
+      budgetTokens: 8000,
+      readOnly: true,
+    });
+    assert.equal(prepared.recalledScenes, null, "closed scenes still in the live context are excluded from retrieval");
+  }
+  closeLatestScene = false;
+
   const constantsChat = await chats.create({
     name: "Existing ranged constants",
     mode: "roleplay",
@@ -433,7 +549,7 @@ try {
     maxContext: 65_000,
     maxTokensOverride: 256,
   });
-  const constantText = "EXISTING_RANGE_SUMMARY ".repeat(1450); // ~8k, below the configured 10k cap.
+  const constantText = "EXISTING_RANGE_SUMMARY ".repeat(1000); // Below the 7k constant share of a 10k memory budget.
   await chats.patchMetadata(constantsChat.id, {
     enableAgents: false,
     summaryMaxTokens: 12_000,
@@ -485,7 +601,7 @@ try {
   assert.deepEqual(
     calls.map((call) => call.kind),
     ["main"],
-    "8k of constants under a 10k cap triggers no summary call, regardless of raw-history size",
+    "constants under 70% of the memory budget trigger no summary call, regardless of raw-history size",
   );
   assert(JSON.stringify(calls[0]!.messages).includes(constantText.trim()), "the existing constant is included intact");
   assert(!JSON.stringify(calls[0]!.messages).includes("ALREADY_SUMMARIZED_RAW"));
@@ -493,7 +609,31 @@ try {
   assert.equal(beforeConstants.length, 1, "no parallel continuity store is populated");
   assert(!(await memory.status(constantsChat.id)).records.some((record) => record.kind === "continuity"));
 
-  const largeConstants = [{ ...beforeConstants[0], content: "CONSTANTS_ONLY_SOURCE ".repeat(2400) }];
+  // The 70% share follows each user's budget; it is not fixed at 7k or 10k.
+  for (const summaryBudgetTokens of [8000, 20_000]) {
+    const content = "BUDGET_CONSTANT ".repeat(Math.floor((summaryBudgetTokens * 0.75 * 4) / 16));
+    assert(estimateChatSummaryTokens(content) > summaryBudgetTokens * 0.7);
+    assert(estimateChatSummaryTokens(content) < summaryBudgetTokens);
+    await memory.updateSettings(constantsChat.id, { summaryBudgetTokens });
+    await chats.patchMetadata(constantsChat.id, { summaryEntries: [{ ...beforeConstants[0], content }] });
+    calls.length = 0;
+    assert(!(await generateConstants()).body.includes('"type":"error"'));
+    await memory.checkScenesAfterGeneration(constantsChat.id, { blocking: false });
+    assert.deepEqual(
+      calls.map((call) => call.kind),
+      ["main", "summary"],
+    );
+    const combine = calls[1]!;
+    assert(combine.messages[0]!.content.includes(`within ${Math.floor(summaryBudgetTokens * 0.7)} tokens`));
+    assert(JSON.stringify(calls[0]!.messages).includes(content.trim()), "the crossing reply keeps its constants");
+  }
+  await memory.updateSettings(constantsChat.id, { summaryBudgetTokens: 10_000 });
+
+  const largeConstants = [{ ...beforeConstants[0], content: "CONSTANTS_ONLY_SOURCE ".repeat(1500) }];
+  assert(estimateChatSummaryTokens(largeConstants[0].content) > 7000);
+  assert(estimateChatSummaryTokens(largeConstants[0].content) < 10_000);
+  summaryResponse = `ARCHIVED_RECAP ${"COMPACTED_CONSTANT ".repeat(1450)}`;
+  assert(estimateChatSummaryTokens(summaryResponse) <= 7000);
   await chats.patchMetadata(constantsChat.id, { summaryEntries: largeConstants });
   let releaseHelper!: () => void;
   summaryGate = new Promise<void>((resolve) => {
@@ -511,6 +651,11 @@ try {
     "Chat Summary output size overrides the helper connection's 256-token setting",
   );
   assert(JSON.stringify(combinedRequest.messages).includes("CONSTANTS_ONLY_SOURCE"));
+  assert.match(
+    combinedRequest.messages[0]!.content,
+    /within 7000 tokens/u,
+    "the helper receives the 70% allocation, not the combined memory allowance",
+  );
   assert.doesNotMatch(
     JSON.stringify(combinedRequest.messages),
     /ALREADY_SUMMARIZED_RAW|ongoing scene continues|character continues/iu,
@@ -534,6 +679,12 @@ try {
     summaryGate = undefined;
   }
   await memory.checkScenesAfterGeneration(constantsChat.id, { blocking: false });
+  assert.equal(
+    calls.filter((call) => call.kind === "summary").length,
+    1,
+    "a result within the constant share needs no paid retry",
+  );
+  summaryResponse = undefined;
   const combinedEntries = JSON.parse((await chats.getById(constantsChat.id))!.metadata).summaryEntries;
   assert.equal(combinedEntries.filter((entry: { enabled: boolean }) => entry.enabled).length, 1);
   assert.equal(
@@ -546,6 +697,165 @@ try {
     !(await memory.status(constantsChat.id)).records.some((record) => record.kind === "continuity"),
     "new constants live only in Chat Summaries",
   );
+  for (const ranged of [true, false]) {
+    const liveChat = await chats.create({
+      name: "Live constant compaction",
+      mode: "roleplay",
+      characterIds: [character.id],
+      connectionId: connection.id,
+    });
+    assert(liveChat);
+    chatIds.push(liveChat.id);
+    await chats.createMessage({ chatId: liveChat.id, role: "user", content: "LIVE_RAW_NOT_COMPACTION_INPUT" });
+    await chats.createMessage({
+      chatId: liveChat.id,
+      role: "user",
+      content: "HIDDEN_RAW",
+      extra: { hiddenFromAI: true },
+    });
+    await chats.patchMetadata(liveChat.id, {
+      advancedMemory: { ...DEFAULT_ADVANCED_MEMORY_SETTINGS, enabled: true, sceneCheckInterval: 100 },
+      macroVariables: { memory: "LIVE_CONSTANT_TO_COMBINE ".repeat(600) },
+      summaryEntries: [
+        createChatSummaryEntry({
+          content: ranged ? "LIVE_CONSTANT_TO_COMBINE ".repeat(600) : "{{getvar::memory}}",
+          enabled: true,
+          ...(ranged ? { rangeStartIndex: 1, rangeEndIndex: 1 } : {}),
+        }),
+        createChatSummaryEntry({
+          id: "hidden-constant",
+          content: "HIDDEN_CONSTANT ".repeat(900),
+          enabled: true,
+          rangeStartIndex: 2,
+          rangeEndIndex: 2,
+        }),
+      ],
+    });
+    calls.length = 0;
+    await memory.checkScenesAfterGeneration(liveChat.id, { blocking: false });
+    assert.deepEqual(
+      calls.map((call) => call.kind),
+      ["summary"],
+      "compaction also covers live and legacy constants",
+    );
+    assert.doesNotMatch(JSON.stringify(calls[0]!.messages), /LIVE_RAW_NOT_COMPACTION_INPUT|HIDDEN_CONSTANT/u);
+    const active = JSON.parse((await chats.getById(liveChat.id))!.metadata).summaryEntries.find(
+      (entry: { enabled: boolean }) => entry.enabled,
+    );
+    assert.equal(active.rangeStartIndex, ranged ? 1 : undefined, "legacy summaries acquire no invented coverage");
+  }
+  const privateChat = await chats.create({
+    name: "Per-character constant budgets",
+    mode: "roleplay",
+    characterIds: ["private-a", "private-b"],
+    connectionId: connection.id,
+  });
+  assert(privateChat);
+  chatIds.push(privateChat.id);
+  for (const hiddenFrom of ["private-b", "private-a"]) {
+    await chats.createMessage({
+      chatId: privateChat.id,
+      role: "user",
+      content: "A private event.",
+      extra: { hiddenFromAICharacterIds: [hiddenFrom] },
+    });
+  }
+  const privateEntries = ["PRIVATE_A_CONSTANT ", "PRIVATE_B_CONSTANT "].map((content, index) =>
+    createChatSummaryEntry({
+      id: `private-${index}`,
+      content: content.repeat(1100),
+      enabled: true,
+      rangeStartIndex: index + 1,
+      rangeEndIndex: index + 1,
+    }),
+  );
+  await chats.patchMetadata(privateChat.id, {
+    groupChatMode: "individual",
+    advancedMemory: {
+      ...DEFAULT_ADVANCED_MEMORY_SETTINGS,
+      enabled: true,
+      summaryBudgetTokens: 10_000,
+      sceneCheckInterval: 100,
+      knowledgeStarts: { "private-a": null, "private-b": null },
+    },
+    summaryEntries: privateEntries,
+  });
+  calls.length = 0;
+  await memory.checkScenesAfterGeneration(privateChat.id, { blocking: false });
+  assert.deepEqual(calls, [], "separate 5k character constants do not jointly exceed a 7k per-view share");
+  await chats.patchMetadata(privateChat.id, {
+    summaryEntries: [{ ...privateEntries[0], content: "PRIVATE_A_CONSTANT ".repeat(1700) }, privateEntries[1]],
+  });
+  await memory.checkScenesAfterGeneration(privateChat.id, { blocking: false });
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0]!.kind, "summary");
+  assert.match(JSON.stringify(calls[0]!.messages), /PRIVATE_A_CONSTANT/u);
+  assert.doesNotMatch(JSON.stringify(calls[0]!.messages), /PRIVATE_B_CONSTANT/u);
+  const privateAfter = JSON.parse((await chats.getById(privateChat.id))!.metadata).summaryEntries;
+  assert.deepEqual(
+    privateAfter.find((entry: { id: string }) => entry.id === "private-1"),
+    privateEntries[1],
+  );
+
+  const macroChat = await chats.create({
+    name: "Audience-dependent constant templates",
+    mode: "roleplay",
+    characterIds: [character.id, "unknown-character"],
+    connectionId: connection.id,
+  });
+  assert(macroChat);
+  chatIds.push(macroChat.id);
+  await chats.createMessage({ chatId: macroChat.id, role: "user", content: "A shared event." });
+  const template = createChatSummaryEntry({
+    id: "character-template",
+    content: "{{char}} owns this promise. ".repeat(150),
+    enabled: true,
+    rangeStartIndex: 1,
+    rangeEndIndex: 1,
+  });
+  await chats.patchMetadata(macroChat.id, {
+    groupChatMode: "individual",
+    advancedMemory: {
+      ...DEFAULT_ADVANCED_MEMORY_SETTINGS,
+      enabled: true,
+      sceneCheckInterval: 100,
+      knowledgeStarts: { [character.id]: null, "unknown-character": null },
+    },
+    summaryEntries: [
+      template,
+      createChatSummaryEntry({
+        id: "ordinary-constant",
+        content: "STABLE_CONSTANT ".repeat(550),
+        enabled: true,
+        rangeStartIndex: 1,
+        rangeEndIndex: 1,
+      }),
+    ],
+  });
+  calls.length = 0;
+  await memory.checkScenesAfterGeneration(macroChat.id, { blocking: false });
+  assert.equal(calls.length, 1);
+  assert.match(JSON.stringify(calls[0]!.messages), /STABLE_CONSTANT/u);
+  assert.doesNotMatch(JSON.stringify(calls[0]!.messages), /owns this promise/u);
+  const macroAfter = JSON.parse((await chats.getById(macroChat.id))!.metadata).summaryEntries;
+  assert.deepEqual(
+    macroAfter.find((entry: { id: string }) => entry.id === template.id),
+    template,
+  );
+  for (const [id, name] of [
+    [character.id, "Dottore"],
+    ["unknown-character", "Character"],
+  ]) {
+    const prepared = await memory.prepare({
+      chatId: macroChat.id,
+      messages: await chats.listMessages(macroChat.id),
+      audienceCharacterIds: [id!],
+      budgetTokens: 50_000,
+      readOnly: true,
+    });
+    assert(prepared.chatSummary!.includes(`${name} owns this promise.`));
+  }
+
   const partialChat = await chats.create({
     name: "Reuse existing summary ranges",
     mode: "roleplay",
