@@ -22,8 +22,32 @@ import { sidecarModelService } from "./sidecar-model.service.js";
 import { sidecarProcessService } from "./sidecar-process.service.js";
 import { utilitySidecarService } from "../utility-sidecar/utility-sidecar.service.js";
 
-function mainSlot(): SidecarSlotFootprint {
+/**
+ * The main slot's status, cached briefly.
+ *
+ * This is the one expensive read in the section: it stats the model file, and on
+ * macOS it can reach a synchronous `execFileSync` with a five-second timeout.
+ * `/api/health` is polled and is the freeze detector's own signal, so that must not
+ * land on every request.
+ *
+ * Only the model's identity and size are cached. Whether the slot is running, and the
+ * memory it actually holds, are read live on every call: a report that says "stopped"
+ * for a minute after the user started their model is the kind of wrong detail these
+ * lines exist to prevent.
+ */
+const MAIN_STATUS_CACHE_MS = 10_000;
+let cachedMainStatus: { status: ReturnType<typeof sidecarModelService.getStatus>; at: number } | null = null;
+
+function mainStatus() {
+  const now = Date.now();
+  if (cachedMainStatus && now - cachedMainStatus.at <= MAIN_STATUS_CACHE_MS) return cachedMainStatus.status;
   const status = sidecarModelService.getStatus();
+  cachedMainStatus = { status, at: now };
+  return status;
+}
+
+function mainSlot(): SidecarSlotFootprint {
+  const status = mainStatus();
   const running = sidecarProcessService.isReady();
   // gpuLayers 0 means the model runs on the CPU, so it is weighed against system
   // memory rather than counted against the card.

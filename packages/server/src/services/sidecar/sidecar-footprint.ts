@@ -271,6 +271,10 @@ function refresh(): void {
       return result;
     })
     .finally(() => {
+      // Safe only because nothing clears `inFlight` from outside: this promise is
+      // always the one in the slot when it settles. Anything that invalidates the
+      // cache mid-flight needs a generation token so a stale probe cannot repopulate
+      // `cached` or clear a newer request's promise.
       inFlight = null;
     });
 }
@@ -285,9 +289,4 @@ export function getMeasuredProcessBytes(pid: number | null | undefined): number 
   if (typeof pid !== "number") return null;
   refresh();
   return cached?.usageByPid.get(pid) ?? null;
-}
-
-export function resetGpuProbeCache(): void {
-  cached = null;
-  inFlight = null;
 }

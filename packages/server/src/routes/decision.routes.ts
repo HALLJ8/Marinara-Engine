@@ -66,6 +66,29 @@ function slotModelIdentity(slot: DecisionLocalSlot): string {
   return `primary:${sidecarModelService.getConfiguredModelRef() ?? ""}:${status.modelSize ?? 0}`;
 }
 
+interface DecisionConnectionRowSummary {
+  id: string;
+  credentialsFromConnectionId?: string | null;
+  profileImportReviewRequired?: unknown;
+}
+
+/**
+ * Why a Decision connection cannot serve, or null when it can.
+ *
+ * A borrowed key whose connection is gone cannot sign a request, and copying the key
+ * across on deletion would be a silent credential move. One function so the list and
+ * the writer cannot drift into disagreeing about what is selectable.
+ */
+export function decisionConnectionUnavailable(
+  row: DecisionConnectionRowSummary,
+  rows: DecisionConnectionRowSummary[],
+): "needs_relinking" | null {
+  if (row.profileImportReviewRequired === "true") return "needs_relinking";
+  if (!row.credentialsFromConnectionId) return null;
+  const lender = rows.find((other) => other.id === row.credentialsFromConnectionId);
+  return lender && lender.profileImportReviewRequired !== "true" ? null : "needs_relinking";
+}
+
 function localOption(slot: DecisionLocalSlot, selectedId: string | null): DecisionModelOption {
   const id = DECISION_LOCAL_SLOT_IDS[slot];
   const description = describeDecisionSlot(slot);
@@ -110,20 +133,13 @@ export async function decisionRoutes(app: FastifyInstance) {
     const options: DecisionModelOption[] = DECISION_LOCAL_SLOTS.map((slot) => localOption(slot, selected));
     for (const row of rows) {
       if (row.provider !== "decision") continue;
-      // A borrowed key whose connection is gone cannot sign a request, and copying the
-      // key across on deletion would be a silent credential move. Say it needs relinking.
-      const orphaned =
-        !!row.credentialsFromConnectionId &&
-        !rows.some(
-          (other) => other.id === row.credentialsFromConnectionId && other.profileImportReviewRequired !== "true",
-        );
       options.push({
         id: row.id,
         label: row.name,
         group: "connection",
         slot: null,
         selected: selected === row.id,
-        unavailable: orphaned || row.profileImportReviewRequired === "true" ? "needs_relinking" : null,
+        unavailable: decisionConnectionUnavailable(row, rows),
       });
     }
     return { selected, options };
@@ -162,13 +178,25 @@ export async function decisionRoutes(app: FastifyInstance) {
     }
     const row = await connections.getById(id);
     if (!row || row.provider !== "decision") return reply.status(404).send({ error: "No such decision connection" });
+    // The same check the dropdown greys the row out with. A stale client, or a direct
+    // request, must not be able to store a connection that cannot sign a request:
+    // that leaves a decision model named in the UI while every gate fails open.
+    const unavailable = decisionConnectionUnavailable(row, await connections.list());
+    if (unavailable)
+      return reply
+        .status(409)
+        .send({ error: "That connection cannot answer decisions right now", reason: unavailable });
     await connections.update(id, { defaultForAgents: true });
     return { selected: id };
   });
 
   /** How a local slot's model is allowed to reach its answer. */
-  app.post("/thinking", async (req) => {
+  app.post("/thinking", async (req, reply) => {
     const { slot, thinking } = thinkingSchema.parse(req.body);
+    // The setter deliberately ignores a slot this build cannot run. Saying so beats
+    // echoing the requested value back, which would read as a saved setting.
+    if (!isDecisionSlotImplemented(slot))
+      return reply.status(409).send({ error: "That local model is not available in this build" });
     setDecisionSlotThinking(slot, thinking);
     return { slot, thinking };
   });

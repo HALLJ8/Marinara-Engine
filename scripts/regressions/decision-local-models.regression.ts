@@ -39,6 +39,7 @@ import {
   getAnswerStyle,
 } from "../../packages/server/src/services/decision/decision-thinking-cache.js";
 import { isDecisionSlotImplemented } from "../../packages/server/src/services/decision/decision-slots.js";
+import { decisionConnectionUnavailable } from "../../packages/server/src/routes/decision.routes.js";
 
 // ── reading an answer out of log-probabilities ────────────────────────────────
 
@@ -444,6 +445,24 @@ assert.equal(assessSidecarLoad({ slots: [slot({ estimatedBytes: 99 * GB })], dev
 assert.equal(isDecisionSlotImplemented("primary"), true);
 assert.equal(isDecisionSlotImplemented("utility"), true);
 assert.equal(isDecisionSlotImplemented("decision_sidecar"), false);
+
+// The dropdown greys a connection out and the select route refuses it using the same
+// rule, so a stale client cannot store a decision model that cannot sign a request.
+const plain = { id: "a" };
+const quarantined = { id: "b", profileImportReviewRequired: "true" };
+const borrowsPlain = { id: "c", credentialsFromConnectionId: "a" };
+const borrowsQuarantined = { id: "d", credentialsFromConnectionId: "b" };
+const borrowsMissing = { id: "e", credentialsFromConnectionId: "zzz" };
+const all = [plain, quarantined, borrowsPlain, borrowsQuarantined, borrowsMissing];
+assert.equal(decisionConnectionUnavailable(plain, all), null);
+assert.equal(decisionConnectionUnavailable(borrowsPlain, all), null);
+assert.equal(decisionConnectionUnavailable(quarantined, all), "needs_relinking");
+assert.equal(
+  decisionConnectionUnavailable(borrowsQuarantined, all),
+  "needs_relinking",
+  "a quarantined lender lends nothing",
+);
+assert.equal(decisionConnectionUnavailable(borrowsMissing, all), "needs_relinking", "a deleted lender needs relinking");
 
 // Vulkan and CUDA index the same cards differently, so devices are matched by name and
 // a machine with one NVIDIA GPU shares it.
