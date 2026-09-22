@@ -4,6 +4,8 @@ This file is the release-notes source of truth for Marinara Engine. Reuse these 
 
 ## [Unreleased]
 
+- Custom agents can use optional activation questions with a Decision connection to skip irrelevant turns. Keyword and cadence settings still apply; failed decisions leave agents eligible to run. Decision connections support TypeSafe, OpenRouter, and user-run System One endpoints, including linked OpenRouter credentials (#6530).
+
 - Game helpers preserve unconfigured task defaults and explain when saved output limits cut off structured responses (#6511).
 
 - Game Mode honors connection and chat generation parameters instead of replacing them with fixed sampling and output settings (#6511).
