@@ -13,6 +13,18 @@ export function isTrackerRowsUpdate(value: unknown): value is { updates?: unknow
   );
 }
 
+/** A row with no usable identity (e.g. an agent-emitted blank `{}`) cannot be
+ * displayed or matched against locks/removals, and has crashed HUD widgets
+ * that assume `row.name` is always a string. Drop it before it enters state. */
+function hasTrackerRowIdentity(row: Record<string, unknown>, identity: "name" | "characterId"): boolean {
+  const name = typeof row.name === "string" ? row.name.trim() : "";
+  if (identity === "characterId") {
+    const id = typeof row.characterId === "string" ? row.characterId.trim() : "";
+    return Boolean(id || name);
+  }
+  return Boolean(name);
+}
+
 /** Arrays retain their legacy meaning; explicit updates preserve every omitted row/property. */
 export function resolveTrackerRowsUpdate(
   value: unknown,
@@ -20,7 +32,9 @@ export function resolveTrackerRowsUpdate(
   identity: "name" | "characterId" = "name",
   canRemove: (row: Record<string, unknown>, index: number) => boolean = () => true,
 ): Record<string, unknown>[] | undefined {
-  if (Array.isArray(value)) return value as Record<string, unknown>[];
+  if (Array.isArray(value)) {
+    return value.filter(isRecord).filter((row) => hasTrackerRowIdentity(row, identity));
+  }
   if (!isTrackerRowsUpdate(value)) return undefined;
   const rows = previous.filter(isRecord).map((row) => ({ ...row }));
   // Replacements keep these original identities stable for the entire batch.

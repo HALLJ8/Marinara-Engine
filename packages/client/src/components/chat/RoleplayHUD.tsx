@@ -1227,8 +1227,8 @@ function CustomTrackerWidget({
   const currentField = fields[cycleIdx];
   const previewLabel = currentField
     ? currentField.value
-      ? `${currentField.name}: ${currentField.value}`
-      : currentField.name
+      ? `${currentField.name ?? ""}: ${currentField.value}`
+      : (currentField.name ?? "")
     : "";
   const longestWord = previewLabel.split(/\s+/).reduce((max, w) => Math.max(max, w.length), 0);
   const previewFontSize = Math.max(3.5, Math.min(6, 60 / Math.max(longestWord, 1)));
