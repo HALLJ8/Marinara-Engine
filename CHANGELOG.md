@@ -23,6 +23,9 @@ This file is the release-notes source of truth for Marinara Engine. Reuse these 
 - Advanced Memory's context threshold applies to the outgoing prompt without subtracting reply tokens. Automatic scene resets apply to all characters and can be undone with the existing All flag; temporary open-scene trimming no longer creates persistent character-specific flags (#6512).
 - New Start flag changes save together with Advanced Memory cutoffs, keeping the previous state intact if a save fails (#6512).
 
+- Advanced Memory identifies corrections needing review and exposes unfinished scene summaries for targeted recovery without resetting the archive (#6526).
+- Advanced Memory keeps saved scene indexes across source-text edits, swipes, illustrations and live context flags. Recalled excerpts use current message text, while character-access checks remain enforced (#6526).
+
 - Advanced Memory reindexing rebuilds saved text vectors without rerunning scene detection or summarization. Saved scene corrections no longer depend on outdated generated-summary inputs, and stale scene corrections can be reviewed and saved without changing their text (#6509).
 
 - Removed the obsolete root suggestion-chips implementation brief, `MARI_SUGGESTION_CHIPS_TASK.md` (#6504).
