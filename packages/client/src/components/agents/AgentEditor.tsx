@@ -2953,28 +2953,25 @@ export function AgentEditor() {
               <p className="mt-1 text-[0.625rem] text-[var(--muted-foreground)]">
                 {localizeUi("ui.agents.agenteditor.leaveKeywordsEmptyToRunThisCustomAgentOn")}
               </p>
+              <ActivationQuestionFields
+                question={localActivationQuestion}
+                threshold={localActivationThreshold}
+                maxSkip={localActivationMaxSkip}
+                enabled={
+                  (connections as Array<{ provider: string; defaultForAgents?: unknown }> | undefined)?.some(
+                    (connection) =>
+                      connection.provider === "decision" &&
+                      (connection.defaultForAgents === true || connection.defaultForAgents === "true"),
+                  ) ?? false
+                }
+                onChange={(values) => {
+                  if (values.question !== undefined) setLocalActivationQuestion(values.question);
+                  if (values.threshold !== undefined) setLocalActivationThreshold(values.threshold);
+                  if (values.maxSkip !== undefined) setLocalActivationMaxSkip(values.maxSkip);
+                  markDirty();
+                }}
+              />
             </FieldGroup>
-          )}
-
-          {(isCustomAgent || isNewCustomAgent) && (
-            <ActivationQuestionFields
-              question={localActivationQuestion}
-              threshold={localActivationThreshold}
-              maxSkip={localActivationMaxSkip}
-              enabled={
-                (connections as Array<{ provider: string; defaultForAgents?: unknown }> | undefined)?.some(
-                  (connection) =>
-                    connection.provider === "decision" &&
-                    (connection.defaultForAgents === true || connection.defaultForAgents === "true"),
-                ) ?? false
-              }
-              onChange={(values) => {
-                if (values.question !== undefined) setLocalActivationQuestion(values.question);
-                if (values.threshold !== undefined) setLocalActivationThreshold(values.threshold);
-                if (values.maxSkip !== undefined) setLocalActivationMaxSkip(values.maxSkip);
-                markDirty();
-              }}
-            />
           )}
 
           {isEchoChamberAgent && (
