@@ -65,7 +65,7 @@ test("Decision settings, test errors and custom-agent questions survive reload",
       useUIStore.getState().closeAllDetails();
       useUIStore.getState().openAgentDetail(agentType);
     }, type);
-    await expect(page.getByLabel("Activation question", { exact: true })).toBeVisible();
+    await expect(page.getByLabel("Question", { exact: true })).toBeVisible();
   };
   const openDefaults = async () => {
     await page.evaluate(async () => {
@@ -85,7 +85,7 @@ test("Decision settings, test errors and custom-agent questions survive reload",
   try {
     await page.goto("/");
     await openAgent();
-    const question = page.getByLabel("Activation question", { exact: true });
+    const question = page.getByLabel("Question", { exact: true });
     await question.scrollIntoViewIfNeeded();
     await expect(question).toBeDisabled();
     await expect(question).toHaveValue("Did the location change?");

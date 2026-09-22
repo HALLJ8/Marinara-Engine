@@ -40,7 +40,7 @@
   "agents.activation.noCeiling": "No ceiling",
   "agents.activation.openConnections": "Open Connections",
   "agents.activation.placeholder": "Did the location, time or characters present change in the latest message?",
-  "agents.activation.question": "Activation question",
+  "agents.activation.question": "Question",
   "agents.activation.threshold": "Run when probability is at least {{value}}",
   "agents.activation.thresholdHelp": "Lower thresholds run the agent more often.",
   "agents.activity.dismissOutput": "Dismiss output from {{agent}}",

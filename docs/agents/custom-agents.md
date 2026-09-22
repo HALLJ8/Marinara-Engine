@@ -151,7 +151,7 @@ Deleting a connection used for a linked key warns you and leaves the Decision co
 
 ### Set up your agent
 
-With a Decision default selected, open a custom agent and enter an **Activation question** of up to 500 characters. Standard agent macros, including `{{user}}` and `{{char}}`, work in the question. **Scan Depth** controls the recent messages used by both keywords and the question.
+With a Decision default selected, open a custom agent and enter a **Question** of up to 500 characters. Standard agent macros, including `{{user}}` and `{{char}}`, work in the question. **Scan Depth** controls the recent messages used by both keywords and the question.
 
 - **Run when probability is at least** defaults to 0.50. The agent runs when the probability of “yes” meets or exceeds it. Higher values skip more runs.
 - **Bypass the question after this many messages without a successful run** is optional. Once this many user/assistant messages have passed since the agent last ran successfully, the question is bypassed. A new agent, or one whose previous message was deleted, also bypasses the question when this setting is enabled. Keywords and cadence must still allow the run.
