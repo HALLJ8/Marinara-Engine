@@ -49,6 +49,20 @@ export const DECISION_THINKING_MODES = ["auto", "off", "allowed"] as const;
 export type DecisionThinkingMode = (typeof DECISION_THINKING_MODES)[number];
 export const DEFAULT_DECISION_THINKING_MODE: DecisionThinkingMode = "auto";
 
+/**
+ * Read a Thinking mode from a slot's config file.
+ *
+ * Both slots persist their settings as JSON on disk, so an older install has no value
+ * here and a hand-edited one may have any string. An unrecognised value would match
+ * neither branch in the backend and silently behave as Off, which is a setting nobody
+ * chose; it becomes the default instead.
+ */
+export function normalizeDecisionThinking(value: unknown): DecisionThinkingMode {
+  return DECISION_THINKING_MODES.includes(value as DecisionThinkingMode)
+    ? (value as DecisionThinkingMode)
+    : DEFAULT_DECISION_THINKING_MODE;
+}
+
 /** What a slot's cached probe concluded about the model currently loaded in it. */
 export type DecisionAnswerStyle = "direct" | "thinks" | "unknown";
 

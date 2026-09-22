@@ -52,12 +52,15 @@ export interface SidecarSlotFootprint {
   /** Backend or runtime label, e.g. "vulkan" or "open_jev_torch". */
   backend: string | null;
   /**
-   * Estimated bytes of device memory: weights plus a KV-cache estimate from the
-   * configured context. When the slot is running and a measured reading is larger,
-   * the measured one is used instead.
+   * Bytes of device memory this slot wants: the model's weights plus a KV-cache
+   * allowance from the configured context.
+   *
+   * A running slot is measured instead, and the measurement replaces the estimate
+   * whether it is larger or smaller — a reading of the process beats arithmetic over
+   * the model file in both directions. `measured` says which one this is.
    */
   estimatedBytes: number | null;
-  /** True when the estimate came from a live reading rather than the model's size. */
+  /** True when this came from a live reading of the process rather than the file size. */
   measured: boolean;
   /** True when the slot runs on the CPU, so the comparison is against system memory. */
   onCpu: boolean;

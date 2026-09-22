@@ -212,6 +212,10 @@ function formatSlot(slot: SidecarSlotFootprint): string {
 /**
  * The server's GPU.
  *
+ * Reported in MiB, matching `nvidia-smi`'s own output, so a reader can line this up
+ * against what the user pastes from that tool. The slot lines below are in GB, where
+ * the question is how much of the card a model wants rather than an exact figure.
+ *
  * Non-NVIDIA cards report their vendor and say the memory was not measured. Guessing
  * a number there would put a fabricated figure into a bug report.
  */
@@ -226,11 +230,16 @@ function formatServerGpu(sidecars: SidecarHealthSection | undefined): string {
   )} MiB used, driver ${device.driverVersion}${others}`;
 }
 
+/**
+ * The two "does not fit" verdicts are different problems and read differently: one
+ * cannot be fixed by stopping anything, the other can. A support reader who cannot
+ * tell them apart cannot tell the user what to do about it.
+ */
 const LOAD_VERDICT_LABELS: Record<string, string> = {
   recommended: "within recommended",
   tight: "tight (less than 1.5 GB headroom)",
   wont_fit: "**heavier than recommended for this device**",
-  wont_fit_beside_sidecar: "**heavier than recommended for this device**",
+  wont_fit_beside_sidecar: "**heavier than recommended for these slots together**",
   unsupported: "not supported on this device",
   not_enough_disk: "not enough free disk",
 };

@@ -11,7 +11,11 @@
  */
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
-import { SIDECAR_FOOTPRINT_HEADROOM_BYTES, type GpuDevice } from "../../packages/shared/src/index.js";
+import {
+  normalizeDecisionThinking,
+  SIDECAR_FOOTPRINT_HEADROOM_BYTES,
+  type GpuDevice,
+} from "../../packages/shared/src/index.js";
 import {
   isDirectAnswer,
   normalizeAnswerToken,
@@ -89,6 +93,14 @@ assert.equal(isDirectAnswer(readLogprobAnswer([{ token: "yes", logprob: Number.N
 assert.equal(readWordAnswer("Let me think. The scene did not move, so no"), 0);
 assert.equal(readWordAnswer("<think>hmm</think> yes"), 1);
 assert.equal(readWordAnswer("I am not sure"), null);
+
+// A Thinking mode is read back from a JSON config file, so an older install has no
+// value and a hand-edited one may have any string. Neither may reach the backend as a
+// mode nobody chose.
+assert.equal(normalizeDecisionThinking(undefined), "auto");
+assert.equal(normalizeDecisionThinking("maybe"), "auto");
+assert.equal(normalizeDecisionThinking("allowed"), "allowed");
+assert.equal(normalizeDecisionThinking("off"), "off");
 
 // ── the backend against a recorded llama-server ───────────────────────────────
 

@@ -539,9 +539,9 @@ class SidecarModelService {
   /**
    * Record how this slot's model may answer an activation question.
    *
-   * Also called by the decision backend itself when Auto concludes the loaded model
-   * cannot answer in one token, so the finding survives a restart instead of costing
-   * two wasted requests again.
+   * The operator's own choice, and only theirs: when Auto finds that the loaded model
+   * cannot answer in one token, that verdict goes in the decision backend's per-model
+   * cache rather than being written back over this setting.
    */
   setDecisionThinking(decisionThinking: DecisionThinkingMode): void {
     if (this.config.decisionThinking === decisionThinking) return;

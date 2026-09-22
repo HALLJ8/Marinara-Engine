@@ -350,17 +350,11 @@ export class UtilitySidecarService {
   }
 
   /**
-   * Choose which model this slot serves.
-   *
-   * Stops a process that is serving something else first. Otherwise the running child
-   * stayed up and ensureRunning() returned it as ready, so status and routing reported
-   * the newly selected model while the old one was still answering every request.
-   */
-  /**
    * Record how this slot's model may answer an activation question.
    *
-   * Also called by the decision backend when Auto concludes the loaded model cannot
-   * answer in one token, so the finding outlives the process.
+   * The operator's own choice, and only theirs: when Auto finds that the loaded model
+   * cannot answer in one token, that verdict goes in the decision backend's per-model
+   * cache rather than being written back over this setting.
    */
   setDecisionThinking(decisionThinking: DecisionThinkingMode): void {
     if (this.config.decisionThinking === decisionThinking) return;
@@ -368,6 +362,13 @@ export class UtilitySidecarService {
     this.writeConfig();
   }
 
+  /**
+   * Choose which model this slot serves.
+   *
+   * Stops a process that is serving something else first. Otherwise the running child
+   * stayed up and ensureRunning() returned it as ready, so status and routing reported
+   * the newly selected model while the old one was still answering every request.
+   */
   async setActiveModel(modelId: string | null): Promise<UtilitySidecarConfig> {
     // null is the only way to clear the selection. An empty string used to slip
     // through as "clear", which quietly turns a malformed request into a state change.

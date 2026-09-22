@@ -12,7 +12,7 @@
  * explicitly, and the whole method depends on those two fields arriving intact.
  */
 import {
-  DEFAULT_DECISION_THINKING_MODE,
+  normalizeDecisionThinking,
   type DecisionLocalSlot,
   type DecisionThinkingMode,
   type DecisionUnavailableReason,
@@ -50,11 +50,11 @@ export function isDecisionSlotImplemented(slot: DecisionLocalSlot): boolean {
 
 /** The main sidecar's Thinking setting, kept with that slot's own config. */
 function primaryThinking(): DecisionThinkingMode {
-  return sidecarModelService.getConfig().decisionThinking ?? DEFAULT_DECISION_THINKING_MODE;
+  return normalizeDecisionThinking(sidecarModelService.getConfig().decisionThinking);
 }
 
 function utilityThinking(): DecisionThinkingMode {
-  return utilitySidecarService.getConfig().decisionThinking ?? DEFAULT_DECISION_THINKING_MODE;
+  return normalizeDecisionThinking(utilitySidecarService.getConfig().decisionThinking);
 }
 
 /**
@@ -95,7 +95,11 @@ export async function resolveDecisionSlot(
   if (slot === "primary") {
     let baseUrl: string;
     try {
-      baseUrl = await sidecarProcessService.ensureReady();
+      // forceStart, like the local sidecar provider does: choosing this slot as the
+      // decision model is an explicit request for it to serve. Without it a user who
+      // runs a local model but has trackers and game-scene analysis both off would
+      // have their chosen decision model never start, and every gate fail open.
+      baseUrl = await sidecarProcessService.ensureReady({ forceStart: true });
     } catch (error) {
       logger.warn(error, "[decision] The primary local model could not start; gates fail open");
       return { resolved: null, failure: { slot, reason: "stopped" } };

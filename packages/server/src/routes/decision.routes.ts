@@ -19,6 +19,7 @@ import {
   DECISION_THINKING_MODES,
   DECISION_THINKING_PREGENERATION_SETTINGS_KEY,
   decisionLocalSlotForId,
+  normalizeDecisionThinking,
   type DecisionLocalSlot,
   type DecisionModelOption,
   type DecisionModelOptions,
@@ -48,9 +49,11 @@ const SLOT_LABELS: Record<DecisionLocalSlot, string> = {
 };
 
 function slotThinking(slot: DecisionLocalSlot) {
-  return slot === "utility"
-    ? utilitySidecarService.getConfig().decisionThinking
-    : sidecarModelService.getConfig().decisionThinking;
+  return normalizeDecisionThinking(
+    slot === "utility"
+      ? utilitySidecarService.getConfig().decisionThinking
+      : sidecarModelService.getConfig().decisionThinking,
+  );
 }
 
 function slotModelIdentity(slot: DecisionLocalSlot): string {
