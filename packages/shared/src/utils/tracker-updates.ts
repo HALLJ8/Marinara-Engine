@@ -115,7 +115,14 @@ export function resolveTrackerRowsUpdate(
       identityRows.push(next);
     }
   }
-  return rows.filter((_row, index) => !removed.has(index));
+  const surviving = rows.filter((_row, index) => !removed.has(index));
+  // A blank/nameless row already in `previous` (e.g. persisted before this fix shipped)
+  // is copied straight through above; an incremental { updates, removed } payload only
+  // ever references rows by name/characterId, so nothing about applying it would ever
+  // remove one on its own. Drop it here the same way the array branch does, unless a
+  // caller (resolveTrackerGroupUpdate) still needs the original position for a
+  // subsequent lock merge.
+  return options?.deferIdentityFilter ? surviving : surviving.filter((row) => hasTrackerRowIdentity(row, identity));
 }
 
 /** Sanitizes a manually-edited tracker-row array field in place, by presence rather than

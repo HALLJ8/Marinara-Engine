@@ -53,6 +53,20 @@ assert.deepEqual(
 const cleanupResult = resolveTrackerRowsUpdate([{ name: "Gold", value: "10" }], [{}, { name: "Gold", value: "5" }]);
 assert.deepEqual(cleanupResult, [{ name: "Gold", value: "10" }], "a fresh array payload never reintroduces old blanks");
 
+// The far more common incremental shape must purge that same stale blank row too, even
+// though the update only references "Gold" by name and never mentions the blank row at
+// all — a caller that always sends { updates } (never a full array replacement) must not
+// carry it forward indefinitely.
+const incrementalCleanupResult = resolveTrackerRowsUpdate(
+  { updates: [{ name: "Gold", value: "51" }] },
+  [{}, { name: "Gold", value: "50" }],
+);
+assert.deepEqual(
+  incrementalCleanupResult,
+  [{ name: "Gold", value: "51" }],
+  "an incremental { updates } payload purges a stale blank row already in `previous`",
+);
+
 // A truthy non-string name (e.g. a number reaching this untyped JSON boundary) is kept
 // and stringified rather than silently treated as blank and dropped.
 const numericNameResult = resolveTrackerRowsUpdate([{ name: 123, value: "gold" }], []);
