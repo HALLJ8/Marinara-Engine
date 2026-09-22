@@ -32,7 +32,7 @@ import {
   normalizeTrackerFieldLocks,
   normalizeInventoryTrackerPlayerStats,
   normalizeTrackerHiddenFields,
-  resolveTrackerRowsUpdate,
+  sanitizeManualTrackerRowsField,
   HOME_FEED_SPRITE_EXPRESSION_MAX_LENGTH,
   parseTrackerFieldLocks,
   parseTrackerHiddenFields,
@@ -2652,7 +2652,10 @@ export async function chatsRoutes(app: FastifyInstance) {
     if (body.temperature !== undefined) fields.temperature = coerceGameStateTextValue(body.temperature);
     if (body.worldCustomFields !== undefined)
       fields.worldCustomFields = normalizeWorldCustomFields(body.worldCustomFields);
-    if (body.presentCharacters !== undefined) fields.presentCharacters = body.presentCharacters as any[];
+    if (body.presentCharacters !== undefined) {
+      fields.presentCharacters = body.presentCharacters as any[];
+      sanitizeManualTrackerRowsField(fields as Record<string, unknown>, "presentCharacters", "characterId");
+    }
     // Repair the Inventory Tracker arrays on the way in. Without this the agent
     // apply path is the only writer that enforces row shape, quantity bounds, and
     // the equipped/carried split — an older client, a direct API call, or the
@@ -2670,16 +2673,18 @@ export async function chatsRoutes(app: FastifyInstance) {
       // agent-apply path's resolveTrackerGroupUpdate. Without this, a blank/nameless row
       // (never produced by the widget's own "+ Add Field", which always seeds a name, but
       // reachable via a raw API call or a future UI bug) could still reach player state and
-      // crash the tracker HUD on the missing name (#6549).
-      if (isRecord(normalizedPlayerStats) && Array.isArray(normalizedPlayerStats.customTrackerFields)) {
-        normalizedPlayerStats.customTrackerFields = resolveTrackerRowsUpdate(
-          normalizedPlayerStats.customTrackerFields,
-          [],
-        );
+      // crash the tracker HUD on the missing name (#6549). Sanitized by presence, not shape:
+      // a { updates, removed } payload is resolved the same way a plain array is, instead of
+      // silently bypassing sanitization because it isn't Array.isArray.
+      if (isRecord(normalizedPlayerStats)) {
+        sanitizeManualTrackerRowsField(normalizedPlayerStats, "customTrackerFields");
       }
       fields.playerStats = normalizedPlayerStats;
     }
-    if (body.personaStats !== undefined) fields.personaStats = body.personaStats as any[];
+    if (body.personaStats !== undefined) {
+      fields.personaStats = body.personaStats as any[];
+      sanitizeManualTrackerRowsField(fields as Record<string, unknown>, "personaStats");
+    }
     if (body.fieldLocks !== undefined) fields.fieldLocks = normalizeTrackerFieldLocks(body.fieldLocks);
     if (body.hiddenTrackerFields !== undefined)
       fields.hiddenTrackerFields = normalizeTrackerHiddenFields(body.hiddenTrackerFields);

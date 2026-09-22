@@ -202,6 +202,12 @@ export function resolveTrackerGroupUpdate(
             : roleplayInventoryTrackerRowLockPrefix(group, identity, index);
       return !Object.entries(locks).some(([key, locked]) => locked && key.startsWith(`${prefix}.`));
     },
+    // The result always feeds a subsequent applyTrackerFieldLocksToGameStatePatch merge,
+    // whose position-based fallback matching (findCurrentCharacterMatch/findCurrentNamedMatch)
+    // needs the original row order. Dropping blank rows here first would shift later rows'
+    // indices and misattribute locked fields to the wrong row; that merge drops blanks itself
+    // once matching is resolved (tracker-field-locks.ts).
+    { deferIdentityFilter: true },
   );
 }
 

@@ -12,6 +12,7 @@ import {
   applyTrackerFieldLocksToGameStatePatch,
   roleplayInventoryTrackerLockKey,
   characterTrackerLockKey,
+  customTrackerLockKey,
   worldCustomFieldTrackerLockKey,
   applyRegexReplacement,
   buildNarratorInstructionMessage,
@@ -11165,6 +11166,106 @@ Use HTML sparingly and diegetically. Do not replace normal prose/dialogue unless
         )?.length,
         4,
         "locked removal does not consume a new arrival",
+      );
+
+      // A blank placeholder row in a plain-array agent payload must not shift later rows'
+      // fallback-matching position. Bob's mood is locked; a blank row and a genuinely new,
+      // unmatched-by-name character ("NewGuy") arrive in the same turn. If dropping the
+      // blank row before the lock-merge shifted NewGuy left by one, NewGuy would
+      // fallback-match locked Bob instead of unlocked Carol, silently discarding both
+      // NewGuy's update and Carol's row.
+      const positionShiftCharacters = [
+        { characterId: "a", name: "Alice", mood: "calm" },
+        { characterId: "b", name: "Bob", mood: "annoyed" },
+        { characterId: "c", name: "Carol", mood: "sleepy" },
+      ];
+      const positionShiftLockState = {
+        ...currentState,
+        presentCharacters: positionShiftCharacters,
+        fieldLocks: { [characterTrackerLockKey(positionShiftCharacters[1]!, 1, "mood")]: true },
+      };
+      const positionShiftNext = [
+        { characterId: "a", name: "Alice", mood: "excited" },
+        {},
+        { name: "NewGuy", mood: "scared" },
+      ];
+      const positionShiftResolved = resolveTrackerGroupUpdate(
+        positionShiftNext,
+        positionShiftCharacters,
+        positionShiftLockState,
+        "presentCharacters",
+      );
+      const positionShiftMerged = applyTrackerFieldLocksToGameStatePatch(
+        { presentCharacters: positionShiftResolved },
+        positionShiftLockState,
+      );
+      assert.deepEqual(
+        positionShiftMerged.presentCharacters,
+        [
+          { characterId: "a", name: "Alice", mood: "excited" },
+          { characterId: "b", name: "Bob", mood: "annoyed" },
+          { name: "NewGuy", mood: "scared" },
+        ],
+        "a blank row does not shift a later unmatched character onto the wrong locked row",
+      );
+
+      // Same shape for customTrackerFields: Mood's value is locked; a blank row precedes
+      // a genuinely new field name.
+      const positionShiftFields = [
+        { name: "Health", value: "10" },
+        { name: "Mood", value: "calm", locked: true },
+        { name: "Clue", value: "gate" },
+      ];
+      const positionShiftFieldLockState = {
+        ...currentState,
+        playerStats: { ...itemState.playerStats, customTrackerFields: positionShiftFields },
+        fieldLocks: { [customTrackerLockKey(positionShiftFields[1]!, "value", 1)]: true },
+      };
+      const positionShiftFieldsNext = [
+        { name: "Health", value: "20" },
+        {},
+        { name: "Treasure", value: "found" },
+      ];
+      const positionShiftFieldsResolved = resolveTrackerGroupUpdate(
+        positionShiftFieldsNext,
+        positionShiftFields,
+        positionShiftFieldLockState,
+        "customTrackerFields",
+      );
+      const positionShiftFieldsPatch = buildLockedPlayerStatsArrayPatch({
+        field: "customTrackerFields",
+        values: positionShiftFieldsResolved!,
+        snapshot: { playerStats: positionShiftFieldLockState.playerStats },
+        lockState: positionShiftFieldLockState,
+      });
+      assert.deepEqual(
+        positionShiftFieldsPatch.values,
+        [
+          { name: "Health", value: "20" },
+          { name: "Mood", value: "calm", locked: true },
+          { name: "Treasure", value: "found" },
+        ],
+        "a blank row does not shift a later unmatched custom tracker field onto the wrong locked row",
+      );
+
+      // The same drop must apply on the early-SSE path, before any snapshot/currentState
+      // is loaded (applyTrackerFieldLocksToGameStatePatch's `!currentState` branch), which
+      // never runs a lock-merge at all.
+      assert.deepEqual(
+        applyTrackerFieldLocksToGameStatePatch(
+          { presentCharacters: [{ characterId: "a", name: "Alice" }, {}, { name: "  " }] },
+          null,
+        ).presentCharacters,
+        [{ characterId: "a", name: "Alice" }],
+        "presentCharacters drops blank rows even before a snapshot is loaded",
+      );
+      assert.deepEqual(
+        applyTrackerFieldLocksToGameStatePatch(
+          { playerStats: { customTrackerFields: [{ name: "Gold", value: "5" }, {}, { value: "no name" }] } },
+          null,
+        ).playerStats,
+        { customTrackerFields: [{ name: "Gold", value: "5" }] },
+        "customTrackerFields drops blank rows even before a snapshot is loaded",
       );
 
       const worldOps = { updates: [{ name: "Tension", value: "High" }], removed: ["Moon Phase", "unknown"] };

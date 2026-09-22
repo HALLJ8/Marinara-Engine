@@ -13,15 +13,24 @@ export function isTrackerRowsUpdate(value: unknown): value is { updates?: unknow
   );
 }
 
+/** Coerces a row's identity field to comparable text. A truthy non-string value (e.g. a
+ * number reaching this untyped JSON boundary) is stringified rather than treated as
+ * blank; only a genuinely empty/nullish value resolves to "". */
+function trackerRowIdentityText(value: unknown): string {
+  if (typeof value === "string") return value.trim();
+  if (typeof value === "number" && Number.isFinite(value)) return String(value).trim();
+  return "";
+}
+
 /** A row with no usable identity (e.g. an agent-emitted blank `{}`) cannot be
  * displayed or matched against locks/removals, and has crashed HUD widgets
  * that assume `row.name` is always a string. Drop it before it enters state. */
-function hasTrackerRowIdentity(row: Record<string, unknown>, identity: "name" | "characterId"): boolean {
-  const name = typeof row.name === "string" ? row.name.trim() : "";
-  if (identity === "characterId") {
-    const id = typeof row.characterId === "string" ? row.characterId.trim() : "";
-    return Boolean(id || name);
-  }
+export function hasTrackerRowIdentity(
+  row: { name?: unknown; characterId?: unknown },
+  identity: "name" | "characterId",
+): boolean {
+  const name = trackerRowIdentityText(row.name);
+  if (identity === "characterId") return Boolean(trackerRowIdentityText(row.characterId) || name);
   return Boolean(name);
 }
 
@@ -31,9 +40,22 @@ export function resolveTrackerRowsUpdate(
   previous: readonly unknown[],
   identity: "name" | "characterId" = "name",
   canRemove: (row: Record<string, unknown>, index: number) => boolean = () => true,
+  options?: { deferIdentityFilter?: boolean },
 ): Record<string, unknown>[] | undefined {
   if (Array.isArray(value)) {
-    return value.filter(isRecord).filter((row) => hasTrackerRowIdentity(row, identity));
+    const records = value.filter(isRecord).map((row) => {
+      const patch: Record<string, unknown> = {};
+      if (typeof row.name !== "string") {
+        const name = trackerRowIdentityText(row.name);
+        if (name) patch.name = name;
+      }
+      if (typeof row.characterId !== "string") {
+        const characterId = trackerRowIdentityText(row.characterId);
+        if (characterId) patch.characterId = characterId;
+      }
+      return Object.keys(patch).length ? { ...row, ...patch } : row;
+    });
+    return options?.deferIdentityFilter ? records : records.filter((row) => hasTrackerRowIdentity(row, identity));
   }
   if (!isTrackerRowsUpdate(value)) return undefined;
   const rows = previous.filter(isRecord).map((row) => ({ ...row }));
@@ -63,9 +85,9 @@ export function resolveTrackerRowsUpdate(
 
   for (const raw of value.updates ?? []) {
     if (!isRecord(raw)) continue;
-    const id = typeof raw.characterId === "string" ? raw.characterId.trim() : "";
-    const name = typeof raw.name === "string" ? raw.name.trim() : "";
-    if (!name && !(identity === "characterId" && id)) continue;
+    const id = trackerRowIdentityText(raw.characterId);
+    const name = trackerRowIdentityText(raw.name);
+    if (!hasTrackerRowIdentity(raw, identity)) continue;
     const index = identity === "characterId" && id ? findId(id) : findNamed(name);
     if (index === -2) continue;
     // An unknown ID must not silently replace another character with the same name.
@@ -94,4 +116,17 @@ export function resolveTrackerRowsUpdate(
     }
   }
   return rows.filter((_row, index) => !removed.has(index));
+}
+
+/** Sanitizes a manually-edited tracker-row array field in place, by presence rather than
+ * shape: a `{ updates, removed }` payload is resolved the same as a plain array, instead
+ * of silently bypassing sanitization because it isn't `Array.isArray`. Falls back to `[]`
+ * when the value is neither shape (e.g. a string), rather than storing it verbatim. */
+export function sanitizeManualTrackerRowsField(
+  container: Record<string, unknown>,
+  key: string,
+  identity: "name" | "characterId" = "name",
+): void {
+  if (!(key in container)) return;
+  container[key] = resolveTrackerRowsUpdate(container[key], [], identity) ?? [];
 }

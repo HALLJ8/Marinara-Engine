@@ -60,9 +60,65 @@ try {
     [{ name: "Reputation", value: "Trusted" }],
     "PATCH /game-state drops blank/nameless customTrackerFields rows the same way the agent-apply path does",
   );
+
+  // A `{ updates, removed }`-shaped customTrackerFields payload previously bypassed
+  // sanitization entirely (it isn't Array.isArray) and was stored verbatim as a
+  // non-array object, later crashing any `.map()` consumer of it.
+  const updatesShapePatch = await app.inject({
+    method: "PATCH",
+    url: `/api/chats/${chat.id}/game-state`,
+    payload: {
+      manual: true,
+      playerStats: { customTrackerFields: { updates: [{ name: "Silver", value: "12" }, {}], removed: [] } },
+    },
+  });
+  assert.equal(updatesShapePatch.statusCode, 200);
+  const updatesShapeState = await app.inject({ method: "GET", url: `/api/chats/${chat.id}/game-state` });
+  assert.deepEqual(
+    updatesShapeState.json().playerStats.customTrackerFields,
+    [{ name: "Silver", value: "12" }],
+    "a { updates, removed }-shaped customTrackerFields payload is sanitized (by presence, not shape) instead of stored verbatim",
+  );
+
+  // presentCharacters and personaStats are siblings of playerStats on this same manual
+  // route, and were left completely unsanitized until this fix.
+  const presentCharactersPatch = await app.inject({
+    method: "PATCH",
+    url: `/api/chats/${chat.id}/game-state`,
+    payload: {
+      manual: true,
+      presentCharacters: [{ characterId: "npc-1", name: "Aria" }, {}, { name: "   " }],
+    },
+  });
+  assert.equal(presentCharactersPatch.statusCode, 200);
+  const presentCharactersState = await app.inject({ method: "GET", url: `/api/chats/${chat.id}/game-state` });
+  assert.deepEqual(
+    presentCharactersState.json().presentCharacters,
+    [{ characterId: "npc-1", name: "Aria" }],
+    "PATCH /game-state drops blank/nameless presentCharacters rows",
+  );
+
+  const personaStatsPatch = await app.inject({
+    method: "PATCH",
+    url: `/api/chats/${chat.id}/game-state`,
+    payload: {
+      manual: true,
+      personaStats: [{ name: "HP", value: 10, max: 20, color: "red" }, {}, { name: "  " }],
+    },
+  });
+  assert.equal(personaStatsPatch.statusCode, 200);
+  const personaStatsState = await app.inject({ method: "GET", url: `/api/chats/${chat.id}/game-state` });
+  assert.deepEqual(
+    personaStatsState.json().personaStats,
+    [{ name: "HP", value: 10, max: 20, color: "red" }],
+    "PATCH /game-state drops blank/nameless personaStats rows",
+  );
 } finally {
   await app?.close();
   rmSync(dataDir, { recursive: true, force: true });
 }
 
-console.info("Game-state custom tracker sanitization: blank/nameless rows dropped through the PATCH route.");
+console.info(
+  "Game-state custom tracker sanitization: blank/nameless rows dropped for customTrackerFields (array and " +
+    "{ updates, removed } shapes), presentCharacters, and personaStats through the manual PATCH route.",
+);

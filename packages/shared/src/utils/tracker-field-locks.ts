@@ -16,7 +16,7 @@ import {
   normalizeWorldCustomFields,
 } from "../constants/tracker-custom-field-icons.js";
 import { excludeInventoryTrackerCarriedDuplicates } from "./inventory-tracker-rows.js";
-import { isTrackerRowsUpdate, resolveTrackerRowsUpdate } from "./tracker-updates.js";
+import { hasTrackerRowIdentity, isTrackerRowsUpdate, resolveTrackerRowsUpdate } from "./tracker-updates.js";
 
 type WorldTrackerField = "date" | "time" | "location" | "weather" | "temperature";
 type TextCharacterField = "emoji" | "name" | "mood" | "appearance" | "outfit" | "thoughts";
@@ -1048,6 +1048,18 @@ function mergeCharactersWithLocks(
   return merged;
 }
 
+/** Drops rows with no usable identity from a merged tracker-row array. Applied only
+ * after position-based fallback matching (findCurrentCharacterMatch/findCurrentNamedMatch,
+ * used by mergeCharactersWithLocks/mergeCustomTrackerFieldsWithGenericLocks below) has
+ * already resolved — filtering beforehand would shift later rows' indices and misattribute
+ * locked fields to the wrong row. */
+function dropUnidentifiedTrackerRows<T extends { name?: unknown; characterId?: unknown }>(
+  rows: T[],
+  identity: "name" | "characterId",
+): T[] {
+  return rows.filter((row) => hasTrackerRowIdentity(row, identity));
+}
+
 export function applyTrackerFieldLocksToGameStatePatch<T extends Record<string, unknown>>(
   patch: T,
   currentState: GameState | null | undefined,
@@ -1061,7 +1073,24 @@ export function applyTrackerFieldLocksToGameStatePatch<T extends Record<string, 
       resolveTrackerRowsUpdate(next.worldCustomFields, currentState?.worldCustomFields ?? []),
     );
   }
-  if (!currentState) return next as T;
+  if (!currentState) {
+    // No prior state means none of the merges below run, so apply the same blank-row
+    // drop directly here (e.g. use-generate.ts applies agent output before the base
+    // game state has loaded, so `currentState` is null on that path).
+    if (Array.isArray(next.presentCharacters)) {
+      next.presentCharacters = dropUnidentifiedTrackerRows(next.presentCharacters as PresentCharacter[], "characterId");
+    }
+    if (isRecord(next.playerStats) && Array.isArray(next.playerStats.customTrackerFields)) {
+      next.playerStats = {
+        ...next.playerStats,
+        customTrackerFields: dropUnidentifiedTrackerRows(
+          next.playerStats.customTrackerFields as CustomTrackerField[],
+          "name",
+        ),
+      };
+    }
+    return next as T;
+  }
   for (const field of ["date", "time", "location", "weather", "temperature"] as const) {
     if (field in next && isTrackerFieldLocked(locks, worldTrackerLockKey(field))) {
       next[field] = currentState[field];
@@ -1078,10 +1107,9 @@ export function applyTrackerFieldLocksToGameStatePatch<T extends Record<string, 
   }
 
   if (Array.isArray(next.presentCharacters)) {
-    next.presentCharacters = mergeCharactersWithLocks(
-      next.presentCharacters as PresentCharacter[],
-      currentState.presentCharacters,
-      locks,
+    next.presentCharacters = dropUnidentifiedTrackerRows(
+      mergeCharactersWithLocks(next.presentCharacters as PresentCharacter[], currentState.presentCharacters, locks),
+      "characterId",
     );
   }
 
@@ -1115,10 +1143,13 @@ export function applyTrackerFieldLocksToGameStatePatch<T extends Record<string, 
       );
     }
     if (Array.isArray(playerStatsPatch.customTrackerFields)) {
-      playerStatsPatch.customTrackerFields = mergeCustomTrackerFieldsWithGenericLocks(
-        playerStatsPatch.customTrackerFields,
-        currentPlayerStats.customTrackerFields,
-        locks,
+      playerStatsPatch.customTrackerFields = dropUnidentifiedTrackerRows(
+        mergeCustomTrackerFieldsWithGenericLocks(
+          playerStatsPatch.customTrackerFields,
+          currentPlayerStats.customTrackerFields,
+          locks,
+        ),
+        "name",
       );
     }
     if (Array.isArray(playerStatsPatch.inventoryTrackerCurrencies)) {

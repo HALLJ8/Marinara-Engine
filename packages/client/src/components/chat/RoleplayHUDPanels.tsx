@@ -558,7 +558,7 @@ export function CombinedPlayerPanel({
                         })}
                       />
                       <InlineEdit
-                        value={char.name}
+                        value={char.name ?? ""}
                         onSave={(value) => updateCharacter(idx, { ...char, name: value })}
                         className="flex-1 !font-medium"
                         placeholder={localizeUi("ui.characters.metadatatab.name")}
@@ -775,7 +775,7 @@ export function CombinedPlayerPanel({
                   >
                     <SlidersHorizontal size="0.625rem" className="shrink-0 text-[var(--muted-foreground)]/65" />
                     <InlineEdit
-                      value={field.name}
+                      value={field.name ?? ""}
                       onSave={(value) => updateCustomField(idx, { ...field, name: value })}
                       className="flex-1 min-w-0"
                       placeholder={localizeUi("ui.chat.combinedplayerpanel.fieldName")}
@@ -1131,7 +1131,7 @@ export function CharactersPanel({
                   })}
                 />
                 <InlineEdit
-                  value={char.name}
+                  value={char.name ?? ""}
                   onSave={(value) => updateCharacter(idx, { ...char, name: value })}
                   className="flex-1 !font-medium"
                   placeholder={localizeUi("ui.characters.metadatatab.name")}
@@ -1413,7 +1413,7 @@ export function CustomTrackerPanel({
             >
               <SlidersHorizontal size="0.625rem" className="shrink-0 text-[var(--muted-foreground)]/65" />
               <InlineEdit
-                value={field.name}
+                value={field.name ?? ""}
                 onSave={(value) => updateField(idx, { ...field, name: value })}
                 className="flex-1 min-w-0"
                 placeholder={localizeUi("ui.chat.combinedplayerpanel.fieldName")}
@@ -1979,7 +1979,7 @@ function StatBarEditable({
         {onUpdateName ? (
           <span className="group/field flex min-w-0 items-center gap-1">
             <InlineEdit
-              value={stat.name}
+              value={stat.name ?? ""}
               onSave={onUpdateName}
               className="!text-[0.625rem] !font-medium !text-[var(--foreground)]/80"
               placeholder={localizeUi("ui.personas.personastatstab.statName")}
@@ -2127,7 +2127,7 @@ function QuestCardEditable({
           })}
         />
         <InlineEdit
-          value={quest.name}
+          value={quest.name ?? ""}
           onSave={(value) => onUpdate({ ...quest, name: value })}
           className={cn("flex-1 !font-medium", quest.completed && "line-through opacity-50")}
           placeholder={localizeUi("ui.chat.questcardeditable.questName")}
@@ -2174,7 +2174,7 @@ function QuestCardEditable({
                   label={localizeUi("ui.chat.questcardeditable.objectiveCompletion")}
                 />
                 <InlineEdit
-                  value={objective.text}
+                  value={objective.text ?? ""}
                   onSave={(value) => updateObjectiveText(idx, value)}
                   className={cn("flex-1", objective.completed && "line-through opacity-50")}
                   placeholder={localizeUi("ui.chat.questcardeditable.objective")}
