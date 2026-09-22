@@ -15,6 +15,7 @@ import {
   SIDECAR_RUNTIME_PREFERENCES,
   SIDECAR_MLX_MODELS,
   SIDECAR_MODELS,
+  type DecisionThinkingMode,
   type SidecarBackend,
   type SidecarConfig,
   type SidecarCustomModelEntry,
@@ -535,6 +536,19 @@ class SidecarModelService {
     return this.resolveBackend();
   }
 
+  /**
+   * Record how this slot's model may answer an activation question.
+   *
+   * Also called by the decision backend itself when Auto concludes the loaded model
+   * cannot answer in one token, so the finding survives a restart instead of costing
+   * two wasted requests again.
+   */
+  setDecisionThinking(decisionThinking: DecisionThinkingMode): void {
+    if (this.config.decisionThinking === decisionThinking) return;
+    this.config = { ...this.config, decisionThinking };
+    this.saveConfig();
+  }
+
   getConfiguredModelRef(): string | null {
     return this.resolveBackend() === "mlx"
       ? mlxRuntimeService.hasModelCache(this.config.modelRepo)
@@ -573,6 +587,7 @@ class SidecarModelService {
         | "embeddingPooling"
         | "embeddingBatchSize"
         | "runtimePreference"
+        | "decisionThinking"
       >
     >,
   ): SidecarConfig {

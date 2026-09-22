@@ -18,6 +18,7 @@ import { dirname, join, resolve, sep } from "node:path";
 import {
   UTILITY_SIDECAR_DEFAULT_CONFIG,
   UTILITY_SIDECAR_LIMITS,
+  type DecisionThinkingMode,
   type UtilitySidecarConfig,
   type UtilitySidecarHardwareSettings,
   type UtilitySidecarModelSource,
@@ -167,6 +168,11 @@ export class UtilitySidecarService {
     return { ...this.config, models: { ...this.config.models } };
   }
 
+  /** This slot's llama-server process id, for measured rather than estimated memory. */
+  getProcessId(): number | null {
+    return this.child?.pid ?? null;
+  }
+
   getStatus(): UtilitySidecarStatus {
     return {
       configured: Object.keys(this.config.models).length > 0,
@@ -182,6 +188,7 @@ export class UtilitySidecarService {
         gpuLayers: this.config.gpuLayers,
         maxParallelJobs: this.config.maxParallelJobs,
       },
+      decisionThinking: this.config.decisionThinking,
     };
   }
 
@@ -349,6 +356,18 @@ export class UtilitySidecarService {
    * stayed up and ensureRunning() returned it as ready, so status and routing reported
    * the newly selected model while the old one was still answering every request.
    */
+  /**
+   * Record how this slot's model may answer an activation question.
+   *
+   * Also called by the decision backend when Auto concludes the loaded model cannot
+   * answer in one token, so the finding outlives the process.
+   */
+  setDecisionThinking(decisionThinking: DecisionThinkingMode): void {
+    if (this.config.decisionThinking === decisionThinking) return;
+    this.config = { ...this.config, decisionThinking };
+    this.writeConfig();
+  }
+
   async setActiveModel(modelId: string | null): Promise<UtilitySidecarConfig> {
     // null is the only way to clear the selection. An empty string used to slip
     // through as "clear", which quietly turns a malformed request into a state change.
