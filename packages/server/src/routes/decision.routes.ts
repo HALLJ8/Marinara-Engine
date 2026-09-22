@@ -190,11 +190,18 @@ export async function decisionRoutes(app: FastifyInstance) {
     return { selected: id };
   });
 
-  /** How a local slot's model is allowed to reach its answer. */
+  /**
+   * How a local slot's model is allowed to reach its answer.
+   *
+   * Unlike `/select`, this deliberately accepts a slot with no model downloaded yet.
+   * It is a preference stored in that slot's own config, exactly like `contextSize`
+   * and `gpuLayers`, which `/api/sidecar/config` and the utility slot's settings both
+   * accept before a model exists; it simply applies once one does. An unimplemented
+   * slot is different: the setter discards that write, so returning the requested
+   * value would report a save that did not happen.
+   */
   app.post("/thinking", async (req, reply) => {
     const { slot, thinking } = thinkingSchema.parse(req.body);
-    // The setter deliberately ignores a slot this build cannot run. Saying so beats
-    // echoing the requested value back, which would read as a saved setting.
     if (!isDecisionSlotImplemented(slot))
       return reply.status(409).send({ error: "That local model is not available in this build" });
     setDecisionSlotThinking(slot, thinking);
