@@ -789,7 +789,7 @@ export function CombinedPlayerPanel({
                     />
                     <span className="text-[var(--muted-foreground)]/40 text-[0.5rem]">=</span>
                     <InlineEdit
-                      value={field.value}
+                      value={field.value ?? ""}
                       onSave={(value) => updateCustomField(idx, { ...field, value })}
                       className="flex-1 min-w-0"
                       placeholder={localizeUi("ui.chat.combinedplayerpanel.value")}
@@ -1427,7 +1427,7 @@ export function CustomTrackerPanel({
               />
               <span className="text-[var(--muted-foreground)]/40 text-[0.5rem]">=</span>
               <InlineEdit
-                value={field.value}
+                value={field.value ?? ""}
                 onSave={(value) => updateField(idx, { ...field, value })}
                 className="flex-1 min-w-0"
                 placeholder={localizeUi("ui.chat.combinedplayerpanel.value")}
