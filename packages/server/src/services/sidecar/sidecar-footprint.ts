@@ -152,8 +152,16 @@ export function assessSidecarLoad(args: {
   unsupportedReason?: string | null;
 }): SidecarLoadAssessment {
   const counted = args.slots.filter((slot) => slot.configured && !slot.onCpu);
-  const totalBytes = counted.reduce((sum, slot) => sum + (slot.estimatedBytes ?? 0), 0);
+  const slotBytes = counted.reduce((sum, slot) => sum + (slot.estimatedBytes ?? 0), 0);
   const capacityBytes = args.device?.totalBytes ?? null;
+
+  // A card is rarely empty. A desktop compositor, a browser or a game holds memory
+  // this engine will never see, and ignoring it reports "recommended" for a model
+  // that cannot load. Whatever a running slot of ours holds is already inside the
+  // card's `used` figure, so subtract it first rather than counting it twice.
+  const ourRunningBytes = counted.reduce((sum, slot) => sum + (slot.running ? (slot.estimatedBytes ?? 0) : 0), 0);
+  const otherUsageBytes = Math.max(0, (args.device?.usedBytes ?? 0) - ourRunningBytes);
+  const totalBytes = slotBytes + otherUsageBytes;
   const headroomBytes = capacityBytes === null ? null : capacityBytes - totalBytes;
 
   if (args.unsupportedReason)
@@ -169,6 +177,8 @@ export function assessSidecarLoad(args: {
   if (capacityBytes === null) return { verdict: "recommended", totalBytes, capacityBytes, headroomBytes };
 
   const candidate = args.candidate ? (counted.find((slot) => slot.slot === args.candidate) ?? null) : null;
+  // "Won't fit" is a property of the model and the card: it stays true however much
+  // is freed up, which is what separates it from the verdicts below.
   const candidateBytes = candidate?.estimatedBytes ?? 0;
 
   // The candidate alone exceeding the card is a different answer from the candidate
@@ -275,12 +285,6 @@ export function getMeasuredProcessBytes(pid: number | null | undefined): number 
   if (typeof pid !== "number") return null;
   refresh();
   return cached?.usageByPid.get(pid) ?? null;
-}
-
-/** Wait for a probe result. Only callers that can afford to block use this. */
-export async function awaitGpuProbe(): Promise<GpuProbe> {
-  refresh();
-  return cached?.probe ?? (await inFlight)?.probe ?? { vendor: null, devices: [], pending: true };
 }
 
 export function resetGpuProbeCache(): void {

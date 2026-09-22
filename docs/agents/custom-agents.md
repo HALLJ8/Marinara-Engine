@@ -151,7 +151,7 @@ If you have a local model in **Local Model**, you can gate agents with it and ne
 1. In **Connections**, open **Connection defaults** and set **Decision model** to **Primary local model**, or to **Utility local model** if you have one set up.
 2. Click **Test**. A successful result shows the probability and request time, plus two things that are specific to a local model: whether log-probabilities were available, and whether the model answers directly.
 
-Marinara asks the model a single yes/no question and reads the answer from the probabilities of its first token, so nothing is generated and the request is short. Requests use a 4-second budget, longer than a hosted one, because your slot may already be busy with agent work.
+Marinara asks the model a single yes/no question, lets it produce one token, and reads the answer from that token's probabilities. No reply is written, so the request is short. Requests use a 4-second budget, longer than a hosted one, because your slot may already be busy with agent work.
 
 **Thinking.** Most models answer in one word. Some always reason first, whatever they are asked. The **Thinking** setting below the dropdown controls this:
 

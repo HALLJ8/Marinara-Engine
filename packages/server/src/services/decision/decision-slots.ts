@@ -150,6 +150,9 @@ export function decisionSlotContextSize(slot: DecisionLocalSlot): number {
 }
 
 export function setDecisionSlotThinking(slot: DecisionLocalSlot, thinking: DecisionThinkingMode): void {
+  // Without this guard the else branch catches `decision_sidecar` too, and a setting
+  // for a slot this build cannot run would silently overwrite the primary slot's.
+  if (!isDecisionSlotImplemented(slot)) return;
   if (slot === "utility") utilitySidecarService.setDecisionThinking(thinking);
   else sidecarModelService.setDecisionThinking(thinking);
 }

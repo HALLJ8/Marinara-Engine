@@ -73,7 +73,13 @@ export async function resolveDecisionBackend(
       return null;
     }
     const resolved = resolution.resolved;
-    const thinks = resolved.thinking === "allowed" || getAnswerStyle(resolved.modelIdentity) === "thinks";
+    // Exactly the formula askQuestion uses, so what is deferred matches what is
+    // actually slow. Reading the cached verdict without the "auto" guard would keep
+    // deferring after the user switched the slot to Off, where every request is a
+    // fast one-token call again.
+    const thinks =
+      resolved.thinking === "allowed" ||
+      (resolved.thinking === "auto" && getAnswerStyle(resolved.modelIdentity) === "thinks");
     return {
       maxStateTokens: Math.max(256, decisionSlotContextSize(slot) - SIDECAR_STATE_HEADROOM_TOKENS),
       deferPreGeneration: thinks && !(await deps.getThinkingPreGeneration()),

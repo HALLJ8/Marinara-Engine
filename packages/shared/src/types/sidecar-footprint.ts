@@ -79,7 +79,10 @@ export const SIDECAR_FOOTPRINT_HEADROOM_BYTES = 1_500_000_000;
 
 export interface SidecarLoadAssessment {
   verdict: SidecarLoadVerdict;
-  /** Sum of every counted slot's estimate, in bytes. */
+  /**
+   * Bytes expected to be in use on the device: every counted slot, plus whatever
+   * else already holds memory there. A running slot's own usage is counted once.
+   */
   totalBytes: number;
   /** Device memory the estimate is compared against, in bytes. Null when unknown. */
   capacityBytes: number | null;

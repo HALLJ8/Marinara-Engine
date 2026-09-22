@@ -209,7 +209,9 @@ function LocalSlotControls({
   onPreGeneration: (enabled: boolean) => void;
 }) {
   const { t } = useTranslation();
-  const thinks = entry.answerStyle === "thinks" || entry.thinking === "allowed";
+  // The same formula the backend defers on, so this checkbox only appears when
+  // pre-generation gating is actually being skipped.
+  const thinks = entry.thinking === "allowed" || (entry.thinking === "auto" && entry.answerStyle === "thinks");
   return (
     <div className="space-y-2 rounded-lg bg-[var(--secondary)]/40 p-2.5">
       <label htmlFor={`decision-thinking-${slot}`} className="block text-[0.6875rem] font-medium">

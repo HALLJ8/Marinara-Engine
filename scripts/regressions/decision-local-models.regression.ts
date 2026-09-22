@@ -38,6 +38,7 @@ import {
   clearDecisionThinkingCache,
   getAnswerStyle,
 } from "../../packages/server/src/services/decision/decision-thinking-cache.js";
+import { isDecisionSlotImplemented } from "../../packages/server/src/services/decision/decision-slots.js";
 
 // ── reading an answer out of log-probabilities ────────────────────────────────
 
@@ -408,6 +409,25 @@ assert.equal(
   "recommended",
 );
 
+// Memory another application already holds counts against the card. Without this a
+// model that cannot possibly load reads as "recommended".
+const busyCard = { ...card(24 * GB), usedBytes: 20 * GB };
+assert.equal(assessSidecarLoad({ slots: [slot({ estimatedBytes: 6 * GB })], device: busyCard }).verdict, "wont_fit");
+// A running slot of ours is already inside the card's `used` figure, so it is counted
+// once rather than twice: 8 GB used, all of it ours, leaves the full remainder free.
+const oursRunning = assessSidecarLoad({
+  slots: [slot({ estimatedBytes: 8 * GB, running: true })],
+  device: { ...card(24 * GB), usedBytes: 8 * GB },
+});
+assert.equal(oursRunning.totalBytes, 8 * GB, "our own running slot must not be double counted");
+assert.equal(oursRunning.verdict, "recommended");
+// Anything on the card beyond our running slots is somebody else's and does count.
+const mixed = assessSidecarLoad({
+  slots: [slot({ estimatedBytes: 8 * GB, running: true })],
+  device: { ...card(24 * GB), usedBytes: 11 * GB },
+});
+assert.equal(mixed.totalBytes, 11 * GB, "3 GB held by another application is added to our 8 GB");
+
 // A CPU-bound slot is weighed against system memory, so it never counts against the card.
 assert.equal(
   assessSidecarLoad({
@@ -418,6 +438,12 @@ assert.equal(
 );
 // With no device, nothing is asserted about fit.
 assert.equal(assessSidecarLoad({ slots: [slot({ estimatedBytes: 99 * GB })], device: null }).verdict, "recommended");
+
+// A slot this build cannot run must not be selectable or writable through the API,
+// or a setting for it lands on the primary slot's config instead.
+assert.equal(isDecisionSlotImplemented("primary"), true);
+assert.equal(isDecisionSlotImplemented("utility"), true);
+assert.equal(isDecisionSlotImplemented("decision_sidecar"), false);
 
 // Vulkan and CUDA index the same cards differently, so devices are matched by name and
 // a machine with one NVIDIA GPU shares it.

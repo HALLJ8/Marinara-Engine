@@ -141,6 +141,16 @@ export async function decisionRoutes(app: FastifyInstance) {
     const slot = decisionLocalSlotForId(id);
     const current = await connections.getDefaultForDecision();
     if (slot) {
+      // An entry the dropdown greys out must not be selectable through the API
+      // either. Storing one would leave /options reporting it as chosen while every
+      // gate quietly resolved nothing, which reads as "activation questions are
+      // broken" rather than "that model is not set up".
+      const description = describeDecisionSlot(slot);
+      if (!isDecisionSlotImplemented(slot) || !description.available)
+        return reply.status(409).send({
+          error: "That local model cannot answer decisions right now",
+          reason: description.available ? "not_installed" : description.reason,
+        });
       await settings.set(DECISION_LOCAL_DEFAULT_SETTINGS_KEY, id!);
       if (current) await connections.update(current.id, { defaultForAgents: false });
       return { selected: id };
