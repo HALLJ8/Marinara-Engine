@@ -5,6 +5,7 @@ This file is the release-notes source of truth for Marinara Engine. Reuse these 
 ## [Unreleased]
 
 - A blank Custom Tracker field (no name or value) can no longer be saved to a Roleplay chat's tracker state; the tracker HUD widget crashed the entire app when one reached it. This also hardens Inventory Tracker and present-character tracker updates against the same class of blank-row corruption (#6549).
+- The same blank/nameless Custom Tracker row is also rejected when it arrives through the game-state PATCH route used by manual tracker edits and direct API calls, not just through agent output (#6549).
 - GPT-6 Sol and Luna are selectable in OpenAI connections with their documented limits, reasoning controls, and compatible streaming and tool requests (#6546).
 
 - Claude Opus 5.5 is selectable in Claude connections with its 1M context and 128k output limits, supported reasoning settings, and compatible tool requests (#6544).

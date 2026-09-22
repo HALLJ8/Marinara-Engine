@@ -32,6 +32,7 @@ import {
   normalizeTrackerFieldLocks,
   normalizeInventoryTrackerPlayerStats,
   normalizeTrackerHiddenFields,
+  resolveTrackerRowsUpdate,
   HOME_FEED_SPRITE_EXPRESSION_MAX_LENGTH,
   parseTrackerFieldLocks,
   parseTrackerHiddenFields,
@@ -2664,7 +2665,19 @@ export async function chatsRoutes(app: FastifyInstance) {
       if (body.playerStats !== null && !isRecord(body.playerStats)) {
         return reply.status(400).send({ error: "playerStats must be an object or null" });
       }
-      fields.playerStats = normalizeInventoryTrackerPlayerStats(body.playerStats);
+      const normalizedPlayerStats = normalizeInventoryTrackerPlayerStats(body.playerStats);
+      // The Custom Tracker widget writes here directly (patchPlayerStats), bypassing the
+      // agent-apply path's resolveTrackerGroupUpdate. Without this, a blank/nameless row
+      // (never produced by the widget's own "+ Add Field", which always seeds a name, but
+      // reachable via a raw API call or a future UI bug) could still reach player state and
+      // crash the tracker HUD on the missing name (#6549).
+      if (isRecord(normalizedPlayerStats) && Array.isArray(normalizedPlayerStats.customTrackerFields)) {
+        normalizedPlayerStats.customTrackerFields = resolveTrackerRowsUpdate(
+          normalizedPlayerStats.customTrackerFields,
+          [],
+        );
+      }
+      fields.playerStats = normalizedPlayerStats;
     }
     if (body.personaStats !== undefined) fields.personaStats = body.personaStats as any[];
     if (body.fieldLocks !== undefined) fields.fieldLocks = normalizeTrackerFieldLocks(body.fieldLocks);
