@@ -248,22 +248,27 @@ test("generation gates post agents on the completed reply and fails open without
       promptTemplate: "Describe the scene.",
     });
     const character = await create("characters", { data: { name: "Mara", first_mes: "" } });
+    const otherCharacter = await create("characters", { data: { name: "Rowan", first_mes: "" } });
     const chat = await create("chats", {
       name: "Activation fixture",
       mode: "roleplay",
-      characterIds: [character.id],
+      characterIds: [character.id, otherCharacter.id],
       connectionId: main.id,
     });
     expect(
       (
         await request.patch(`/api/chats/${chat.id}/metadata`, {
-          data: { enableAgents: true, activeAgentIds: [gated.type, miss.type, ungated.type] },
+          data: {
+            enableAgents: true,
+            groupChatMode: "individual",
+            activeAgentIds: [gated.type, miss.type, ungated.type],
+          },
         })
       ).ok(),
     ).toBeTruthy();
     const generate = async () => {
       const response = await request.post("/api/generate", {
-        data: { chatId: chat.id, userMessage: "Continue the scene." },
+        data: { chatId: chat.id, userMessage: "Continue the scene.", forCharacterId: character.id },
       });
       expect(response.ok()).toBeTruthy();
       const text = await response.text();
@@ -274,8 +279,8 @@ test("generation gates post agents on the completed reply and fails open without
     expect(agentCalls).toBe(1);
     expect(decisionBatches).toHaveLength(1);
     expect(decisionBatches[0]).toMatchObject({
-      questions: { [gated.id]: { instructions: "Did Mara move?" } },
-      state: { recent_messages: [{ role: "assistant", content: replyText }] },
+      questions: { [gated.id]: { instructions: "Did Mara, Rowan move?" } },
+      state: { recent_messages: [{ role: "assistant", name: "Mara", content: replyText }] },
     });
     expect(Object.keys(decisionBatches[0]!.questions as object)).toEqual([gated.id]);
     probability = 0.8;

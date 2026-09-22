@@ -9342,6 +9342,8 @@ export async function generateRoutes(app: FastifyInstance) {
         const buildRoleplayCharacterInstruction = (charName: string) =>
           groupTurnPromptEnabled && chatMode === "roleplay" ? `Respond ONLY as ${charName}.` : null;
 
+        const mergedSpeaksOnlyTarget =
+          !isGroupChat || Boolean(regenGroupChatIndividual) || mentionedConversationCharacters.length === 1;
         if (useIndividualLoop) {
           // Individual group mode: generate one response per character
           sendProgress("generating");
@@ -9545,8 +9547,6 @@ export async function generateRoutes(app: FastifyInstance) {
 
           // A merged group generation may voice several characters unless a regen
           // target or a single explicit @mention pins it to exactly one speaker.
-          const mergedSpeaksOnlyTarget =
-            !isGroupChat || Boolean(regenGroupChatIndividual) || mentionedConversationCharacters.length === 1;
           const genResult = await generateForCharacter(targetCharId, sentMessages, true, mergedSpeaksOnlyTarget);
           if (genResult) {
             firstSavedMsg ??= genResult.savedMsg;
@@ -9587,7 +9587,18 @@ export async function generateRoutes(app: FastifyInstance) {
             ? chatMessages.map((message, index) =>
                 index === continuedTargetIndex ? { ...message, content: completedResponse } : message,
               )
-            : [...chatMessages, { role: "assistant", content: completedResponse }];
+            : [
+                ...chatMessages,
+                {
+                  role: "assistant",
+                  content: completedResponse,
+                  // Combined group replies are narration; a single speaker retains its identity.
+                  characterId:
+                    allResponseSegments.length === 1 && (useIndividualLoop || mergedSpeaksOnlyTarget)
+                      ? (lastSavedMsg?.characterId ?? null)
+                      : null,
+                },
+              ];
         const inactivePostProcessingAgentIds = new Set<string>();
         for (const agent of resolvedAgents) {
           if (agent.phase !== "post_processing" || builtInAgentTypes.has(agent.type)) continue;
