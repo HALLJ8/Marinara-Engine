@@ -22,8 +22,9 @@ RUN corepack enable && corepack install
 
 # Install all dependencies (including dev for building)
 # Use cache mount to avoid storing pnpm store in image
+# Local embeddings and Whisper use bundled CPU binaries; skip optional ONNX CUDA downloads.
 RUN --mount=type=cache,target=/app/.pnpm-store \
-    pnpm install --frozen-lockfile
+    ONNXRUNTIME_NODE_INSTALL_CUDA=skip pnpm install --frozen-lockfile
 
 # Copy source code
 COPY tsconfig.base.json ./
@@ -70,7 +71,7 @@ RUN corepack enable && corepack install
 # Use cache mount to avoid storing pnpm store in image
 # Strip onnxruntime-web WASM blobs, uses onnxruntime-node (native)
 RUN --mount=type=cache,target=/app/.pnpm-store \
-    pnpm install --frozen-lockfile --prod && \
+    ONNXRUNTIME_NODE_INSTALL_CUDA=skip pnpm install --frozen-lockfile --prod && \
     rm -rf /app/node_modules/.pnpm/onnxruntime-web@*
 
 # Copy built artifacts from builder
